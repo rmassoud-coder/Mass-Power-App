@@ -55,9 +55,8 @@ export default function EditServiceScreen() {
         throw new Error(error.detail || 'Failed to update service');
       }
 
-      Alert.alert('Success', 'Service updated successfully', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      Alert.alert('Success', 'Service updated successfully');
+      router.back();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to update service');
     } finally {

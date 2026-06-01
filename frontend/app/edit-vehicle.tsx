@@ -87,9 +87,8 @@ export default function EditVehicleScreen() {
         throw new Error(error.detail || 'Failed to update vehicle');
       }
 
-      Alert.alert('Success', 'Vehicle updated successfully', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      Alert.alert('Success', 'Vehicle updated successfully');
+      router.back();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to update vehicle');
     } finally {

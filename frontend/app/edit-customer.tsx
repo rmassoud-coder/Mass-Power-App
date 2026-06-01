@@ -47,9 +47,7 @@ export default function EditCustomerScreen() {
         throw new Error(error.detail || 'Failed to update customer');
       }
 
-      Alert.alert('Success', 'Customer updated successfully', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      router.back();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to update customer');
     } finally {

@@ -69,12 +69,8 @@ export default function AddServiceScreen() {
         throw new Error(error.detail || 'Failed to add service');
       }
 
-      Alert.alert('Success', 'Service record added successfully', [
-        {
-          text: 'OK',
-          onPress: () => router.back(),
-        },
-      ]);
+      // Navigate back directly - works reliably on web
+      router.back();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to add service');
     } finally {

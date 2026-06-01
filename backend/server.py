@@ -375,6 +375,108 @@ async def delete_service(service_id: str):
     return {"message": "Service deleted successfully"}
 
 
+# Report Routes
+class ReportItem(BaseModel):
+    service_id: str
+    customer_id: str
+    customer_name: str
+    customer_mobile: str
+    vehicle_id: str
+    vehicle_make: str
+    vehicle_model: str
+    vehicle_year: Optional[str] = None
+    vehicle_vin: str
+    vehicle_plate: str
+    service_description: str
+    additional_info: Optional[str] = None
+    cost: float
+    service_date: datetime
+
+class ReportResponse(BaseModel):
+    items: List[ReportItem]
+    total_cost: float
+    total_services: int
+
+@api_router.get("/reports/services", response_model=ReportResponse)
+async def services_report(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    mobile: Optional[str] = None,
+    vin: Optional[str] = None,
+    plate: Optional[str] = None,
+):
+    """Get services report filtered by date range and optionally by customer/vehicle"""
+    # Build service query
+    service_query: dict = {}
+    if start_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date)
+            service_query.setdefault("service_date", {})["$gte"] = start_dt
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid start_date format")
+    if end_date:
+        try:
+            end_dt = datetime.fromisoformat(end_date)
+            service_query.setdefault("service_date", {})["$lte"] = end_dt
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid end_date format")
+
+    # Filter customers if mobile provided
+    if mobile:
+        matching_customers = await db.customers.find(
+            {"mobile_number": {"$regex": mobile, "$options": "i"}}
+        ).to_list(1000)
+        customer_ids = [str(c["_id"]) for c in matching_customers]
+        if not customer_ids:
+            return ReportResponse(items=[], total_cost=0, total_services=0)
+        service_query["customer_id"] = {"$in": customer_ids}
+
+    # Filter vehicles if vin or plate provided
+    if vin or plate:
+        vehicle_filter: dict = {}
+        if vin:
+            vehicle_filter["vin"] = {"$regex": vin, "$options": "i"}
+        if plate:
+            vehicle_filter["plate_number"] = {"$regex": plate, "$options": "i"}
+        matching_vehicles = await db.vehicles.find(vehicle_filter).to_list(1000)
+        vehicle_ids = [str(v["_id"]) for v in matching_vehicles]
+        if not vehicle_ids:
+            return ReportResponse(items=[], total_cost=0, total_services=0)
+        service_query["vehicle_id"] = {"$in": vehicle_ids}
+
+    # Fetch services
+    services = await db.services.find(service_query).sort("service_date", -1).to_list(10000)
+
+    # Enrich each service with customer + vehicle data
+    items = []
+    total_cost = 0.0
+    for service in services:
+        customer = await db.customers.find_one({"_id": ObjectId(service["customer_id"])})
+        vehicle = await db.vehicles.find_one({"_id": ObjectId(service["vehicle_id"])})
+        if not customer or not vehicle:
+            continue
+
+        items.append(ReportItem(
+            service_id=str(service["_id"]),
+            customer_id=service["customer_id"],
+            customer_name=customer["name"],
+            customer_mobile=customer["mobile_number"],
+            vehicle_id=service["vehicle_id"],
+            vehicle_make=vehicle["make"],
+            vehicle_model=vehicle["model"],
+            vehicle_year=vehicle.get("year"),
+            vehicle_vin=vehicle["vin"],
+            vehicle_plate=vehicle["plate_number"],
+            service_description=service["service_description"],
+            additional_info=service.get("additional_info"),
+            cost=service["cost"],
+            service_date=service["service_date"],
+        ))
+        total_cost += service["cost"]
+
+    return ReportResponse(items=items, total_cost=total_cost, total_services=len(items))
+
+
 # Include router
 app.include_router(api_router)
 

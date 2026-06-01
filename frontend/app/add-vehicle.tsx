@@ -93,16 +93,11 @@ export default function AddVehicleScreen() {
         throw new Error(error.detail || 'Failed to add vehicle');
       }
 
-      Alert.alert('Success', 'Vehicle added successfully', [
-        {
-          text: 'OK',
-          onPress: () =>
-            router.replace({
-              pathname: '/customer-detail',
-              params: { customerId: params.customerId },
-            }),
-        },
-      ]);
+      // Navigate back to customer detail
+      router.replace({
+        pathname: '/customer-detail',
+        params: { customerId: params.customerId as string },
+      });
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to add vehicle');
     } finally {

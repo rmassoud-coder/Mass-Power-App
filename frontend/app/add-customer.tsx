@@ -47,24 +47,11 @@ export default function AddCustomerScreen() {
       }
 
       const customer = await response.json();
-      Alert.alert('Success', 'Customer created successfully', [
-        {
-          text: 'Add Vehicle',
-          onPress: () =>
-            router.replace({
-              pathname: '/add-vehicle',
-              params: { customerId: customer.id },
-            }),
-        },
-        {
-          text: 'View Customer',
-          onPress: () =>
-            router.replace({
-              pathname: '/customer-detail',
-              params: { customerId: customer.id },
-            }),
-        },
-      ]);
+      // After creating, navigate to add-vehicle for this customer
+      router.replace({
+        pathname: '/add-vehicle',
+        params: { customerId: customer.id },
+      });
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to create customer');
     } finally {

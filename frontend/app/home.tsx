@@ -184,6 +184,15 @@ export default function HomeScreen() {
             <Ionicons name="person-add-outline" size={20} color="#2563eb" />
             <Text style={styles.addCustomerButtonText}>Add New Customer</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.reportButton}
+            onPress={() => router.push('/report')}
+            testID="report-button"
+          >
+            <Ionicons name="document-text-outline" size={20} color="#fff" />
+            <Text style={styles.reportButtonText}>View Services Report</Text>
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -312,6 +321,21 @@ const styles = StyleSheet.create({
   },
   addCustomerButtonText: {
     color: '#2563eb',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  reportButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#10b981',
+    marginTop: 12,
+  },
+  reportButtonText: {
+    color: '#fff',
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
