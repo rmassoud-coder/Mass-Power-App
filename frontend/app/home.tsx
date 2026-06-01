@@ -81,8 +81,8 @@ export default function HomeScreen() {
               <Ionicons name="car-sport" size={32} color="#2563eb" />
             </View>
             <View>
-              <Text style={styles.headerTitle}>Garage Service</Text>
-              <Text style={styles.headerSubtitle}>Search Customer Records</Text>
+              <Text style={styles.headerTitle}>Mass Power</Text>
+              <Text style={styles.headerSubtitle}>Auto Services</Text>
             </View>
           </View>
           <TouchableOpacity
