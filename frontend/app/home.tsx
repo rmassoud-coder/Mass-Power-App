@@ -8,6 +8,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -20,7 +22,17 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(false);
   
   const router = useRouter();
+  const { width, height } = useWindowDimensions();
   const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
+
+  // Responsive sizing
+  const isSmallScreen = height < 700;
+  const cardPadding = isSmallScreen ? 14 : 20;
+  const cardMargin = isSmallScreen ? 10 : 16;
+  const sectionGap = isSmallScreen ? 8 : 16;
+  const titleFontSize = isSmallScreen ? 14 : 16;
+  const inputHeight = isSmallScreen ? 40 : 48;
+  const buttonPadding = isSmallScreen ? 10 : 14;
 
   const handleSearch = async (searchType: 'mobile' | 'vin' | 'plate', query: string) => {
     if (!query.trim()) {
@@ -94,16 +106,20 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.content}>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        >
           {/* Search by Mobile Number */}
-          <View style={styles.searchCard}>
-            <View style={styles.searchHeader}>
-              <Ionicons name="call-outline" size={24} color="#2563eb" />
-              <Text style={styles.searchTitle}>Search by Mobile Number</Text>
+          <View style={[styles.searchCard, { padding: cardPadding, marginBottom: cardMargin }]}>
+            <View style={[styles.searchHeader, { marginBottom: sectionGap }]}>
+              <Ionicons name="call-outline" size={isSmallScreen ? 20 : 24} color="#2563eb" />
+              <Text style={[styles.searchTitle, { fontSize: titleFontSize }]}>Search by Mobile Number</Text>
             </View>
-            <View style={styles.inputContainer}>
+            <View style={[styles.inputContainer, { marginBottom: sectionGap }]}>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { paddingVertical: isSmallScreen ? 8 : 12 }]}
                 placeholder="Enter mobile number"
                 value={mobileNumber}
                 onChangeText={setMobileNumber}
@@ -112,25 +128,25 @@ export default function HomeScreen() {
               />
             </View>
             <TouchableOpacity
-              style={[styles.searchButton, loading && styles.searchButtonDisabled]}
+              style={[styles.searchButton, { paddingVertical: buttonPadding }, loading && styles.searchButtonDisabled]}
               onPress={() => handleSearch('mobile', mobileNumber)}
               disabled={loading}
               testID="mobile-search-button"
             >
-              <Ionicons name="search" size={20} color="#fff" />
+              <Ionicons name="search" size={isSmallScreen ? 16 : 20} color="#fff" />
               <Text style={styles.searchButtonText}>Search</Text>
             </TouchableOpacity>
           </View>
 
           {/* Search by VIN Number */}
-          <View style={styles.searchCard}>
-            <View style={styles.searchHeader}>
-              <Ionicons name="barcode-outline" size={24} color="#2563eb" />
-              <Text style={styles.searchTitle}>Search by VIN Number</Text>
+          <View style={[styles.searchCard, { padding: cardPadding, marginBottom: cardMargin }]}>
+            <View style={[styles.searchHeader, { marginBottom: sectionGap }]}>
+              <Ionicons name="barcode-outline" size={isSmallScreen ? 20 : 24} color="#2563eb" />
+              <Text style={[styles.searchTitle, { fontSize: titleFontSize }]}>Search by VIN Number</Text>
             </View>
-            <View style={styles.inputContainer}>
+            <View style={[styles.inputContainer, { marginBottom: sectionGap }]}>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { paddingVertical: isSmallScreen ? 8 : 12 }]}
                 placeholder="Enter VIN number"
                 value={vinNumber}
                 onChangeText={setVinNumber}
@@ -139,25 +155,25 @@ export default function HomeScreen() {
               />
             </View>
             <TouchableOpacity
-              style={[styles.searchButton, loading && styles.searchButtonDisabled]}
+              style={[styles.searchButton, { paddingVertical: buttonPadding }, loading && styles.searchButtonDisabled]}
               onPress={() => handleSearch('vin', vinNumber)}
               disabled={loading}
               testID="vin-search-button"
             >
-              <Ionicons name="search" size={20} color="#fff" />
+              <Ionicons name="search" size={isSmallScreen ? 16 : 20} color="#fff" />
               <Text style={styles.searchButtonText}>Search</Text>
             </TouchableOpacity>
           </View>
 
           {/* Search by Plate Number */}
-          <View style={styles.searchCard}>
-            <View style={styles.searchHeader}>
-              <Ionicons name="car-outline" size={24} color="#2563eb" />
-              <Text style={styles.searchTitle}>Search by Plate Number</Text>
+          <View style={[styles.searchCard, { padding: cardPadding, marginBottom: cardMargin }]}>
+            <View style={[styles.searchHeader, { marginBottom: sectionGap }]}>
+              <Ionicons name="car-outline" size={isSmallScreen ? 20 : 24} color="#2563eb" />
+              <Text style={[styles.searchTitle, { fontSize: titleFontSize }]}>Search by Plate Number</Text>
             </View>
-            <View style={styles.inputContainer}>
+            <View style={[styles.inputContainer, { marginBottom: sectionGap }]}>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { paddingVertical: isSmallScreen ? 8 : 12 }]}
                 placeholder="Enter plate number"
                 value={plateNumber}
                 onChangeText={setPlateNumber}
@@ -166,34 +182,34 @@ export default function HomeScreen() {
               />
             </View>
             <TouchableOpacity
-              style={[styles.searchButton, loading && styles.searchButtonDisabled]}
+              style={[styles.searchButton, { paddingVertical: buttonPadding }, loading && styles.searchButtonDisabled]}
               onPress={() => handleSearch('plate', plateNumber)}
               disabled={loading}
               testID="plate-search-button"
             >
-              <Ionicons name="search" size={20} color="#fff" />
+              <Ionicons name="search" size={isSmallScreen ? 16 : 20} color="#fff" />
               <Text style={styles.searchButtonText}>Search</Text>
             </TouchableOpacity>
           </View>
 
           <TouchableOpacity
-            style={styles.addCustomerButton}
+            style={[styles.addCustomerButton, { paddingVertical: buttonPadding }]}
             onPress={() => router.push('/add-customer')}
             testID="add-customer-button"
           >
-            <Ionicons name="person-add-outline" size={20} color="#2563eb" />
+            <Ionicons name="person-add-outline" size={isSmallScreen ? 16 : 20} color="#2563eb" />
             <Text style={styles.addCustomerButtonText}>Add New Customer</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.reportButton}
+            style={[styles.reportButton, { paddingVertical: buttonPadding }]}
             onPress={() => router.push('/report')}
             testID="report-button"
           >
-            <Ionicons name="document-text-outline" size={20} color="#fff" />
+            <Ionicons name="document-text-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
             <Text style={styles.reportButtonText}>View Services Report</Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -256,8 +272,11 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 16,
+  },
+  contentContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 24,
   },
   searchCard: {
     backgroundColor: '#fff',
