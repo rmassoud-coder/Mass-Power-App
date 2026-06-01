@@ -55,7 +55,9 @@ export default function RootLayout() {
           <Stack.Screen name="add-customer" />
           <Stack.Screen name="edit-customer" />
           <Stack.Screen name="add-vehicle" />
+          <Stack.Screen name="edit-vehicle" />
           <Stack.Screen name="add-service" />
+          <Stack.Screen name="edit-service" />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>

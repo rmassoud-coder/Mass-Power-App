@@ -204,6 +204,21 @@ async def update_customer(customer_id: str, update_data: CustomerUpdate):
     updated_customer = await db.customers.find_one({"_id": ObjectId(customer_id)})
     return Customer(**serialize_doc(updated_customer))
 
+@api_router.delete("/customers/{customer_id}")
+async def delete_customer(customer_id: str):
+    customer = await db.customers.find_one({"_id": ObjectId(customer_id)})
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    # Delete all services for this customer
+    await db.services.delete_many({"customer_id": customer_id})
+    # Delete all vehicles for this customer
+    await db.vehicles.delete_many({"customer_id": customer_id})
+    # Delete the customer
+    await db.customers.delete_one({"_id": ObjectId(customer_id)})
+    
+    return {"message": "Customer and all associated records deleted successfully"}
+
 
 # Vehicle Routes
 @api_router.post("/vehicles", response_model=Vehicle)
@@ -303,6 +318,19 @@ async def update_vehicle(vehicle_id: str, update_data: VehicleUpdate):
     
     updated_vehicle = await db.vehicles.find_one({"_id": ObjectId(vehicle_id)})
     return Vehicle(**serialize_doc(updated_vehicle))
+
+@api_router.delete("/vehicles/{vehicle_id}")
+async def delete_vehicle(vehicle_id: str):
+    vehicle = await db.vehicles.find_one({"_id": ObjectId(vehicle_id)})
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+    
+    # Delete all services for this vehicle
+    await db.services.delete_many({"vehicle_id": vehicle_id})
+    # Delete the vehicle
+    await db.vehicles.delete_one({"_id": ObjectId(vehicle_id)})
+    
+    return {"message": "Vehicle and all associated services deleted successfully"}
 
 
 # Service Routes

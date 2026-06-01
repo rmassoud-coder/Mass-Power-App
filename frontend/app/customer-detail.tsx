@@ -107,6 +107,69 @@ export default function CustomerDetailScreen() {
     );
   };
 
+  const handleDeleteVehicle = async (vehicleId: string) => {
+    Alert.alert(
+      'Delete Vehicle',
+      'This will also delete all service records for this vehicle. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const response = await fetch(
+                `${backendUrl}/api/vehicles/${vehicleId}`,
+                { method: 'DELETE' }
+              );
+
+              if (!response.ok) {
+                throw new Error('Failed to delete vehicle');
+              }
+
+              Alert.alert('Success', 'Vehicle deleted successfully');
+              fetchCustomerDetails();
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete vehicle');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteCustomer = async () => {
+    Alert.alert(
+      'Delete Customer',
+      'This will permanently delete the customer, all their vehicles, and all service records. This action cannot be undone. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const response = await fetch(
+                `${backendUrl}/api/customers/${params.customerId}`,
+                { method: 'DELETE' }
+              );
+
+              if (!response.ok) {
+                throw new Error('Failed to delete customer');
+              }
+
+              Alert.alert('Success', 'Customer deleted successfully', [
+                { text: 'OK', onPress: () => router.replace('/home') },
+              ]);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete customer');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -130,21 +193,26 @@ export default function CustomerDetailScreen() {
           <Ionicons name="arrow-back" size={24} color="#1e293b" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Customer Details</Text>
-        <TouchableOpacity
-          onPress={() =>
-            router.push({
-              pathname: '/edit-customer',
-              params: {
-                customerId: details.customer.id,
-                name: details.customer.name,
-                mobileNumber: details.customer.mobile_number,
-              },
-            })
-          }
-          style={styles.editButton}
-        >
-          <Ionicons name="create-outline" size={24} color="#2563eb" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={() =>
+              router.push({
+                pathname: '/edit-customer',
+                params: {
+                  customerId: details.customer.id,
+                  name: details.customer.name,
+                  mobileNumber: details.customer.mobile_number,
+                },
+              })
+            }
+            style={styles.headerActionButton}
+          >
+            <Ionicons name="create-outline" size={22} color="#2563eb" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleDeleteCustomer} style={styles.headerActionButton}>
+            <Ionicons name="trash-outline" size={22} color="#ef4444" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView style={styles.content}>
@@ -187,6 +255,32 @@ export default function CustomerDetailScreen() {
                   </Text>
                   <Text style={styles.vehicleMeta}>VIN: {vehicle.vin}</Text>
                   <Text style={styles.vehicleMeta}>Plate: {vehicle.plate_number}</Text>
+                </View>
+                <View style={styles.vehicleActions}>
+                  <TouchableOpacity
+                    onPress={() =>
+                      router.push({
+                        pathname: '/edit-vehicle',
+                        params: {
+                          vehicleId: vehicle.id,
+                          vin: vehicle.vin,
+                          plateNumber: vehicle.plate_number,
+                          make: vehicle.make,
+                          model: vehicle.model,
+                          year: vehicle.year || '',
+                        },
+                      })
+                    }
+                    style={styles.cardActionButton}
+                  >
+                    <Ionicons name="create-outline" size={20} color="#2563eb" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleDeleteVehicle(vehicle.id)}
+                    style={styles.cardActionButton}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                  </TouchableOpacity>
                 </View>
               </View>
             </View>
@@ -249,12 +343,30 @@ export default function CustomerDetailScreen() {
                   </View>
                   <View style={styles.serviceActions}>
                     <Text style={styles.serviceCost}>${service.cost.toFixed(2)}</Text>
-                    <TouchableOpacity
-                      onPress={() => handleDeleteService(service.id)}
-                      style={styles.deleteButton}
-                    >
-                      <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                    </TouchableOpacity>
+                    <View style={styles.serviceButtonRow}>
+                      <TouchableOpacity
+                        onPress={() =>
+                          router.push({
+                            pathname: '/edit-service',
+                            params: {
+                              serviceId: service.id,
+                              serviceDescription: service.service_description,
+                              additionalInfo: service.additional_info || '',
+                              cost: service.cost.toString(),
+                            },
+                          })
+                        }
+                        style={styles.deleteButton}
+                      >
+                        <Ionicons name="create-outline" size={20} color="#2563eb" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleDeleteService(service.id)}
+                        style={styles.deleteButton}
+                      >
+                        <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
               </View>
@@ -295,6 +407,27 @@ const styles = StyleSheet.create({
   },
   editButton: {
     padding: 8,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerActionButton: {
+    padding: 8,
+    marginLeft: 4,
+  },
+  vehicleActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  cardActionButton: {
+    padding: 8,
+    marginLeft: 4,
+  },
+  serviceButtonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
   },
   headerTitle: {
     fontSize: 20,
