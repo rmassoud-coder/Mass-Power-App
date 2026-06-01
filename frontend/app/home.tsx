@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useAuth } from '../src/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 
@@ -21,7 +20,6 @@ export default function HomeScreen() {
   const [plateNumber, setPlateNumber] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const { logout, token } = useAuth();
   const router = useRouter();
   const backendUrl = Constants.expoConfig?.extra?.backendUrl || process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -42,11 +40,7 @@ export default function HomeScreen() {
         url = `${backendUrl}/api/vehicles/search-plate?plate=${encodeURIComponent(query)}`;
       }
 
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const response = await fetch(url);
 
       if (!response.ok) {
         throw new Error('Search failed');
@@ -76,20 +70,6 @@ export default function HomeScreen() {
     }
   };
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Logout', onPress: async () => {
-          await logout();
-          router.replace('/login');
-        }},
-      ]
-    );
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -97,13 +77,13 @@ export default function HomeScreen() {
         style={styles.keyboardView}
       >
         <View style={styles.header}>
+          <View style={styles.headerIcon}>
+            <Ionicons name="car-sport" size={32} color="#2563eb" />
+          </View>
           <View>
             <Text style={styles.headerTitle}>Garage Service</Text>
             <Text style={styles.headerSubtitle}>Search Customer Records</Text>
           </View>
-          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-            <Ionicons name="log-out-outline" size={24} color="#ef4444" />
-          </TouchableOpacity>
         </View>
 
         <View style={styles.content}>
@@ -120,12 +100,14 @@ export default function HomeScreen() {
                 value={mobileNumber}
                 onChangeText={setMobileNumber}
                 keyboardType="phone-pad"
+                testID="mobile-search-input"
               />
             </View>
             <TouchableOpacity
               style={[styles.searchButton, loading && styles.searchButtonDisabled]}
               onPress={() => handleSearch('mobile', mobileNumber)}
               disabled={loading}
+              testID="mobile-search-button"
             >
               <Ionicons name="search" size={20} color="#fff" />
               <Text style={styles.searchButtonText}>Search</Text>
@@ -145,12 +127,14 @@ export default function HomeScreen() {
                 value={vinNumber}
                 onChangeText={setVinNumber}
                 autoCapitalize="characters"
+                testID="vin-search-input"
               />
             </View>
             <TouchableOpacity
               style={[styles.searchButton, loading && styles.searchButtonDisabled]}
               onPress={() => handleSearch('vin', vinNumber)}
               disabled={loading}
+              testID="vin-search-button"
             >
               <Ionicons name="search" size={20} color="#fff" />
               <Text style={styles.searchButtonText}>Search</Text>
@@ -170,17 +154,28 @@ export default function HomeScreen() {
                 value={plateNumber}
                 onChangeText={setPlateNumber}
                 autoCapitalize="characters"
+                testID="plate-search-input"
               />
             </View>
             <TouchableOpacity
               style={[styles.searchButton, loading && styles.searchButtonDisabled]}
               onPress={() => handleSearch('plate', plateNumber)}
               disabled={loading}
+              testID="plate-search-button"
             >
               <Ionicons name="search" size={20} color="#fff" />
               <Text style={styles.searchButtonText}>Search</Text>
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity
+            style={styles.addCustomerButton}
+            onPress={() => router.push('/add-customer')}
+            testID="add-customer-button"
+          >
+            <Ionicons name="person-add-outline" size={20} color="#2563eb" />
+            <Text style={styles.addCustomerButtonText}>Add New Customer</Text>
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -197,7 +192,6 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 24,
     paddingVertical: 16,
@@ -205,8 +199,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
+  headerIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#eff6ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#1e293b',
   },
@@ -215,29 +218,26 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginTop: 2,
   },
-  logoutButton: {
-    padding: 8,
-  },
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 24,
+    paddingTop: 16,
   },
   searchCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 20,
-    marginBottom: 20,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
   searchHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   searchTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: '#1e293b',
     marginLeft: 12,
@@ -251,14 +251,14 @@ const styles = StyleSheet.create({
   },
   input: {
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     fontSize: 16,
     color: '#1e293b',
   },
   searchButton: {
     backgroundColor: '#2563eb',
     borderRadius: 12,
-    paddingVertical: 14,
+    paddingVertical: 12,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
@@ -268,6 +268,23 @@ const styles = StyleSheet.create({
   },
   searchButtonText: {
     color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  addCustomerButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#2563eb',
+    backgroundColor: '#fff',
+    marginTop: 8,
+  },
+  addCustomerButtonText: {
+    color: '#2563eb',
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,

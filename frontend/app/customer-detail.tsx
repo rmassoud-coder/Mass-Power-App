@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useAuth } from '../src/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 
@@ -48,7 +47,6 @@ interface CustomerDetail {
 export default function CustomerDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { token } = useAuth();
   const [loading, setLoading] = useState(true);
   const [details, setDetails] = useState<CustomerDetail | null>(null);
   const backendUrl = Constants.expoConfig?.extra?.backendUrl || process.env.EXPO_PUBLIC_BACKEND_URL;
@@ -60,12 +58,7 @@ export default function CustomerDetailScreen() {
   const fetchCustomerDetails = async () => {
     try {
       const response = await fetch(
-        `${backendUrl}/api/customers/${params.customerId}/details`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        }
+        `${backendUrl}/api/customers/${params.customerId}/details`
       );
 
       if (!response.ok) {
@@ -97,9 +90,6 @@ export default function CustomerDetailScreen() {
                 `${backendUrl}/api/services/${serviceId}`,
                 {
                   method: 'DELETE',
-                  headers: {
-                    'Authorization': `Bearer ${token}`,
-                  },
                 }
               );
 

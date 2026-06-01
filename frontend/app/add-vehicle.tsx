@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useAuth } from '../src/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 
@@ -26,7 +25,6 @@ export default function AddVehicleScreen() {
   const [year, setYear] = useState('');
   const [loading, setLoading] = useState(false);
   const [decoding, setDecoding] = useState(false);
-  const { token } = useAuth();
   const router = useRouter();
   const backendUrl = Constants.expoConfig?.extra?.backendUrl || process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -44,12 +42,7 @@ export default function AddVehicleScreen() {
     setDecoding(true);
     try {
       const response = await fetch(
-        `${backendUrl}/api/vehicles/decode-vin/${encodeURIComponent(vin)}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        }
+        `${backendUrl}/api/vehicles/decode-vin/${encodeURIComponent(vin)}`
       );
 
       if (!response.ok) {
@@ -85,7 +78,6 @@ export default function AddVehicleScreen() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           customer_id: params.customerId,
