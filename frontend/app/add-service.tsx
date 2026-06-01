@@ -14,7 +14,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Constants from 'expo-constants';
 import { Picker } from '@react-native-picker/picker';
 
 interface Vehicle {
@@ -36,7 +35,7 @@ export default function AddServiceScreen() {
   const [cost, setCost] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const backendUrl = Constants.expoConfig?.extra?.backendUrl || process.env.EXPO_PUBLIC_BACKEND_URL;
+  const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
 
   const handleSubmit = async () => {
     if (!selectedVehicleId || !serviceDescription.trim() || !cost.trim()) {

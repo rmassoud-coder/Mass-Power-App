@@ -11,7 +11,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Constants from 'expo-constants';
 
 interface Vehicle {
   id: string;
@@ -49,7 +48,7 @@ export default function CustomerDetailScreen() {
   const params = useLocalSearchParams();
   const [loading, setLoading] = useState(true);
   const [details, setDetails] = useState<CustomerDetail | null>(null);
-  const backendUrl = Constants.expoConfig?.extra?.backendUrl || process.env.EXPO_PUBLIC_BACKEND_URL;
+  const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
 
   useEffect(() => {
     fetchCustomerDetails();

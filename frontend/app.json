@@ -8,9 +8,6 @@
     "scheme": "garage-service",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "extra": {
-      "backendUrl": "${EXPO_PUBLIC_BACKEND_URL}"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.garageservice.app"

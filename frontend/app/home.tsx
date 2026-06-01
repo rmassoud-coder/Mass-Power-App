@@ -12,7 +12,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Constants from 'expo-constants';
 
 export default function HomeScreen() {
   const [mobileNumber, setMobileNumber] = useState('');
@@ -21,7 +20,7 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(false);
   
   const router = useRouter();
-  const backendUrl = Constants.expoConfig?.extra?.backendUrl || process.env.EXPO_PUBLIC_BACKEND_URL;
+  const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
 
   const handleSearch = async (searchType: 'mobile' | 'vin' | 'plate', query: string) => {
     if (!query.trim()) {
