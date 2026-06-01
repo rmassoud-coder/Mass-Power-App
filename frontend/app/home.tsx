@@ -76,13 +76,22 @@ export default function HomeScreen() {
         style={styles.keyboardView}
       >
         <View style={styles.header}>
-          <View style={styles.headerIcon}>
-            <Ionicons name="car-sport" size={32} color="#2563eb" />
+          <View style={styles.headerLeft}>
+            <View style={styles.headerIcon}>
+              <Ionicons name="car-sport" size={32} color="#2563eb" />
+            </View>
+            <View>
+              <Text style={styles.headerTitle}>Garage Service</Text>
+              <Text style={styles.headerSubtitle}>Search Customer Records</Text>
+            </View>
           </View>
-          <View>
-            <Text style={styles.headerTitle}>Garage Service</Text>
-            <Text style={styles.headerSubtitle}>Search Customer Records</Text>
-          </View>
+          <TouchableOpacity
+            style={styles.headerAddButton}
+            onPress={() => router.push('/add-customer')}
+            testID="header-add-customer-button"
+          >
+            <Ionicons name="person-add" size={22} color="#fff" />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.content}>
@@ -192,11 +201,30 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 24,
     paddingVertical: 16,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  headerAddButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#2563eb',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   headerIcon: {
     width: 48,
