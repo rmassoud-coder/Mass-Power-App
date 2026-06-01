@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,9 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import ConfirmDialog from '../src/components/ConfirmDialog';
 
 interface Vehicle {
   id: string;
@@ -43,16 +44,27 @@ interface CustomerDetail {
   services: Service[];
 }
 
+type DeleteTarget =
+  | { type: 'customer' }
+  | { type: 'vehicle'; id: string }
+  | { type: 'service'; id: string }
+  | null;
+
 export default function CustomerDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const [loading, setLoading] = useState(true);
   const [details, setDetails] = useState<CustomerDetail | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
+  const [deleting, setDeleting] = useState(false);
   const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
 
-  useEffect(() => {
-    fetchCustomerDetails();
-  }, []);
+  // Auto-refresh whenever screen comes into focus (after edits/adds)
+  useFocusEffect(
+    useCallback(() => {
+      fetchCustomerDetails();
+    }, [])
+  );
 
   const fetchCustomerDetails = async () => {
     try {
@@ -74,100 +86,74 @@ export default function CustomerDetailScreen() {
     }
   };
 
-  const handleDeleteService = async (serviceId: string) => {
-    Alert.alert(
-      'Delete Service',
-      'Are you sure you want to delete this service record?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const response = await fetch(
-                `${backendUrl}/api/services/${serviceId}`,
-                {
-                  method: 'DELETE',
-                }
-              );
+  const performDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      let url = '';
+      if (deleteTarget.type === 'customer') {
+        url = `${backendUrl}/api/customers/${params.customerId}`;
+      } else if (deleteTarget.type === 'vehicle') {
+        url = `${backendUrl}/api/vehicles/${deleteTarget.id}`;
+      } else if (deleteTarget.type === 'service') {
+        url = `${backendUrl}/api/services/${deleteTarget.id}`;
+      }
 
-              if (!response.ok) {
-                throw new Error('Failed to delete service');
-              }
+      const response = await fetch(url, { method: 'DELETE' });
+      if (!response.ok) {
+        throw new Error('Delete failed');
+      }
 
-              Alert.alert('Success', 'Service deleted successfully');
-              fetchCustomerDetails();
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete service');
-            }
-          },
-        },
-      ]
-    );
+      const wasCustomer = deleteTarget.type === 'customer';
+      setDeleteTarget(null);
+
+      if (wasCustomer) {
+        router.replace('/home');
+      } else {
+        // Auto-refresh the screen after delete
+        await fetchCustomerDetails();
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to delete. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  const handleDeleteVehicle = async (vehicleId: string) => {
-    Alert.alert(
-      'Delete Vehicle',
-      'This will also delete all service records for this vehicle. Are you sure?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const response = await fetch(
-                `${backendUrl}/api/vehicles/${vehicleId}`,
-                { method: 'DELETE' }
-              );
-
-              if (!response.ok) {
-                throw new Error('Failed to delete vehicle');
-              }
-
-              Alert.alert('Success', 'Vehicle deleted successfully');
-              fetchCustomerDetails();
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete vehicle');
-            }
-          },
-        },
-      ]
-    );
+  const getDeleteDialogProps = () => {
+    if (!deleteTarget) {
+      return { title: '', message: '' };
+    }
+    if (deleteTarget.type === 'customer') {
+      return {
+        title: 'Delete Customer?',
+        message:
+          'This will permanently delete the customer, all their vehicles, and all service records. This action cannot be undone.',
+      };
+    }
+    if (deleteTarget.type === 'vehicle') {
+      return {
+        title: 'Delete Vehicle?',
+        message:
+          'This will permanently delete this vehicle and all its service records. This action cannot be undone.',
+      };
+    }
+    return {
+      title: 'Delete Service?',
+      message: 'This will permanently delete this service record. This action cannot be undone.',
+    };
   };
 
-  const handleDeleteCustomer = async () => {
-    Alert.alert(
-      'Delete Customer',
-      'This will permanently delete the customer, all their vehicles, and all service records. This action cannot be undone. Are you sure?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const response = await fetch(
-                `${backendUrl}/api/customers/${params.customerId}`,
-                { method: 'DELETE' }
-              );
+  const handleDeleteService = (serviceId: string) => {
+    setDeleteTarget({ type: 'service', id: serviceId });
+  };
 
-              if (!response.ok) {
-                throw new Error('Failed to delete customer');
-              }
+  const handleDeleteVehicle = (vehicleId: string) => {
+    setDeleteTarget({ type: 'vehicle', id: vehicleId });
+  };
 
-              Alert.alert('Success', 'Customer deleted successfully', [
-                { text: 'OK', onPress: () => router.replace('/home') },
-              ]);
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete customer');
-            }
-          },
-        },
-      ]
-    );
+  const handleDeleteCustomer = () => {
+    setDeleteTarget({ type: 'customer' });
   };
 
   if (loading) {
@@ -378,6 +364,17 @@ export default function CustomerDetailScreen() {
           )}
         </View>
       </ScrollView>
+
+      <ConfirmDialog
+        visible={deleteTarget !== null}
+        title={getDeleteDialogProps().title}
+        message={getDeleteDialogProps().message}
+        confirmText={deleting ? 'Deleting...' : 'Delete'}
+        cancelText="Cancel"
+        destructive={true}
+        onConfirm={performDelete}
+        onCancel={() => !deleting && setDeleteTarget(null)}
+      />
     </SafeAreaView>
   );
 }
