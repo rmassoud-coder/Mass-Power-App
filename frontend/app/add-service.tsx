@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { createService } from '../src/db/database';
 import { Picker } from '@react-native-picker/picker';
 
 interface Vehicle {
@@ -35,8 +36,7 @@ export default function AddServiceScreen() {
   const [cost, setCost] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
-
+  
   const handleSubmit = async () => {
     if (!selectedVehicleId || !serviceDescription.trim() || !cost.trim()) {
       Alert.alert('Error', 'Please fill in all required fields');
@@ -51,25 +51,13 @@ export default function AddServiceScreen() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${backendUrl}/api/services`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          vehicle_id: selectedVehicleId,
-          service_description: serviceDescription.trim(),
-          additional_info: additionalInfo.trim() || undefined,
-          cost: costNumber,
-        }),
-      });
+      await createService(
+        selectedVehicleId,
+        serviceDescription.trim(),
+        additionalInfo.trim() || undefined,
+        costNumber
+      );
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to add service');
-      }
-
-      // Navigate back directly - works reliably on web
       router.back();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to add service');

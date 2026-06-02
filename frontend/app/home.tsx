@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { searchCustomers, searchVehiclesByVin, searchVehiclesByPlate } from '../src/db/database';
 
 export default function HomeScreen() {
   const [mobileNumber, setMobileNumber] = useState('');
@@ -22,8 +23,7 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(false);
   
   const router = useRouter();
-  const { width, height } = useWindowDimensions();
-  const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
+  const { height } = useWindowDimensions();
 
   // Responsive sizing
   const isSmallScreen = height < 700;
@@ -31,7 +31,6 @@ export default function HomeScreen() {
   const cardMargin = isSmallScreen ? 10 : 16;
   const sectionGap = isSmallScreen ? 8 : 16;
   const titleFontSize = isSmallScreen ? 14 : 16;
-  const inputHeight = isSmallScreen ? 40 : 48;
   const buttonPadding = isSmallScreen ? 10 : 14;
 
   const handleSearch = async (searchType: 'mobile' | 'vin' | 'plate', query: string) => {
@@ -42,23 +41,15 @@ export default function HomeScreen() {
 
     setLoading(true);
     try {
-      let url = '';
+      let results: any[] = [];
       if (searchType === 'mobile') {
-        url = `${backendUrl}/api/customers/search?q=${encodeURIComponent(query)}`;
+        results = await searchCustomers(query.trim());
       } else if (searchType === 'vin') {
-        url = `${backendUrl}/api/vehicles/search-vin?vin=${encodeURIComponent(query)}`;
+        results = await searchVehiclesByVin(query.trim());
       } else if (searchType === 'plate') {
-        url = `${backendUrl}/api/vehicles/search-plate?plate=${encodeURIComponent(query)}`;
+        results = await searchVehiclesByPlate(query.trim());
       }
 
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        throw new Error('Search failed');
-      }
-
-      const results = await response.json();
-      
       if (results.length === 0) {
         Alert.alert(
           'No Results Found',
@@ -74,8 +65,8 @@ export default function HomeScreen() {
           params: { results: JSON.stringify(results) },
         });
       }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to search. Please try again.');
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to search. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -208,6 +199,15 @@ export default function HomeScreen() {
           >
             <Ionicons name="document-text-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
             <Text style={styles.reportButtonText}>View Services Report</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.backupButton, { paddingVertical: buttonPadding }]}
+            onPress={() => router.push('/backup')}
+            testID="backup-button"
+          >
+            <Ionicons name="cloud-download-outline" size={isSmallScreen ? 16 : 20} color="#1e293b" />
+            <Text style={styles.backupButtonText}>Backup & Restore</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -355,6 +355,22 @@ const styles = StyleSheet.create({
   },
   reportButtonText: {
     color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  backupButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  backupButtonText: {
+    color: '#1e293b',
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,

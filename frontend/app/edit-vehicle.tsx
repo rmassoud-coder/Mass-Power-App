@@ -14,6 +14,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { updateVehicle } from '../src/db/database';
+import { decodeVin } from '../src/utils/vinDecoder';
 
 export default function EditVehicleScreen() {
   const params = useLocalSearchParams();
@@ -25,8 +27,7 @@ export default function EditVehicleScreen() {
   const [loading, setLoading] = useState(false);
   const [decoding, setDecoding] = useState(false);
   const router = useRouter();
-  const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
-
+  
   const handleDecodeVIN = async () => {
     if (!vin.trim()) {
       Alert.alert('Error', 'Please enter a VIN number');
@@ -35,17 +36,11 @@ export default function EditVehicleScreen() {
 
     setDecoding(true);
     try {
-      const response = await fetch(
-        `${backendUrl}/api/vehicles/decode-vin/${encodeURIComponent(vin)}`
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to decode VIN');
-      }
-
-      const data = await response.json();
+      const data = await decodeVin(vin);
       
-      if (data.error) {
+      if (data.offline) {
+        Alert.alert('No Internet', 'VIN decoder requires internet. Please enter vehicle details manually.');
+      } else if (data.error) {
         Alert.alert('VIN Decoder', data.error);
       } else {
         if (data.make) setMake(data.make);
@@ -68,26 +63,15 @@ export default function EditVehicleScreen() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${backendUrl}/api/vehicles/${params.vehicleId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          vin: vin.trim(),
-          plate_number: plateNumber.trim(),
-          make: make.trim(),
-          model: model.trim(),
-          year: year.trim() || undefined,
-        }),
-      });
+      await updateVehicle(
+        params.vehicleId as string,
+        vin.trim(),
+        plateNumber.trim(),
+        make.trim(),
+        model.trim(),
+        year.trim() || undefined
+      );
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to update vehicle');
-      }
-
-      Alert.alert('Success', 'Vehicle updated successfully');
       router.back();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to update vehicle');

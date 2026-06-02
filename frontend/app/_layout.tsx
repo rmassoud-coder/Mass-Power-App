@@ -4,33 +4,44 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { Asset } from 'expo-asset';
-import { Image } from 'react-native';
+import { Image, Platform, View, Text } from 'react-native';
+import { initDatabase } from '../src/db/database';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [appIsReady, setAppIsReady] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
 
   useEffect(() => {
     async function prepare() {
       try {
-        // Prewarm icon assets for Expo Go Android
-        const iconAssets = [
-          require('../assets/images/icon.png'),
-          require('../assets/images/adaptive-icon.png'),
-        ];
+        // Initialize local SQLite database
+        await initDatabase();
 
-        const cacheImages = iconAssets.map((icon) => {
-          return Asset.fromModule(icon).downloadAsync();
-        });
+        // Prewarm icon assets only on native (skip on web)
+        if (Platform.OS !== 'web') {
+          const iconAssets = [
+            require('../assets/images/icon.png'),
+            require('../assets/images/adaptive-icon.png'),
+          ];
 
-        await Promise.all(cacheImages);
+          const cacheImages = iconAssets.map((icon) => {
+            return Asset.fromModule(icon).downloadAsync();
+          });
 
-        iconAssets.forEach((icon) => {
-          Image.prefetch(Image.resolveAssetSource(icon).uri);
-        });
-      } catch (e) {
+          await Promise.all(cacheImages);
+
+          iconAssets.forEach((icon) => {
+            const source = Image.resolveAssetSource(icon);
+            if (source?.uri) {
+              Image.prefetch(source.uri);
+            }
+          });
+        }
+      } catch (e: any) {
         console.warn(e);
+        setInitError(e?.message || 'Failed to initialize database');
       } finally {
         setAppIsReady(true);
         await SplashScreen.hideAsync();
@@ -42,6 +53,16 @@ export default function RootLayout() {
 
   if (!appIsReady) {
     return null;
+  }
+
+  if (initError) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+        <Text style={{ fontSize: 18, color: '#ef4444', textAlign: 'center' }}>
+          Failed to start: {initError}
+        </Text>
+      </View>
+    );
   }
 
   return (
@@ -59,6 +80,7 @@ export default function RootLayout() {
           <Stack.Screen name="add-service" />
           <Stack.Screen name="edit-service" />
           <Stack.Screen name="report" />
+          <Stack.Screen name="backup" />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>

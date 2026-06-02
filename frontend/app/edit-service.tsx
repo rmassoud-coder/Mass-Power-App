@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { updateService } from '../src/db/database';
 
 export default function EditServiceScreen() {
   const params = useLocalSearchParams();
@@ -22,8 +23,7 @@ export default function EditServiceScreen() {
   const [cost, setCost] = useState(params.cost as string);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
-
+  
   const handleSubmit = async () => {
     if (!serviceDescription.trim() || !cost.trim()) {
       Alert.alert('Error', 'Please fill in all required fields');
@@ -38,24 +38,13 @@ export default function EditServiceScreen() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${backendUrl}/api/services/${params.serviceId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          service_description: serviceDescription.trim(),
-          additional_info: additionalInfo.trim() || undefined,
-          cost: costNumber,
-        }),
-      });
+      await updateService(
+        params.serviceId as string,
+        serviceDescription.trim(),
+        additionalInfo.trim() || undefined,
+        costNumber
+      );
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to update service');
-      }
-
-      Alert.alert('Success', 'Service updated successfully');
       router.back();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to update service');

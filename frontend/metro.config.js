@@ -5,6 +5,9 @@ const { FileStore } = require('metro-cache');
 
 const config = getDefaultConfig(__dirname);
 
+// Enable .wasm support for expo-sqlite web
+config.resolver.assetExts.push('wasm');
+
 // Use a stable on-disk store (shared across web/android)
 const root = process.env.METRO_CACHE_ROOT || path.join(__dirname, '.metro-cache');
 config.cacheStores = [

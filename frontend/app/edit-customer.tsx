@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { updateCustomer } from '../src/db/database';
 
 export default function EditCustomerScreen() {
   const params = useLocalSearchParams();
@@ -21,8 +22,7 @@ export default function EditCustomerScreen() {
   const [mobileNumber, setMobileNumber] = useState(params.mobileNumber as string);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
-
+  
   const handleSubmit = async () => {
     if (!name.trim() || !mobileNumber.trim()) {
       Alert.alert('Error', 'Please fill in all fields');
@@ -31,21 +31,7 @@ export default function EditCustomerScreen() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${backendUrl}/api/customers/${params.customerId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: name.trim(),
-          mobile_number: mobileNumber.trim(),
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to update customer');
-      }
+      await updateCustomer(params.customerId as string, name.trim(), mobileNumber.trim());
 
       router.back();
     } catch (error: any) {

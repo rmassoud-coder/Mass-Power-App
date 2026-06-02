@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { getReport } from '../src/db/database';
 
 interface ReportItem {
   service_id: string;
@@ -42,8 +43,7 @@ type FilterType = 'mobile' | 'vin' | 'plate';
 
 export default function ReportScreen() {
   const router = useRouter();
-  const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
-
+  
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [filterType, setFilterType] = useState<FilterType>('mobile');
@@ -64,20 +64,13 @@ export default function ReportScreen() {
 
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (startDate) params.append('start_date', `${startDate}T00:00:00`);
-      if (endDate) params.append('end_date', `${endDate}T23:59:59`);
-      if (filterValue.trim()) {
-        params.append(filterType, filterValue.trim());
-      }
-
-      const response = await fetch(`${backendUrl}/api/reports/services?${params.toString()}`);
-
-      if (!response.ok) {
-        throw new Error('Failed to generate report');
-      }
-
-      const data = await response.json();
+      const data = await getReport(
+        startDate ? `${startDate}T00:00:00` : undefined,
+        endDate ? `${endDate}T23:59:59` : undefined,
+        filterType === 'mobile' && filterValue.trim() ? filterValue.trim() : undefined,
+        filterType === 'vin' && filterValue.trim() ? filterValue.trim() : undefined,
+        filterType === 'plate' && filterValue.trim() ? filterValue.trim() : undefined,
+      );
       setReport(data);
     } catch (error) {
       Alert.alert('Error', 'Failed to generate report');

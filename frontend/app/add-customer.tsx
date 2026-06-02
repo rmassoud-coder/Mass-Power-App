@@ -14,14 +14,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { createCustomer } from '../src/db/database';
 
 export default function AddCustomerScreen() {
   const [name, setName] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
-
+  
   const handleSubmit = async () => {
     if (!name.trim() || !mobileNumber.trim()) {
       Alert.alert('Error', 'Please fill in all fields');
@@ -30,23 +30,7 @@ export default function AddCustomerScreen() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${backendUrl}/api/customers`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: name.trim(),
-          mobile_number: mobileNumber.trim(),
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to create customer');
-      }
-
-      const customer = await response.json();
+      const customer = await createCustomer(name.trim(), mobileNumber.trim());
       // After creating, navigate to add-vehicle for this customer
       router.replace({
         pathname: '/add-vehicle',

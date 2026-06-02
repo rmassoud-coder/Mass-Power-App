@@ -12,6 +12,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import ConfirmDialog from '../src/components/ConfirmDialog';
+import {
+  getCustomerDetails,
+  deleteCustomer,
+  deleteVehicle,
+  deleteService,
+  CustomerDetail,
+} from '../src/db/database';
 
 interface Vehicle {
   id: string;
@@ -57,7 +64,6 @@ export default function CustomerDetailScreen() {
   const [details, setDetails] = useState<CustomerDetail | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
   const [deleting, setDeleting] = useState(false);
-  const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
 
   // Auto-refresh whenever screen comes into focus (after edits/adds)
   useFocusEffect(
@@ -68,18 +74,10 @@ export default function CustomerDetailScreen() {
 
   const fetchCustomerDetails = async () => {
     try {
-      const response = await fetch(
-        `${backendUrl}/api/customers/${params.customerId}/details`
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch customer details');
-      }
-
-      const data = await response.json();
+      const data = await getCustomerDetails(params.customerId as string);
       setDetails(data);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to load customer details');
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to load customer details');
       router.back();
     } finally {
       setLoading(false);
@@ -90,18 +88,12 @@ export default function CustomerDetailScreen() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      let url = '';
       if (deleteTarget.type === 'customer') {
-        url = `${backendUrl}/api/customers/${params.customerId}`;
+        await deleteCustomer(params.customerId as string);
       } else if (deleteTarget.type === 'vehicle') {
-        url = `${backendUrl}/api/vehicles/${deleteTarget.id}`;
+        await deleteVehicle(deleteTarget.id);
       } else if (deleteTarget.type === 'service') {
-        url = `${backendUrl}/api/services/${deleteTarget.id}`;
-      }
-
-      const response = await fetch(url, { method: 'DELETE' });
-      if (!response.ok) {
-        throw new Error('Delete failed');
+        await deleteService(deleteTarget.id);
       }
 
       const wasCustomer = deleteTarget.type === 'customer';
@@ -110,11 +102,10 @@ export default function CustomerDetailScreen() {
       if (wasCustomer) {
         router.replace('/home');
       } else {
-        // Auto-refresh the screen after delete
         await fetchCustomerDetails();
       }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to delete. Please try again.');
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to delete. Please try again.');
     } finally {
       setDeleting(false);
     }

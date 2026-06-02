@@ -1,0 +1,106 @@
+{
+  "customers": [
+    {
+      "id": "6a1dcd13d860efc6bc5dc11e",
+      "name": "John Doe",
+      "mobile_number": "555-1234",
+      "created_at": "2026-06-01T18:18:59.096000",
+      "updated_at": "2026-06-01T18:18:59.096000"
+    },
+    {
+      "id": "6a1dcdb1d860efc6bc5dc121",
+      "name": "John Smith Updated",
+      "mobile_number": "555-0123",
+      "created_at": "2026-06-01T18:21:37.711000",
+      "updated_at": "2026-06-01T18:21:38.143000"
+    },
+    {
+      "id": "6a1dd2ca1f337421427357be",
+      "name": "Jane Smith",
+      "mobile_number": "555-9999",
+      "created_at": "2026-06-01T18:43:22.645000",
+      "updated_at": "2026-06-01T18:43:22.645000"
+    },
+    {
+      "id": "6a1dd7171f337421427357bf",
+      "name": "Rabih",
+      "mobile_number": "70761506",
+      "created_at": "2026-06-01T19:01:43.095000",
+      "updated_at": "2026-06-01T19:01:43.095000"
+    }
+  ],
+  "vehicles": [
+    {
+      "id": "6a1dcd1ed860efc6bc5dc11f",
+      "customer_id": "6a1dcd13d860efc6bc5dc11e",
+      "vin": "5UXWX7C5*BA",
+      "plate_number": "ABC123",
+      "make": "BMW",
+      "model": "X3",
+      "year": "2011",
+      "created_at": "2026-06-01T18:19:10.363000"
+    },
+    {
+      "id": "6a1dcdb3d860efc6bc5dc122",
+      "customer_id": "6a1dcdb1d860efc6bc5dc121",
+      "vin": "5UXWX7C5*BA",
+      "plate_number": "ABC-1234",
+      "make": "BMW",
+      "model": "X3",
+      "year": "2011",
+      "created_at": "2026-06-01T18:21:39.097000"
+    },
+    {
+      "id": "6a1dd77a1f337421427357c8",
+      "customer_id": "6a1dd7171f337421427357bf",
+      "vin": "WBANE53586CK89712",
+      "plate_number": "150150",
+      "make": "BMW",
+      "model": "525i",
+      "year": "2006",
+      "created_at": "2026-06-01T19:03:22.006000"
+    },
+    {
+      "id": "6a1defec3b0a760e759d9967",
+      "customer_id": "6a1dd7171f337421427357bf",
+      "vin": "WAURGB4H5CN001311",
+      "plate_number": "155155",
+      "make": "AUDI",
+      "model": "A8",
+      "year": "2011",
+      "created_at": "2026-06-01T20:47:40.751000"
+    }
+  ],
+  "services": [
+    {
+      "id": "6a1dcd23d860efc6bc5dc120",
+      "vehicle_id": "6a1dcd1ed860efc6bc5dc11f",
+      "customer_id": "6a1dcd13d860efc6bc5dc11e",
+      "service_description": "Oil Change",
+      "additional_info": "Full synthetic oil, new filter",
+      "cost": 75.5,
+      "service_date": "2026-06-01T18:19:15.953000",
+      "created_at": "2026-06-01T18:19:15.953000"
+    },
+    {
+      "id": "6a1ddee43b0a760e759d9966",
+      "vehicle_id": "6a1dd77a1f337421427357c8",
+      "customer_id": "6a1dd7171f337421427357bf",
+      "service_description": "Electric Work",
+      "additional_info": "",
+      "cost": 50.0,
+      "service_date": "2026-06-01T19:35:00.840000",
+      "created_at": "2026-06-01T19:35:00.840000"
+    },
+    {
+      "id": "6a1ddc6d5dbbb08f04a0e55e",
+      "vehicle_id": "6a1dd77a1f337421427357c8",
+      "customer_id": "6a1dd7171f337421427357bf",
+      "service_description": "Ac Freon",
+      "additional_info": "",
+      "cost": 30.0,
+      "service_date": "2026-06-01T19:24:29.262000",
+      "created_at": "2026-06-01T19:24:29.262000"
+    }
+  ]
+}
