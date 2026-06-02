@@ -21,6 +21,7 @@ export default function EditServiceScreen() {
   const [serviceDescription, setServiceDescription] = useState(params.serviceDescription as string);
   const [additionalInfo, setAdditionalInfo] = useState((params.additionalInfo as string) || '');
   const [cost, setCost] = useState(params.cost as string);
+  const [isPaid, setIsPaid] = useState(params.isPaid === 'true');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   
@@ -42,7 +43,8 @@ export default function EditServiceScreen() {
         params.serviceId as string,
         serviceDescription.trim(),
         additionalInfo.trim() || undefined,
-        costNumber
+        costNumber,
+        isPaid
       );
 
       router.back();
@@ -116,6 +118,23 @@ export default function EditServiceScreen() {
                 />
               </View>
             </View>
+
+            {/* Paid Checkbox */}
+            <TouchableOpacity
+              style={styles.paidCheckbox}
+              onPress={() => setIsPaid(!isPaid)}
+              testID="paid-checkbox-edit"
+            >
+              <View style={[styles.checkbox, isPaid && styles.checkboxChecked]}>
+                {isPaid && <Ionicons name="checkmark" size={18} color="#fff" />}
+              </View>
+              <View style={styles.paidCheckboxLabel}>
+                <Text style={styles.paidCheckboxText}>Invoice Paid</Text>
+                <Text style={styles.paidCheckboxSubtext}>
+                  {isPaid ? 'Marked as paid' : 'Will show as unpaid in red'}
+                </Text>
+              </View>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.submitButton, loading && styles.submitButtonDisabled]}
@@ -191,6 +210,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 16,
     marginBottom: 32,
+  },
+  paidCheckbox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 24,
+  },
+  checkbox: {
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#cbd5e1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  checkboxChecked: {
+    backgroundColor: '#10b981',
+    borderColor: '#10b981',
+  },
+  paidCheckboxLabel: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  paidCheckboxText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+  },
+  paidCheckboxSubtext: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
   },
   submitButtonDisabled: { opacity: 0.6 },
   submitButtonText: { color: '#fff', fontSize: 18, fontWeight: '600', marginLeft: 8 },

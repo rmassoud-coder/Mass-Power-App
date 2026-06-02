@@ -312,12 +312,19 @@ export default function CustomerDetailScreen() {
                     <Text style={styles.noServicesText}>No services yet for this vehicle</Text>
                   ) : (
                     vehicleServices.map((service) => (
-                      <View key={service.id} style={styles.serviceItemCard}>
+                      <View key={service.id} style={[styles.serviceItemCard, !service.is_paid && styles.serviceItemUnpaid]}>
                         <View style={styles.serviceItemContent}>
                           <View style={styles.serviceItemMain}>
-                            <Text style={styles.serviceItemDescription}>
-                              {service.service_description}
-                            </Text>
+                            <View style={styles.serviceItemTitleRow}>
+                              <Text style={styles.serviceItemDescription}>
+                                {service.service_description}
+                              </Text>
+                              {!service.is_paid && (
+                                <View style={styles.unpaidBadge}>
+                                  <Text style={styles.unpaidBadgeText}>UNPAID</Text>
+                                </View>
+                              )}
+                            </View>
                             {service.additional_info && (
                               <Text style={styles.serviceItemAdditional}>
                                 {service.additional_info}
@@ -328,7 +335,9 @@ export default function CustomerDetailScreen() {
                             </Text>
                           </View>
                           <View style={styles.serviceItemRight}>
-                            <Text style={styles.serviceItemCost}>${service.cost.toFixed(2)}</Text>
+                            <Text style={[styles.serviceItemCost, !service.is_paid && styles.serviceItemCostUnpaid]}>
+                              ${service.cost.toFixed(2)}
+                            </Text>
                             <View style={styles.serviceItemActions}>
                               <TouchableOpacity
                                 onPress={() =>
@@ -339,6 +348,7 @@ export default function CustomerDetailScreen() {
                                       serviceDescription: service.service_description,
                                       additionalInfo: service.additional_info || '',
                                       cost: service.cost.toString(),
+                                      isPaid: service.is_paid ? 'true' : 'false',
                                     },
                                   })
                                 }
@@ -692,6 +702,31 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderLeftWidth: 3,
     borderLeftColor: '#10b981',
+  },
+  serviceItemUnpaid: {
+    backgroundColor: '#fef2f2',
+    borderLeftColor: '#ef4444',
+  },
+  serviceItemTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  unpaidBadge: {
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  unpaidBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  serviceItemCostUnpaid: {
+    color: '#ef4444',
   },
   serviceItemContent: {
     flexDirection: 'row',

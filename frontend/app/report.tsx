@@ -30,6 +30,7 @@ interface ReportItem {
   service_description: string;
   additional_info?: string;
   cost: number;
+  is_paid: boolean;
   service_date: string;
 }
 
@@ -37,6 +38,8 @@ interface ReportResponse {
   items: ReportItem[];
   total_cost: number;
   total_services: number;
+  unpaid_count: number;
+  unpaid_total: number;
 }
 
 type FilterType = 'mobile' | 'vin' | 'plate';
@@ -48,6 +51,7 @@ export default function ReportScreen() {
   const [endDate, setEndDate] = useState('');
   const [filterType, setFilterType] = useState<FilterType>('mobile');
   const [filterValue, setFilterValue] = useState('');
+  const [unpaidOnly, setUnpaidOnly] = useState(false);
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<ReportResponse | null>(null);
 
@@ -70,6 +74,7 @@ export default function ReportScreen() {
         filterType === 'mobile' && filterValue.trim() ? filterValue.trim() : undefined,
         filterType === 'vin' && filterValue.trim() ? filterValue.trim() : undefined,
         filterType === 'plate' && filterValue.trim() ? filterValue.trim() : undefined,
+        unpaidOnly,
       );
       setReport(data);
     } catch (error) {
@@ -83,6 +88,7 @@ export default function ReportScreen() {
     setStartDate('');
     setEndDate('');
     setFilterValue('');
+    setUnpaidOnly(false);
     setReport(null);
   };
 
@@ -194,6 +200,23 @@ export default function ReportScreen() {
                 autoCapitalize={filterType === 'mobile' ? 'none' : 'characters'}
               />
             </View>
+
+            {/* Unpaid Only Toggle */}
+            <TouchableOpacity
+              style={styles.unpaidToggle}
+              onPress={() => setUnpaidOnly(!unpaidOnly)}
+              testID="unpaid-only-toggle"
+            >
+              <View style={[styles.checkbox, unpaidOnly && styles.checkboxCheckedRed]}>
+                {unpaidOnly && <Ionicons name="checkmark" size={18} color="#fff" />}
+              </View>
+              <View style={styles.unpaidToggleLabel}>
+                <Text style={styles.unpaidToggleText}>Show Unpaid Services Only</Text>
+                <Text style={styles.unpaidToggleSubtext}>
+                  Filter to show only services that haven't been paid yet
+                </Text>
+              </View>
+            </TouchableOpacity>
           </View>
 
           {/* Action Buttons */}
@@ -234,6 +257,20 @@ export default function ReportScreen() {
                 </View>
               </View>
 
+              {report.unpaid_count > 0 && (
+                <View style={styles.unpaidSummaryCard}>
+                  <View style={styles.unpaidSummaryRow}>
+                    <Ionicons name="alert-circle" size={20} color="#ef4444" />
+                    <Text style={styles.unpaidSummaryText}>
+                      {report.unpaid_count} unpaid service{report.unpaid_count !== 1 ? 's' : ''}
+                    </Text>
+                  </View>
+                  <Text style={styles.unpaidSummaryAmount}>
+                    Outstanding: ${report.unpaid_total.toFixed(2)}
+                  </Text>
+                </View>
+              )}
+
               {report.items.length === 0 ? (
                 <View style={styles.emptyContainer}>
                   <Ionicons name="document-outline" size={48} color="#cbd5e1" />
@@ -243,18 +280,27 @@ export default function ReportScreen() {
                 <View style={styles.itemsList}>
                   <Text style={styles.itemsTitle}>Service Records</Text>
                   {report.items.map((item) => (
-                    <View key={item.service_id} style={styles.reportItem}>
+                    <View key={item.service_id} style={[styles.reportItem, !item.is_paid && styles.reportItemUnpaid]}>
                       <View style={styles.itemHeader}>
                         <View style={styles.itemIconContainer}>
                           <Ionicons name="construct" size={20} color="#10b981" />
                         </View>
                         <View style={styles.itemInfo}>
-                          <Text style={styles.itemDescription}>{item.service_description}</Text>
+                          <View style={styles.itemTitleRow}>
+                            <Text style={styles.itemDescription}>{item.service_description}</Text>
+                            {!item.is_paid && (
+                              <View style={styles.unpaidBadge}>
+                                <Text style={styles.unpaidBadgeText}>UNPAID</Text>
+                              </View>
+                            )}
+                          </View>
                           {item.additional_info && (
                             <Text style={styles.itemAdditional}>{item.additional_info}</Text>
                           )}
                         </View>
-                        <Text style={styles.itemCost}>${item.cost.toFixed(2)}</Text>
+                        <Text style={[styles.itemCost, !item.is_paid && styles.itemCostUnpaid]}>
+                          ${item.cost.toFixed(2)}
+                        </Text>
                       </View>
                       <View style={styles.itemDetails}>
                         <View style={styles.detailRow}>
@@ -353,6 +399,95 @@ const styles = StyleSheet.create({
   filterTabActive: { backgroundColor: '#2563eb' },
   filterTabText: { fontSize: 13, fontWeight: '600', color: '#64748b', marginLeft: 6 },
   filterTabTextActive: { color: '#fff' },
+  unpaidToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginTop: 12,
+    backgroundColor: '#fef2f2',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#cbd5e1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  checkboxCheckedRed: {
+    backgroundColor: '#ef4444',
+    borderColor: '#ef4444',
+  },
+  unpaidToggleLabel: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  unpaidToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#991b1b',
+  },
+  unpaidToggleSubtext: {
+    fontSize: 12,
+    color: '#b91c1c',
+    marginTop: 2,
+  },
+  unpaidSummaryCard: {
+    backgroundColor: '#fef2f2',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  unpaidSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  unpaidSummaryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#991b1b',
+    marginLeft: 6,
+  },
+  unpaidSummaryAmount: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#ef4444',
+  },
+  reportItemUnpaid: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#ef4444',
+    backgroundColor: '#fef9f9',
+  },
+  itemTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  unpaidBadge: {
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 6,
+  },
+  unpaidBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  itemCostUnpaid: {
+    color: '#ef4444',
+  },
   buttonRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   clearButton: {
     paddingVertical: 14,

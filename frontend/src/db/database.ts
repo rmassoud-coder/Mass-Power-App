@@ -44,6 +44,7 @@ export interface Service {
   service_description: string;
   additional_info?: string;
   cost: number;
+  is_paid: boolean;
   service_date: string;
   created_at: string;
 }
@@ -74,6 +75,7 @@ export interface ReportItem {
   service_description: string;
   additional_info?: string;
   cost: number;
+  is_paid: boolean;
   service_date: string;
 }
 
@@ -112,6 +114,7 @@ export async function initDatabase() {
       service_description TEXT NOT NULL,
       additional_info TEXT,
       cost REAL NOT NULL,
+      is_paid INTEGER NOT NULL DEFAULT 1,
       service_date TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
@@ -123,6 +126,13 @@ export async function initDatabase() {
       value TEXT
     );
   `);
+
+  // Migration: add is_paid column if missing (defaults to 1=paid for existing records)
+  try {
+    await db.execAsync(`ALTER TABLE services ADD COLUMN is_paid INTEGER NOT NULL DEFAULT 1`);
+  } catch {
+    // Column already exists - ignore
+  }
 
   // Seed data only once
   const seeded = await db.getFirstAsync<{ value: string }>(
@@ -228,10 +238,14 @@ export async function getCustomerDetails(customerId: string): Promise<CustomerDe
     `SELECT * FROM vehicles WHERE customer_id = ?`,
     [customerId]
   );
-  const services = await db.getAllAsync<Service>(
+  const rawServices = await db.getAllAsync<any>(
     `SELECT * FROM services WHERE customer_id = ? ORDER BY service_date DESC`,
     [customerId]
   );
+  const services: Service[] = rawServices.map((s) => ({
+    ...s,
+    is_paid: s.is_paid === 1,
+  }));
   return { customer, vehicles, services };
 }
 
@@ -342,7 +356,8 @@ export async function createService(
   vehicleId: string,
   serviceDescription: string,
   additionalInfo: string | undefined,
-  cost: number
+  cost: number,
+  isPaid: boolean
 ): Promise<Service> {
   const db = await getDb();
   const vehicle = await db.getFirstAsync<Vehicle>(
@@ -355,8 +370,8 @@ export async function createService(
   const id = generateId();
   const now = new Date().toISOString();
   await db.runAsync(
-    `INSERT INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, service_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, vehicleId, vehicle.customer_id, serviceDescription, additionalInfo || null, cost, now, now]
+    `INSERT INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, service_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, vehicleId, vehicle.customer_id, serviceDescription, additionalInfo || null, cost, isPaid ? 1 : 0, now, now]
   );
   return {
     id,
@@ -365,6 +380,7 @@ export async function createService(
     service_description: serviceDescription,
     additional_info: additionalInfo,
     cost,
+    is_paid: isPaid,
     service_date: now,
     created_at: now,
   };
@@ -374,12 +390,13 @@ export async function updateService(
   id: string,
   serviceDescription: string,
   additionalInfo: string | undefined,
-  cost: number
+  cost: number,
+  isPaid: boolean
 ): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `UPDATE services SET service_description = ?, additional_info = ?, cost = ? WHERE id = ?`,
-    [serviceDescription, additionalInfo || null, cost, id]
+    `UPDATE services SET service_description = ?, additional_info = ?, cost = ?, is_paid = ? WHERE id = ?`,
+    [serviceDescription, additionalInfo || null, cost, isPaid ? 1 : 0, id]
   );
 }
 
@@ -394,8 +411,9 @@ export async function getReport(
   endDate?: string,
   mobile?: string,
   vin?: string,
-  plate?: string
-): Promise<{ items: ReportItem[]; total_cost: number; total_services: number }> {
+  plate?: string,
+  unpaidOnly?: boolean
+): Promise<{ items: ReportItem[]; total_cost: number; total_services: number; unpaid_count: number; unpaid_total: number }> {
   const db = await getDb();
   const conditions: string[] = [];
   const params: any[] = [];
@@ -420,6 +438,9 @@ export async function getReport(
     conditions.push('v.plate_number LIKE ?');
     params.push(`%${plate}%`);
   }
+  if (unpaidOnly) {
+    conditions.push('s.is_paid = 0');
+  }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const sql = `
@@ -437,6 +458,7 @@ export async function getReport(
       s.service_description,
       s.additional_info,
       s.cost,
+      s.is_paid as is_paid_int,
       s.service_date
     FROM services s
     JOIN customers c ON s.customer_id = c.id
@@ -445,9 +467,34 @@ export async function getReport(
     ORDER BY s.service_date DESC
   `;
 
-  const items = await db.getAllAsync<ReportItem>(sql, params);
+  const rawItems = await db.getAllAsync<any>(sql, params);
+  const items: ReportItem[] = rawItems.map((r) => ({
+    service_id: r.service_id,
+    customer_id: r.customer_id,
+    customer_name: r.customer_name,
+    customer_mobile: r.customer_mobile,
+    vehicle_id: r.vehicle_id,
+    vehicle_make: r.vehicle_make,
+    vehicle_model: r.vehicle_model,
+    vehicle_year: r.vehicle_year,
+    vehicle_vin: r.vehicle_vin,
+    vehicle_plate: r.vehicle_plate,
+    service_description: r.service_description,
+    additional_info: r.additional_info,
+    cost: r.cost,
+    is_paid: r.is_paid_int === 1,
+    service_date: r.service_date,
+  }));
   const total_cost = items.reduce((sum, i) => sum + i.cost, 0);
-  return { items, total_cost, total_services: items.length };
+  const unpaidItems = items.filter((i) => !i.is_paid);
+  const unpaid_total = unpaidItems.reduce((sum, i) => sum + i.cost, 0);
+  return {
+    items,
+    total_cost,
+    total_services: items.length,
+    unpaid_count: unpaidItems.length,
+    unpaid_total,
+  };
 }
 
 // ============ Export / Import ============
@@ -455,7 +502,11 @@ export async function exportAllData(): Promise<string> {
   const db = await getDb();
   const customers = await db.getAllAsync<Customer>(`SELECT * FROM customers`);
   const vehicles = await db.getAllAsync<Vehicle>(`SELECT * FROM vehicles`);
-  const services = await db.getAllAsync<Service>(`SELECT * FROM services`);
+  const rawServices = await db.getAllAsync<any>(`SELECT * FROM services`);
+  const services: Service[] = rawServices.map((s) => ({
+    ...s,
+    is_paid: s.is_paid === 1,
+  }));
   const exportData = {
     version: 1,
     exported_at: new Date().toISOString(),
@@ -503,8 +554,18 @@ export async function importData(jsonString: string, mergeMode: boolean): Promis
   }
   for (const s of data.services) {
     const result = await db.runAsync(
-      `INSERT OR IGNORE INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, service_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [s.id, s.vehicle_id, s.customer_id, s.service_description, s.additional_info || null, s.cost, s.service_date, s.created_at]
+      `INSERT OR IGNORE INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, service_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        s.id,
+        s.vehicle_id,
+        s.customer_id,
+        s.service_description,
+        s.additional_info || null,
+        s.cost,
+        s.is_paid === false ? 0 : 1,
+        s.service_date,
+        s.created_at,
+      ]
     );
     if (result.changes > 0) servicesAdded++;
   }
