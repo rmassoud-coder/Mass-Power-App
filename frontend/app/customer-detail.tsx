@@ -214,7 +214,17 @@ export default function CustomerDetailScreen() {
           </View>
         </View>
 
-        {/* Vehicles Section */}
+        {/* Total Summary */}
+        {details.vehicles.length > 0 && (
+          <View style={styles.summaryBar}>
+            <Text style={styles.summaryText}>
+              {details.vehicles.length} vehicle{details.vehicles.length !== 1 ? 's' : ''} • {details.services.length} service{details.services.length !== 1 ? 's' : ''}
+            </Text>
+            <Text style={styles.summaryTotalCost}>Total: ${totalCost.toFixed(2)}</Text>
+          </View>
+        )}
+
+        {/* Vehicles with their Services */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Vehicles ({details.vehicles.length})</Text>
@@ -227,140 +237,143 @@ export default function CustomerDetailScreen() {
               }
               style={styles.addButton}
             >
-              <Ionicons name="add-circle" size={24} color="#2563eb" />
+              <Ionicons name="add-circle" size={28} color="#2563eb" />
             </TouchableOpacity>
           </View>
 
-          {details.vehicles.map((vehicle) => (
-            <View key={vehicle.id} style={styles.vehicleCard}>
-              <View style={styles.vehicleHeader}>
-                <Ionicons name="car-sport" size={24} color="#2563eb" />
-                <View style={styles.vehicleInfo}>
-                  <Text style={styles.vehicleName}>
-                    {vehicle.year ? `${vehicle.year} ` : ''}{vehicle.make} {vehicle.model}
-                  </Text>
-                  <Text style={styles.vehicleMeta}>VIN: {vehicle.vin}</Text>
-                  <Text style={styles.vehicleMeta}>Plate: {vehicle.plate_number}</Text>
-                </View>
-                <View style={styles.vehicleActions}>
-                  <TouchableOpacity
-                    onPress={() =>
-                      router.push({
-                        pathname: '/edit-vehicle',
-                        params: {
-                          vehicleId: vehicle.id,
-                          vin: vehicle.vin,
-                          plateNumber: vehicle.plate_number,
-                          make: vehicle.make,
-                          model: vehicle.model,
-                          year: vehicle.year || '',
-                        },
-                      })
-                    }
-                    style={styles.cardActionButton}
-                  >
-                    <Ionicons name="create-outline" size={20} color="#2563eb" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => handleDeleteVehicle(vehicle.id)}
-                    style={styles.cardActionButton}
-                  >
-                    <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          ))}
+          {details.vehicles.map((vehicle) => {
+            const vehicleServices = details.services.filter((s) => s.vehicle_id === vehicle.id);
+            const vehicleTotalCost = vehicleServices.reduce((sum, s) => sum + s.cost, 0);
 
-          {details.vehicles.length === 0 && (
-            <Text style={styles.emptyText}>No vehicles registered</Text>
-          )}
-        </View>
-
-        {/* Services Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={styles.sectionTitle}>Service History ({details.services.length})</Text>
-              <Text style={styles.totalCost}>Total: ${totalCost.toFixed(2)}</Text>
-            </View>
-            <TouchableOpacity
-              onPress={() =>
-                router.push({
-                  pathname: '/add-service',
-                  params: {
-                    customerId: details.customer.id,
-                    vehicles: JSON.stringify(details.vehicles),
-                  },
-                })
-              }
-              style={styles.addButton}
-              disabled={details.vehicles.length === 0}
-            >
-              <Ionicons
-                name="add-circle"
-                size={24}
-                color={details.vehicles.length === 0 ? '#cbd5e1' : '#2563eb'}
-              />
-            </TouchableOpacity>
-          </View>
-
-          {details.services.map((service) => {
-            const vehicle = details.vehicles.find((v) => v.id === service.vehicle_id);
             return (
-              <View key={service.id} style={styles.serviceCard}>
-                <View style={styles.serviceHeader}>
-                  <View style={styles.serviceIconContainer}>
-                    <Ionicons name="construct" size={20} color="#10b981" />
+              <View key={vehicle.id} style={styles.vehicleGroupCard}>
+                {/* Vehicle Header */}
+                <View style={styles.vehicleGroupHeader}>
+                  <View style={styles.vehicleGroupIconContainer}>
+                    <Ionicons name="car-sport" size={24} color="#2563eb" />
                   </View>
-                  <View style={styles.serviceInfo}>
-                    <Text style={styles.serviceDescription}>{service.service_description}</Text>
-                    {service.additional_info && (
-                      <Text style={styles.serviceAdditional}>{service.additional_info}</Text>
-                    )}
-                    {vehicle && (
-                      <Text style={styles.serviceVehicle}>
-                        {vehicle.make} {vehicle.model} - {vehicle.plate_number}
-                      </Text>
-                    )}
-                    <Text style={styles.serviceDate}>
-                      {new Date(service.service_date).toLocaleDateString()}
+                  <View style={styles.vehicleGroupInfo}>
+                    <Text style={styles.vehicleGroupName}>
+                      {vehicle.year ? `${vehicle.year} ` : ''}{vehicle.make} {vehicle.model}
                     </Text>
+                    <Text style={styles.vehicleGroupMeta}>Plate: {vehicle.plate_number}</Text>
+                    <Text style={styles.vehicleGroupMeta}>VIN: {vehicle.vin}</Text>
                   </View>
-                  <View style={styles.serviceActions}>
-                    <Text style={styles.serviceCost}>${service.cost.toFixed(2)}</Text>
-                    <View style={styles.serviceButtonRow}>
-                      <TouchableOpacity
-                        onPress={() =>
-                          router.push({
-                            pathname: '/edit-service',
-                            params: {
-                              serviceId: service.id,
-                              serviceDescription: service.service_description,
-                              additionalInfo: service.additional_info || '',
-                              cost: service.cost.toString(),
-                            },
-                          })
-                        }
-                        style={styles.deleteButton}
-                      >
-                        <Ionicons name="create-outline" size={20} color="#2563eb" />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleDeleteService(service.id)}
-                        style={styles.deleteButton}
-                      >
-                        <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                      </TouchableOpacity>
+                  <View style={styles.vehicleGroupActions}>
+                    <TouchableOpacity
+                      onPress={() =>
+                        router.push({
+                          pathname: '/edit-vehicle',
+                          params: {
+                            vehicleId: vehicle.id,
+                            vin: vehicle.vin,
+                            plateNumber: vehicle.plate_number,
+                            make: vehicle.make,
+                            model: vehicle.model,
+                            year: vehicle.year || '',
+                          },
+                        })
+                      }
+                      style={styles.cardActionButton}
+                    >
+                      <Ionicons name="create-outline" size={20} color="#2563eb" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleDeleteVehicle(vehicle.id)}
+                      style={styles.cardActionButton}
+                    >
+                      <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Services Sub-section for this Vehicle */}
+                <View style={styles.servicesSubSection}>
+                  <View style={styles.servicesSubHeader}>
+                    <View style={styles.servicesSubHeaderLeft}>
+                      <Ionicons name="construct" size={16} color="#10b981" />
+                      <Text style={styles.servicesSubTitle}>
+                        Services ({vehicleServices.length})
+                      </Text>
+                      {vehicleServices.length > 0 && (
+                        <Text style={styles.vehicleSubtotal}>
+                          • ${vehicleTotalCost.toFixed(2)}
+                        </Text>
+                      )}
                     </View>
+                    <TouchableOpacity
+                      onPress={() =>
+                        router.push({
+                          pathname: '/add-service',
+                          params: {
+                            customerId: details.customer.id,
+                            vehicles: JSON.stringify([vehicle]),
+                          },
+                        })
+                      }
+                      style={styles.addServiceButton}
+                    >
+                      <Ionicons name="add-circle" size={22} color="#10b981" />
+                    </TouchableOpacity>
                   </View>
+
+                  {vehicleServices.length === 0 ? (
+                    <Text style={styles.noServicesText}>No services yet for this vehicle</Text>
+                  ) : (
+                    vehicleServices.map((service) => (
+                      <View key={service.id} style={styles.serviceItemCard}>
+                        <View style={styles.serviceItemContent}>
+                          <View style={styles.serviceItemMain}>
+                            <Text style={styles.serviceItemDescription}>
+                              {service.service_description}
+                            </Text>
+                            {service.additional_info && (
+                              <Text style={styles.serviceItemAdditional}>
+                                {service.additional_info}
+                              </Text>
+                            )}
+                            <Text style={styles.serviceItemDate}>
+                              {new Date(service.service_date).toLocaleDateString()}
+                            </Text>
+                          </View>
+                          <View style={styles.serviceItemRight}>
+                            <Text style={styles.serviceItemCost}>${service.cost.toFixed(2)}</Text>
+                            <View style={styles.serviceItemActions}>
+                              <TouchableOpacity
+                                onPress={() =>
+                                  router.push({
+                                    pathname: '/edit-service',
+                                    params: {
+                                      serviceId: service.id,
+                                      serviceDescription: service.service_description,
+                                      additionalInfo: service.additional_info || '',
+                                      cost: service.cost.toString(),
+                                    },
+                                  })
+                                }
+                                style={styles.serviceItemActionButton}
+                              >
+                                <Ionicons name="create-outline" size={18} color="#2563eb" />
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={() => handleDeleteService(service.id)}
+                                style={styles.serviceItemActionButton}
+                              >
+                                <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        </View>
+                      </View>
+                    ))
+                  )}
                 </View>
               </View>
             );
           })}
 
-          {details.services.length === 0 && (
-            <Text style={styles.emptyText}>No service records</Text>
+          {details.vehicles.length === 0 && (
+            <Text style={styles.emptyText}>No vehicles registered. Add a vehicle to start tracking services.</Text>
           )}
         </View>
       </ScrollView>
@@ -580,5 +593,151 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
     paddingVertical: 24,
+  },
+  summaryBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  summaryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e40af',
+  },
+  summaryTotalCost: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#10b981',
+  },
+  vehicleGroupCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden',
+  },
+  vehicleGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#f8fafc',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  vehicleGroupIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#eff6ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  vehicleGroupInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  vehicleGroupName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  vehicleGroupMeta: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 1,
+  },
+  vehicleGroupActions: {
+    flexDirection: 'row',
+  },
+  servicesSubSection: {
+    padding: 12,
+  },
+  servicesSubHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    paddingVertical: 6,
+    marginBottom: 6,
+  },
+  servicesSubHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  servicesSubTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#10b981',
+    marginLeft: 6,
+  },
+  vehicleSubtotal: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+    marginLeft: 4,
+  },
+  addServiceButton: {
+    padding: 2,
+  },
+  noServicesText: {
+    fontSize: 13,
+    color: '#94a3b8',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: 12,
+  },
+  serviceItemCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#10b981',
+  },
+  serviceItemContent: {
+    flexDirection: 'row',
+  },
+  serviceItemMain: {
+    flex: 1,
+  },
+  serviceItemDescription: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e293b',
+  },
+  serviceItemAdditional: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  serviceItemDate: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginTop: 4,
+  },
+  serviceItemRight: {
+    alignItems: 'flex-end',
+    marginLeft: 8,
+  },
+  serviceItemCost: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#10b981',
+    marginBottom: 4,
+  },
+  serviceItemActions: {
+    flexDirection: 'row',
+  },
+  serviceItemActionButton: {
+    padding: 4,
+    marginLeft: 2,
   },
 });
