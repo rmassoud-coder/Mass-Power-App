@@ -47,7 +47,42 @@ export interface Service {
   is_paid: boolean;
   service_date: string;
   created_at: string;
+  // Dashboard warning lights (booleans stored as 0/1 in SQLite)
+  dash_abs?: boolean;
+  dash_check_engine?: boolean;
+  dash_brake?: boolean;
+  dash_airbag?: boolean;
+  dash_immobilizer?: boolean;
 }
+
+// Service category options for dropdown
+export const SERVICE_CATEGORIES = [
+  'HVAC Services',
+  'Locksmith Services',
+  'Oil Services',
+  'Electrical Services',
+  'Mechanical Services',
+  'Other Services',
+] as const;
+
+export type ServiceCategory = typeof SERVICE_CATEGORIES[number];
+
+// Dashboard warning light definitions
+export interface DashLights {
+  abs: boolean;
+  check_engine: boolean;
+  brake: boolean;
+  airbag: boolean;
+  immobilizer: boolean;
+}
+
+export const EMPTY_DASH_LIGHTS: DashLights = {
+  abs: false,
+  check_engine: false,
+  brake: false,
+  airbag: false,
+  immobilizer: false,
+};
 
 export interface SearchResult {
   customer: Customer;
@@ -132,6 +167,22 @@ export async function initDatabase() {
     await db.execAsync(`ALTER TABLE services ADD COLUMN is_paid INTEGER NOT NULL DEFAULT 1`);
   } catch {
     // Column already exists - ignore
+  }
+
+  // Migration: dashboard warning light columns
+  const dashColumns = [
+    'dash_abs',
+    'dash_check_engine',
+    'dash_brake',
+    'dash_airbag',
+    'dash_immobilizer',
+  ];
+  for (const col of dashColumns) {
+    try {
+      await db.execAsync(`ALTER TABLE services ADD COLUMN ${col} INTEGER NOT NULL DEFAULT 0`);
+    } catch {
+      // Column already exists - ignore
+    }
   }
 
   // Seed data only once
@@ -245,6 +296,11 @@ export async function getCustomerDetails(customerId: string): Promise<CustomerDe
   const services: Service[] = rawServices.map((s) => ({
     ...s,
     is_paid: s.is_paid === 1,
+    dash_abs: s.dash_abs === 1,
+    dash_check_engine: s.dash_check_engine === 1,
+    dash_brake: s.dash_brake === 1,
+    dash_airbag: s.dash_airbag === 1,
+    dash_immobilizer: s.dash_immobilizer === 1,
   }));
   return { customer, vehicles, services };
 }
@@ -357,7 +413,8 @@ export async function createService(
   serviceDescription: string,
   additionalInfo: string | undefined,
   cost: number,
-  isPaid: boolean
+  isPaid: boolean,
+  dashLights?: DashLights
 ): Promise<Service> {
   const db = await getDb();
   const vehicle = await db.getFirstAsync<Vehicle>(
@@ -369,9 +426,25 @@ export async function createService(
   }
   const id = generateId();
   const now = new Date().toISOString();
+  const d = dashLights || EMPTY_DASH_LIGHTS;
   await db.runAsync(
-    `INSERT INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, service_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, vehicleId, vehicle.customer_id, serviceDescription, additionalInfo || null, cost, isPaid ? 1 : 0, now, now]
+    `INSERT INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, service_date, created_at, dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      vehicleId,
+      vehicle.customer_id,
+      serviceDescription,
+      additionalInfo || null,
+      cost,
+      isPaid ? 1 : 0,
+      now,
+      now,
+      d.abs ? 1 : 0,
+      d.check_engine ? 1 : 0,
+      d.brake ? 1 : 0,
+      d.airbag ? 1 : 0,
+      d.immobilizer ? 1 : 0,
+    ]
   );
   return {
     id,
@@ -383,6 +456,11 @@ export async function createService(
     is_paid: isPaid,
     service_date: now,
     created_at: now,
+    dash_abs: d.abs,
+    dash_check_engine: d.check_engine,
+    dash_brake: d.brake,
+    dash_airbag: d.airbag,
+    dash_immobilizer: d.immobilizer,
   };
 }
 
@@ -391,12 +469,25 @@ export async function updateService(
   serviceDescription: string,
   additionalInfo: string | undefined,
   cost: number,
-  isPaid: boolean
+  isPaid: boolean,
+  dashLights?: DashLights
 ): Promise<void> {
   const db = await getDb();
+  const d = dashLights || EMPTY_DASH_LIGHTS;
   await db.runAsync(
-    `UPDATE services SET service_description = ?, additional_info = ?, cost = ?, is_paid = ? WHERE id = ?`,
-    [serviceDescription, additionalInfo || null, cost, isPaid ? 1 : 0, id]
+    `UPDATE services SET service_description = ?, additional_info = ?, cost = ?, is_paid = ?, dash_abs = ?, dash_check_engine = ?, dash_brake = ?, dash_airbag = ?, dash_immobilizer = ? WHERE id = ?`,
+    [
+      serviceDescription,
+      additionalInfo || null,
+      cost,
+      isPaid ? 1 : 0,
+      d.abs ? 1 : 0,
+      d.check_engine ? 1 : 0,
+      d.brake ? 1 : 0,
+      d.airbag ? 1 : 0,
+      d.immobilizer ? 1 : 0,
+      id,
+    ]
   );
 }
 
@@ -506,6 +597,11 @@ export async function exportAllData(): Promise<string> {
   const services: Service[] = rawServices.map((s) => ({
     ...s,
     is_paid: s.is_paid === 1,
+    dash_abs: s.dash_abs === 1,
+    dash_check_engine: s.dash_check_engine === 1,
+    dash_brake: s.dash_brake === 1,
+    dash_airbag: s.dash_airbag === 1,
+    dash_immobilizer: s.dash_immobilizer === 1,
   }));
   const exportData = {
     version: 1,
@@ -554,7 +650,7 @@ export async function importData(jsonString: string, mergeMode: boolean): Promis
   }
   for (const s of data.services) {
     const result = await db.runAsync(
-      `INSERT OR IGNORE INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, service_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR IGNORE INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, service_date, created_at, dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         s.id,
         s.vehicle_id,
@@ -565,6 +661,11 @@ export async function importData(jsonString: string, mergeMode: boolean): Promis
         s.is_paid === false ? 0 : 1,
         s.service_date,
         s.created_at,
+        s.dash_abs ? 1 : 0,
+        s.dash_check_engine ? 1 : 0,
+        s.dash_brake ? 1 : 0,
+        s.dash_airbag ? 1 : 0,
+        s.dash_immobilizer ? 1 : 0,
       ]
     );
     if (result.changes > 0) servicesAdded++;

@@ -14,19 +14,41 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { updateService } from '../src/db/database';
+import { Picker } from '@react-native-picker/picker';
+import { updateService, SERVICE_CATEGORIES, DashLights } from '../src/db/database';
+import DashLightsPicker from '../src/components/DashLightsPicker';
 
 export default function EditServiceScreen() {
   const params = useLocalSearchParams();
-  const [serviceDescription, setServiceDescription] = useState(params.serviceDescription as string);
-  const [additionalInfo, setAdditionalInfo] = useState((params.additionalInfo as string) || '');
+
+  const initialDesc = (params.serviceDescription as string) || SERVICE_CATEGORIES[0];
+  // If existing description isn't in the categories list, default to "Other Services"
+  const initialCategory = (SERVICE_CATEGORIES as readonly string[]).includes(initialDesc)
+    ? initialDesc
+    : 'Other Services';
+
+  // If the existing description didn't match a category, prepend it to additional info so we don't lose it
+  const initialAdditional =
+    initialCategory !== initialDesc
+      ? `${initialDesc}${params.additionalInfo ? ` - ${params.additionalInfo as string}` : ''}`
+      : (params.additionalInfo as string) || '';
+
+  const [serviceCategory, setServiceCategory] = useState<string>(initialCategory);
+  const [additionalInfo, setAdditionalInfo] = useState(initialAdditional);
   const [cost, setCost] = useState(params.cost as string);
   const [isPaid, setIsPaid] = useState(params.isPaid === 'true');
+  const [dashLights, setDashLights] = useState<DashLights>({
+    abs: params.dashAbs === 'true',
+    check_engine: params.dashCheckEngine === 'true',
+    brake: params.dashBrake === 'true',
+    airbag: params.dashAirbag === 'true',
+    immobilizer: params.dashImmobilizer === 'true',
+  });
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  
+
   const handleSubmit = async () => {
-    if (!serviceDescription.trim() || !cost.trim()) {
+    if (!serviceCategory || !cost.trim()) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
@@ -41,10 +63,11 @@ export default function EditServiceScreen() {
     try {
       await updateService(
         params.serviceId as string,
-        serviceDescription.trim(),
+        serviceCategory,
         additionalInfo.trim() || undefined,
         costNumber,
-        isPaid
+        isPaid,
+        dashLights
       );
 
       router.back();
@@ -69,28 +92,31 @@ export default function EditServiceScreen() {
           <View style={{ width: 40 }} />
         </View>
 
-        <ScrollView style={styles.content}>
+        <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.form}>
             <View style={styles.iconContainer}>
               <Ionicons name="construct" size={48} color="#10b981" />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Service Description *</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="clipboard-outline" size={20} color="#666" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., Oil Change"
-                  value={serviceDescription}
-                  onChangeText={setServiceDescription}
-                  autoCapitalize="words"
-                />
+              <Text style={styles.label}>Service Type *</Text>
+              <View style={styles.pickerContainer}>
+                <Ionicons name="clipboard-outline" size={20} color="#666" style={styles.pickerIcon} />
+                <Picker
+                  selectedValue={serviceCategory}
+                  onValueChange={(value) => setServiceCategory(value)}
+                  style={styles.picker}
+                  testID="service-category-picker-edit"
+                >
+                  {SERVICE_CATEGORIES.map((cat) => (
+                    <Picker.Item key={cat} label={cat} value={cat} />
+                  ))}
+                </Picker>
               </View>
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Additional Info</Text>
+              <Text style={styles.label}>Notes / Description</Text>
               <View style={[styles.inputContainer, styles.textAreaContainer]}>
                 <TextInput
                   style={[styles.input, styles.textArea]}
@@ -102,6 +128,11 @@ export default function EditServiceScreen() {
                   textAlignVertical="top"
                 />
               </View>
+            </View>
+
+            {/* Dashboard Warning Lights */}
+            <View style={styles.dashCard}>
+              <DashLightsPicker value={dashLights} onChange={setDashLights} />
             </View>
 
             <View style={styles.inputGroup}>
@@ -119,7 +150,6 @@ export default function EditServiceScreen() {
               </View>
             </View>
 
-            {/* Paid Checkbox */}
             <TouchableOpacity
               style={styles.paidCheckbox}
               onPress={() => setIsPaid(!isPaid)}
@@ -173,19 +203,30 @@ const styles = StyleSheet.create({
   backButton: { padding: 8 },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#1e293b' },
   content: { flex: 1, paddingHorizontal: 24 },
-  form: { paddingTop: 32 },
+  form: { paddingTop: 24 },
   iconContainer: {
     alignSelf: 'center',
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: '#d1fae5',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 24,
   },
-  inputGroup: { marginBottom: 24 },
+  inputGroup: { marginBottom: 20 },
   label: { fontSize: 14, fontWeight: '600', color: '#1e293b', marginBottom: 8 },
+  pickerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingLeft: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  pickerIcon: { marginRight: 12 },
+  picker: { flex: 1, height: 56 },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -196,11 +237,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
-  textAreaContainer: { height: 120, alignItems: 'flex-start', paddingVertical: 12 },
+  textAreaContainer: { height: 100, alignItems: 'flex-start', paddingVertical: 12 },
   inputIcon: { marginRight: 12 },
   input: { flex: 1, fontSize: 16, color: '#1e293b' },
   textArea: { height: '100%' },
   currencySymbol: { fontSize: 16, fontWeight: '600', color: '#1e293b', marginRight: 4 },
+  dashCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 20,
+  },
   submitButton: {
     backgroundColor: '#10b981',
     borderRadius: 12,
@@ -208,7 +257,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 8,
     marginBottom: 32,
   },
   paidCheckbox: {
@@ -219,7 +268,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   checkbox: {
     width: 26,
@@ -231,24 +280,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#fff',
   },
-  checkboxChecked: {
-    backgroundColor: '#10b981',
-    borderColor: '#10b981',
-  },
-  paidCheckboxLabel: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  paidCheckboxText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1e293b',
-  },
-  paidCheckboxSubtext: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: 2,
-  },
+  checkboxChecked: { backgroundColor: '#10b981', borderColor: '#10b981' },
+  paidCheckboxLabel: { marginLeft: 12, flex: 1 },
+  paidCheckboxText: { fontSize: 16, fontWeight: '600', color: '#1e293b' },
+  paidCheckboxSubtext: { fontSize: 12, color: '#64748b', marginTop: 2 },
   submitButtonDisabled: { opacity: 0.6 },
   submitButtonText: { color: '#fff', fontSize: 18, fontWeight: '600', marginLeft: 8 },
 });

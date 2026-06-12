@@ -178,6 +178,66 @@ frontend:
           agent: "testing"
           comment: "Frontend not tested as per testing protocol. This is an Expo/React Native app."
 
+  - task: "Service Type dropdown (HVAC, Locksmith, Oil, Electrical, Mechanical, Other)"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/add-service.tsx, /app/frontend/app/edit-service.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Replaced free-text Service Description input with a Picker dropdown of 6 predefined categories. Existing free-text values are migrated to the additional_info field when editing."
+
+  - task: "Dashboard warning light checkboxes (ABS / Check Engine / Brake / Airbag / Immobilizer)"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/components/DashLightsPicker.tsx, /app/frontend/src/db/database.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Added 5 dash light boolean columns to the services table with safe ALTER TABLE migration. New chip-style picker on Add/Edit Service. Dash badges displayed under each service in customer detail. Values are persisted and round-tripped in JSON backup/import."
+
+  - task: "QR code generation + HTML export per vehicle"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/components/VehicleQrModal.tsx, /app/frontend/src/utils/htmlBuilder.ts, /app/frontend/app/settings.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Added a purple QR icon next to each vehicle in customer detail. Tapping opens a sheet showing a QR code that points to {github_base}/{vehicle_id}.html plus buttons to export the file as HTML (for GitHub Pages upload) or PDF (printable). Base URL is configurable in the new Settings screen."
+
+  - task: "55mm Thermal Bluetooth printing per service"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/utils/printer.ts, /app/frontend/src/utils/htmlBuilder.ts, /app/frontend/app/customer-detail.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Added a print icon on each service card. Uses expo-print system print dialog with a 55mm width HTML template. On Android, this routes to any installed printer/Bluetooth service. NOTE: True direct Bluetooth ESC/POS printing requires the user's device to have a print service like PrinterShare or RawBT installed and configured, since Expo Go cannot ship a native Bluetooth ESC/POS module. This works on the EAS-built APK with such a print service installed."
+
+  - task: "Settings screen (garage info + GitHub Pages base URL)"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/settings.tsx, /app/frontend/src/utils/settings.ts"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Added Settings entry on home. Stores garage name, garage phone, and GitHub Pages base URL in AsyncStorage. Used in printed receipts and exported HTML pages."
+
 metadata:
   created_by: "testing_agent"
   version: "1.0"
@@ -185,7 +245,12 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Service Type dropdown (HVAC, Locksmith, Oil, Electrical, Mechanical, Other)"
+    - "Dashboard warning light checkboxes (ABS / Check Engine / Brake / Airbag / Immobilizer)"
+    - "QR code generation + HTML export per vehicle"
+    - "55mm Thermal Bluetooth printing per service"
+    - "Settings screen (garage info + GitHub Pages base URL)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"

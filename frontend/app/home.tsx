@@ -209,6 +209,15 @@ export default function HomeScreen() {
             <Ionicons name="cloud-download-outline" size={isSmallScreen ? 16 : 20} color="#1e293b" />
             <Text style={styles.backupButtonText}>Backup & Restore</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.backupButton, { paddingVertical: buttonPadding }]}
+            onPress={() => router.push('/settings')}
+            testID="settings-button"
+          >
+            <Ionicons name="settings-outline" size={isSmallScreen ? 16 : 20} color="#1e293b" />
+            <Text style={styles.backupButtonText}>Settings</Text>
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

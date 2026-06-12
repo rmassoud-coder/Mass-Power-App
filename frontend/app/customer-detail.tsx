@@ -10,46 +10,28 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import ConfirmDialog from '../src/components/ConfirmDialog';
+import VehicleQrModal from '../src/components/VehicleQrModal';
 import {
   getCustomerDetails,
   deleteCustomer,
   deleteVehicle,
   deleteService,
-  CustomerDetail,
+  CustomerDetail as DBCustomerDetail,
+  Customer as DBCustomer,
+  Vehicle as DBVehicle,
+  Service as DBService,
 } from '../src/db/database';
+import { loadSettings } from '../src/utils/settings';
+import { buildThermalReceiptHtml } from '../src/utils/htmlBuilder';
+import { printHtml } from '../src/utils/printer';
 
-interface Vehicle {
-  id: string;
-  vin: string;
-  plate_number: string;
-  make: string;
-  model: string;
-  year?: string;
-  created_at: string;
-}
+interface Vehicle extends DBVehicle {}
+interface Service extends DBService {}
+interface Customer extends DBCustomer {}
 
-interface Service {
-  id: string;
-  vehicle_id: string;
-  service_description: string;
-  additional_info?: string;
-  cost: number;
-  service_date: string;
-}
-
-interface Customer {
-  id: string;
-  name: string;
-  mobile_number: string;
-}
-
-interface CustomerDetail {
-  customer: Customer;
-  vehicles: Vehicle[];
-  services: Service[];
-}
+interface CustomerDetail extends DBCustomerDetail {}
 
 type DeleteTarget =
   | { type: 'customer' }
@@ -64,6 +46,8 @@ export default function CustomerDetailScreen() {
   const [details, setDetails] = useState<CustomerDetail | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
   const [deleting, setDeleting] = useState(false);
+  const [qrVehicle, setQrVehicle] = useState<Vehicle | null>(null);
+  const [printingId, setPrintingId] = useState<string | null>(null);
 
   // Auto-refresh whenever screen comes into focus (after edits/adds)
   useFocusEffect(
@@ -145,6 +129,24 @@ export default function CustomerDetailScreen() {
 
   const handleDeleteCustomer = () => {
     setDeleteTarget({ type: 'customer' });
+  };
+
+  const handlePrintService = async (service: Service, vehicle: Vehicle) => {
+    if (!details) return;
+    setPrintingId(service.id);
+    try {
+      const settings = await loadSettings();
+      const html = buildThermalReceiptHtml(details.customer, vehicle, service, settings);
+      await printHtml(html);
+    } catch (e: any) {
+      Alert.alert(
+        'Print failed',
+        e?.message ||
+          'Unable to open printer. Make sure your Bluetooth thermal printer is paired and a print service is installed (e.g. PrinterShare / RawBT).'
+      );
+    } finally {
+      setPrintingId(null);
+    }
   };
 
   if (loading) {
@@ -252,6 +254,13 @@ export default function CustomerDetailScreen() {
                   </View>
                   <View style={styles.vehicleGroupActions}>
                     <TouchableOpacity
+                      onPress={() => setQrVehicle(vehicle)}
+                      style={styles.cardActionButton}
+                      testID={`qr-vehicle-${vehicle.id}`}
+                    >
+                      <MaterialCommunityIcons name="qrcode" size={22} color="#7c3aed" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
                       onPress={() =>
                         router.push({
                           pathname: '/edit-vehicle',
@@ -303,6 +312,7 @@ export default function CustomerDetailScreen() {
                         })
                       }
                       style={styles.addServiceButton}
+                      testID={`add-service-${vehicle.id}`}
                     >
                       <Ionicons name="add-circle" size={22} color="#10b981" />
                     </TouchableOpacity>
@@ -311,7 +321,14 @@ export default function CustomerDetailScreen() {
                   {vehicleServices.length === 0 ? (
                     <Text style={styles.noServicesText}>No services yet for this vehicle</Text>
                   ) : (
-                    vehicleServices.map((service) => (
+                    vehicleServices.map((service) => {
+                      const dashOn: string[] = [];
+                      if (service.dash_abs) dashOn.push('ABS');
+                      if (service.dash_check_engine) dashOn.push('Engine');
+                      if (service.dash_brake) dashOn.push('Brake');
+                      if (service.dash_airbag) dashOn.push('Airbag');
+                      if (service.dash_immobilizer) dashOn.push('Key');
+                      return (
                       <View key={service.id} style={[styles.serviceItemCard, !service.is_paid && styles.serviceItemUnpaid]}>
                         <View style={styles.serviceItemContent}>
                           <View style={styles.serviceItemMain}>
@@ -330,6 +347,12 @@ export default function CustomerDetailScreen() {
                                 {service.additional_info}
                               </Text>
                             )}
+                            {dashOn.length > 0 && (
+                              <View style={styles.dashBadgeRow}>
+                                <Ionicons name="warning" size={11} color="#ea580c" />
+                                <Text style={styles.dashBadgeText}>{dashOn.join(' \u2022 ')}</Text>
+                              </View>
+                            )}
                             <Text style={styles.serviceItemDate}>
                               {new Date(service.service_date).toLocaleDateString()}
                             </Text>
@@ -340,6 +363,18 @@ export default function CustomerDetailScreen() {
                             </Text>
                             <View style={styles.serviceItemActions}>
                               <TouchableOpacity
+                                onPress={() => handlePrintService(service, vehicle)}
+                                style={styles.serviceItemActionButton}
+                                disabled={printingId === service.id}
+                                testID={`print-service-${service.id}`}
+                              >
+                                {printingId === service.id ? (
+                                  <ActivityIndicator size="small" color="#7c3aed" />
+                                ) : (
+                                  <Ionicons name="print-outline" size={18} color="#7c3aed" />
+                                )}
+                              </TouchableOpacity>
+                              <TouchableOpacity
                                 onPress={() =>
                                   router.push({
                                     pathname: '/edit-service',
@@ -349,6 +384,11 @@ export default function CustomerDetailScreen() {
                                       additionalInfo: service.additional_info || '',
                                       cost: service.cost.toString(),
                                       isPaid: service.is_paid ? 'true' : 'false',
+                                      dashAbs: service.dash_abs ? 'true' : 'false',
+                                      dashCheckEngine: service.dash_check_engine ? 'true' : 'false',
+                                      dashBrake: service.dash_brake ? 'true' : 'false',
+                                      dashAirbag: service.dash_airbag ? 'true' : 'false',
+                                      dashImmobilizer: service.dash_immobilizer ? 'true' : 'false',
                                     },
                                   })
                                 }
@@ -366,7 +406,8 @@ export default function CustomerDetailScreen() {
                           </View>
                         </View>
                       </View>
-                    ))
+                      );
+                    })
                   )}
                 </View>
               </View>
@@ -388,6 +429,14 @@ export default function CustomerDetailScreen() {
         destructive={true}
         onConfirm={performDelete}
         onCancel={() => !deleting && setDeleteTarget(null)}
+      />
+
+      <VehicleQrModal
+        visible={qrVehicle !== null}
+        customer={details.customer}
+        vehicle={qrVehicle}
+        services={qrVehicle ? details.services.filter((s) => s.vehicle_id === qrVehicle.id) : []}
+        onClose={() => setQrVehicle(null)}
       />
     </SafeAreaView>
   );
@@ -765,5 +814,21 @@ const styles = StyleSheet.create({
   serviceItemActionButton: {
     padding: 4,
     marginLeft: 2,
+  },
+  dashBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    backgroundColor: '#fff7ed',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    alignSelf: 'flex-start',
+  },
+  dashBadgeText: {
+    fontSize: 10,
+    color: '#ea580c',
+    fontWeight: '600',
+    marginLeft: 4,
   },
 });

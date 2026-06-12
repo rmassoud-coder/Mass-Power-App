@@ -14,8 +14,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { createService } from '../src/db/database';
+import { createService, SERVICE_CATEGORIES, EMPTY_DASH_LIGHTS, DashLights } from '../src/db/database';
 import { Picker } from '@react-native-picker/picker';
+import DashLightsPicker from '../src/components/DashLightsPicker';
 
 interface Vehicle {
   id: string;
@@ -29,17 +30,18 @@ interface Vehicle {
 export default function AddServiceScreen() {
   const params = useLocalSearchParams();
   const vehicles: Vehicle[] = params.vehicles ? JSON.parse(params.vehicles as string) : [];
-  
+
   const [selectedVehicleId, setSelectedVehicleId] = useState(vehicles[0]?.id || '');
-  const [serviceDescription, setServiceDescription] = useState('');
+  const [serviceCategory, setServiceCategory] = useState<string>(SERVICE_CATEGORIES[0]);
   const [additionalInfo, setAdditionalInfo] = useState('');
   const [cost, setCost] = useState('');
   const [isPaid, setIsPaid] = useState(false);
+  const [dashLights, setDashLights] = useState<DashLights>(EMPTY_DASH_LIGHTS);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  
+
   const handleSubmit = async () => {
-    if (!selectedVehicleId || !serviceDescription.trim() || !cost.trim()) {
+    if (!selectedVehicleId || !serviceCategory || !cost.trim()) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
@@ -54,10 +56,11 @@ export default function AddServiceScreen() {
     try {
       await createService(
         selectedVehicleId,
-        serviceDescription.trim(),
+        serviceCategory,
         additionalInfo.trim() || undefined,
         costNumber,
-        isPaid
+        isPaid,
+        dashLights
       );
 
       router.back();
@@ -82,7 +85,7 @@ export default function AddServiceScreen() {
           <View style={{ width: 40 }} />
         </View>
 
-        <ScrollView style={styles.content}>
+        <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.form}>
             <View style={styles.iconContainer}>
               <Ionicons name="construct" size={48} color="#10b981" />
@@ -109,28 +112,31 @@ export default function AddServiceScreen() {
               </View>
             </View>
 
-            {/* Service Description */}
+            {/* Service Category (Dropdown) */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Service Description *</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="clipboard-outline" size={20} color="#666" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., Oil Change, Brake Repair"
-                  value={serviceDescription}
-                  onChangeText={setServiceDescription}
-                  autoCapitalize="words"
-                />
+              <Text style={styles.label}>Service Type *</Text>
+              <View style={styles.pickerContainer}>
+                <Ionicons name="clipboard-outline" size={20} color="#666" style={styles.pickerIcon} />
+                <Picker
+                  selectedValue={serviceCategory}
+                  onValueChange={(value) => setServiceCategory(value)}
+                  style={styles.picker}
+                  testID="service-category-picker"
+                >
+                  {SERVICE_CATEGORIES.map((cat) => (
+                    <Picker.Item key={cat} label={cat} value={cat} />
+                  ))}
+                </Picker>
               </View>
             </View>
 
-            {/* Additional Info */}
+            {/* Additional Info / Description */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Additional Info</Text>
+              <Text style={styles.label}>Notes / Description</Text>
               <View style={[styles.inputContainer, styles.textAreaContainer]}>
                 <TextInput
                   style={[styles.input, styles.textArea]}
-                  placeholder="Additional notes or details..."
+                  placeholder="e.g., oil filter replaced, brake pads worn..."
                   value={additionalInfo}
                   onChangeText={setAdditionalInfo}
                   multiline
@@ -138,6 +144,11 @@ export default function AddServiceScreen() {
                   textAlignVertical="top"
                 />
               </View>
+            </View>
+
+            {/* Dashboard Warning Lights */}
+            <View style={styles.dashCard}>
+              <DashLightsPicker value={dashLights} onChange={setDashLights} />
             </View>
 
             {/* Cost */}
@@ -195,13 +206,8 @@ export default function AddServiceScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  keyboardView: {
-    flex: 1,
-  },
+  container: { flex: 1, backgroundColor: '#f8fafc' },
+  keyboardView: { flex: 1 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -212,40 +218,22 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1e293b',
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-  },
-  form: {
-    paddingTop: 32,
-  },
+  backButton: { padding: 8 },
+  headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#1e293b' },
+  content: { flex: 1, paddingHorizontal: 24 },
+  form: { paddingTop: 24 },
   iconContainer: {
     alignSelf: 'center',
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: '#d1fae5',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 32,
-  },
-  inputGroup: {
     marginBottom: 24,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 8,
-  },
+  inputGroup: { marginBottom: 20 },
+  label: { fontSize: 14, fontWeight: '600', color: '#1e293b', marginBottom: 8 },
   pickerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -255,13 +243,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
-  pickerIcon: {
-    marginRight: 12,
-  },
-  picker: {
-    flex: 1,
-    height: 56,
-  },
+  pickerIcon: { marginRight: 12 },
+  picker: { flex: 1, height: 56 },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -272,27 +255,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
-  textAreaContainer: {
-    height: 120,
-    alignItems: 'flex-start',
-    paddingVertical: 12,
-  },
-  inputIcon: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: '#1e293b',
-  },
-  textArea: {
-    height: '100%',
-  },
-  currencySymbol: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1e293b',
-    marginRight: 4,
+  textAreaContainer: { height: 100, alignItems: 'flex-start', paddingVertical: 12 },
+  inputIcon: { marginRight: 12 },
+  input: { flex: 1, fontSize: 16, color: '#1e293b' },
+  textArea: { height: '100%' },
+  currencySymbol: { fontSize: 16, fontWeight: '600', color: '#1e293b', marginRight: 4 },
+  dashCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 20,
   },
   submitButton: {
     backgroundColor: '#10b981',
@@ -301,7 +275,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 8,
     marginBottom: 32,
   },
   paidCheckbox: {
@@ -312,7 +286,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   checkbox: {
     width: 26,
@@ -324,31 +298,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#fff',
   },
-  checkboxChecked: {
-    backgroundColor: '#10b981',
-    borderColor: '#10b981',
-  },
-  paidCheckboxLabel: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  paidCheckboxText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1e293b',
-  },
-  paidCheckboxSubtext: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: 2,
-  },
-  submitButtonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
+  checkboxChecked: { backgroundColor: '#10b981', borderColor: '#10b981' },
+  paidCheckboxLabel: { marginLeft: 12, flex: 1 },
+  paidCheckboxText: { fontSize: 16, fontWeight: '600', color: '#1e293b' },
+  paidCheckboxSubtext: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  submitButtonDisabled: { opacity: 0.6 },
+  submitButtonText: { color: '#fff', fontSize: 18, fontWeight: '600', marginLeft: 8 },
 });

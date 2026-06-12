@@ -1,0 +1,42 @@
+{
+  "summary": "Frontend-only testing of Mass Power Auto Services Expo app (offline, expo-sqlite). All 4 new features VERIFIED WORKING via Playwright mobile-viewport (390x844): (1) Service Type Picker shows exactly the 6 required categories ['HVAC Services','Locksmith Services','Oil Services','Electrical Services','Mechanical Services','Other Services'] and free-text 'Service Description' input is gone. (2) DashLightsPicker renders all 5 chips (ABS, Check Engine, Brake, Airbag, Immobilizer Key); toggling Brake applies colored border rgb(239,68,68). (3) After saving a 'Mechanical Services' record with Brake+Airbag ON, cost 125.50, paid checked, customer-detail correctly shows 'Mechanical Services' card with the orange '⚠ Brake • Airbag' badge below it, totals update to $205.50/3 services. (4) Vehicle QR icon opens bottom-sheet modal showing QR svg, vehicle title (2006 BMW 525i, Plate: 150150), constructed URL using saved baseUrl ('https://acme.github.io/repo/<vehicleId>.html'), Export HTML + Export PDF buttons, and 'N service records included' footer. (5) Settings screen reachable from Home, all 3 fields editable (Garage Name, Garage Phone, GitHub Pages URL), values persist after closing/reopening (verified via direct URL reload). (6) Print icon on service card clicks without throwing a fatal JS error or red-screen on web. (7) Existing seed data (Rabih's Electric Work, Ac Freon) intact after dash_* column migration; old services show NO dash badge confirming new columns default to 0/false. (8) Search by mobile '70' still works. No console errors, only style deprecation warnings ('shadow*' & 'props.pointerEvents'). Note: deprecated 'expo-av' / 'expo-barcode-scanner' / 'expo-background-fetch' NOT in use — clean.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "all screens",
+       "issues": [
+         "React Native Web prints repeated deprecation warnings: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' and 'props.pointerEvents is deprecated. Use style.pointerEvents'. These come from multiple StyleSheets across home/customer-detail/etc. Functional impact: none, but should be cleaned for future RN versions."
+       ]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_1.json"
+  ],
+  "action_items": [
+    "(Nice-to-have) Add testID props to the 'add-service' '+' button per vehicle in customer-detail.tsx and to the 'add-vehicle' '+' button so future automated tests can navigate without coordinate/colour heuristics. I added testID=`add-service-${vehicle.id}` already but it was not picked up by the running bundler during this session — please verify on a fresh restart.",
+    "(Optional cleanup) Replace 'shadow*' style props with 'boxShadow' across all StyleSheet.create blocks (home.tsx etc.) to silence RN Web deprecation warnings.",
+    "(Optional cleanup) Replace 'props.pointerEvents' with 'style.pointerEvents' wherever used."
+  ],
+  "critical_code_review_comments": [
+    "database.ts: ALTER TABLE migrations for dash_* columns are wrapped in try/catch — correct idempotent approach for SQLite. Good.",
+    "edit-service.tsx initialCategory logic correctly defaults to 'Other Services' when an existing free-text description doesn't match any of the 6 categories, and prepends the legacy text to additionalInfo so data isn't lost. Solid migration UX.",
+    "printer.ts swallows Print.printAsync cancel errors and re-throws others — good. On web, Print.printAsync triggers the browser print dialog which is the documented behaviour.",
+    "settings.ts saveSettings auto-appends trailing '/' to baseUrl. Verified — saved 'https://acme.github.io/repo/' renders as `<base><vehicleId>.html` in the QR modal.",
+    "VehicleQrModal lays out and works, but the modal lacks an obvious testID on the Export buttons and close-X — adding testIDs ('qr-export-html','qr-export-pdf','qr-modal-close') would help future regression."
+  ],
+  "updated_files": [
+    "/app/frontend/app/customer-detail.tsx (added testID=`add-service-${vehicle.id}` to the '+' button next to 'Services (n)' header)"
+  ],
+  "success_rate": {"backend": "N/A (skipped per instructions — offline app)", "frontend": "100% (8/8 critical flows verified)"},
+  "seed_data_creation": "No new seed data; used existing 'Rabih' (mobile 70761506) with 2 vehicles. Added one TEST service 'Mechanical Services' $125.50 with Brake+Airbag dash lights ON to customer Rabih's 2006 BMW 525i — left in DB for visual handoff; main agent may want to delete it.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "App is fully offline using expo-sqlite. Web preview at http://localhost:3000. Seed customer Rabih reachable via mobile search '70' or '70761506'. testIDs available: settings-button, mobile-search-input/button, vin-search-input/button, plate-search-input/button, header-add-customer-button, add-customer-button, report-button, backup-button, qr-vehicle-<id>, print-service-<id>, service-category-picker (add), service-category-picker-edit, dash-abs/check_engine/brake/airbag/immobilizer, paid-checkbox, paid-checkbox-edit. To navigate into add-service from Playwright easily, build URL `/add-service?vehicles=<urlencoded JSON array of vehicles>`. On RN Web the Picker renders as a native <select> so options can be read via querySelector('select').options. The print button uses expo-print which triggers the browser print dialog on web — click does not throw.",
+  "rca_of_issue": "N/A — no bug discovered. All 4 requested features behave as specified."
+}
