@@ -4,6 +4,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Pressable,
   StyleSheet,
   ScrollView,
   Alert,
@@ -59,6 +60,8 @@ export default function SettingsScreen() {
   };
 
   const handleExportAllVehicles = async () => {
+    // eslint-disable-next-line no-console
+    console.log('[bulk-export] starting');
     setExporting(true);
     setExportProgress('Loading vehicles...');
     try {
@@ -247,24 +250,30 @@ export default function SettingsScreen() {
               Generate one HTML file per vehicle (matching the QR URLs) plus an index.html, packaged in a ZIP ready to upload to the &quot;vehicle profiles&quot; folder on GitHub.
             </Text>
 
-            <TouchableOpacity
-              style={[styles.exportBtn, exporting && styles.exportBtnDisabled]}
+            <Pressable
+              style={({ pressed }) => [
+                styles.exportBtn,
+                exporting && styles.exportBtnDisabled,
+                pressed && { opacity: 0.85 },
+              ]}
               onPress={handleExportAllVehicles}
               disabled={exporting}
               testID="bulk-export-button"
             >
-              {exporting ? (
-                <>
-                  <ActivityIndicator color="#fff" />
-                  <Text style={styles.exportBtnText}>{exportProgress || 'Working...'}</Text>
-                </>
-              ) : (
-                <>
-                  <Ionicons name="archive" size={20} color="#fff" />
-                  <Text style={styles.exportBtnText}>Export All Vehicles (ZIP)</Text>
-                </>
-              )}
-            </TouchableOpacity>
+              <View style={styles.btnInner}>
+                {exporting ? (
+                  <>
+                    <ActivityIndicator color="#fff" />
+                    <Text style={styles.exportBtnText}>{exportProgress || 'Working...'}</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="archive" size={20} color="#fff" />
+                    <Text style={styles.exportBtnText}>Export All Vehicles (ZIP)</Text>
+                  </>
+                )}
+              </View>
+            </Pressable>
 
             <TouchableOpacity style={styles.uploadHelpBtn} onPress={handleOpenGithubUpload}>
               <Ionicons name="cloud-upload-outline" size={18} color="#2563eb" />
@@ -432,6 +441,11 @@ const styles = StyleSheet.create({
   },
   exportBtnDisabled: { opacity: 0.7 },
   exportBtnText: { color: '#fff', fontSize: 14, fontWeight: '600', marginLeft: 8 },
+  btnInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   uploadHelpBtn: {
     flexDirection: 'row',
     alignItems: 'center',
