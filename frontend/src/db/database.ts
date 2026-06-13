@@ -613,6 +613,37 @@ export async function exportAllData(): Promise<string> {
   return JSON.stringify(exportData, null, 2);
 }
 
+/** Returns every vehicle joined with its customer and all its services (for bulk HTML export). */
+export async function getAllVehiclesWithDetails(): Promise<
+  { customer: Customer; vehicle: Vehicle; services: Service[] }[]
+> {
+  const db = await getDb();
+  const customers = await db.getAllAsync<Customer>(`SELECT * FROM customers`);
+  const vehicles = await db.getAllAsync<Vehicle>(`SELECT * FROM vehicles`);
+  const rawServices = await db.getAllAsync<any>(`SELECT * FROM services`);
+  const services: Service[] = rawServices.map((s) => ({
+    ...s,
+    is_paid: s.is_paid === 1,
+    dash_abs: s.dash_abs === 1,
+    dash_check_engine: s.dash_check_engine === 1,
+    dash_brake: s.dash_brake === 1,
+    dash_airbag: s.dash_airbag === 1,
+    dash_immobilizer: s.dash_immobilizer === 1,
+  }));
+
+  const customerById = new Map(customers.map((c) => [c.id, c]));
+  const out: { customer: Customer; vehicle: Vehicle; services: Service[] }[] = [];
+  for (const v of vehicles) {
+    const customer = customerById.get(v.customer_id);
+    if (!customer) continue;
+    const vehicleServices = services
+      .filter((s) => s.vehicle_id === v.id)
+      .sort((a, b) => (a.service_date < b.service_date ? 1 : -1));
+    out.push({ customer, vehicle: v, services: vehicleServices });
+  }
+  return out;
+}
+
 export async function importData(jsonString: string, mergeMode: boolean): Promise<{
   customers: number;
   vehicles: number;

@@ -106,7 +106,7 @@ export default function VehicleQrModal({ visible, customer, vehicle, services, o
             <View style={styles.infoBox}>
               <Ionicons name="information-circle" size={18} color="#2563eb" />
               <Text style={styles.infoText}>
-                Export the HTML below and upload it to your GitHub Pages repo as <Text style={{ fontWeight: 'bold' }}>{vehicle.id}.html</Text>. Customers can then scan the QR to view their service history online.
+                Upload this HTML file as <Text style={{ fontWeight: 'bold' }}>{vehicle.id}.html</Text> into the <Text style={{ fontWeight: 'bold' }}>vehicle profiles</Text> folder of your GitHub repo. Then the customer can scan the QR to view this vehicle&apos;s service history online.
               </Text>
             </View>
 
