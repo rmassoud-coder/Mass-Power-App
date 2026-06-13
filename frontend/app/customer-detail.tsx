@@ -24,7 +24,7 @@ import {
   Service as DBService,
 } from '../src/db/database';
 import { loadSettings } from '../src/utils/settings';
-import { buildThermalReceiptHtml } from '../src/utils/htmlBuilder';
+import { buildThermalReceiptHtml, buildOilStickerHtml } from '../src/utils/htmlBuilder';
 import { printHtml } from '../src/utils/printer';
 
 interface Vehicle extends DBVehicle {}
@@ -48,6 +48,7 @@ export default function CustomerDetailScreen() {
   const [deleting, setDeleting] = useState(false);
   const [qrVehicle, setQrVehicle] = useState<Vehicle | null>(null);
   const [printingId, setPrintingId] = useState<string | null>(null);
+  const [printingStickerId, setPrintingStickerId] = useState<string | null>(null);
 
   // Auto-refresh whenever screen comes into focus (after edits/adds)
   useFocusEffect(
@@ -146,6 +147,24 @@ export default function CustomerDetailScreen() {
       );
     } finally {
       setPrintingId(null);
+    }
+  };
+
+  const handlePrintSticker = async (service: Service, vehicle: Vehicle) => {
+    if (!details) return;
+    setPrintingStickerId(service.id);
+    try {
+      const settings = await loadSettings();
+      const html = buildOilStickerHtml(details.customer, vehicle, service, settings);
+      await printHtml(html);
+    } catch (e: any) {
+      Alert.alert(
+        'Print failed',
+        e?.message ||
+          'Unable to open printer. Make sure your Bluetooth thermal printer is paired and a print service is installed (e.g. PrinterShare / RawBT).'
+      );
+    } finally {
+      setPrintingStickerId(null);
     }
   };
 
@@ -376,6 +395,20 @@ export default function CustomerDetailScreen() {
                               ${service.cost.toFixed(2)}
                             </Text>
                             <View style={styles.serviceItemActions}>
+                              {(service.next_service_date || service.next_service_mileage) && (
+                                <TouchableOpacity
+                                  onPress={() => handlePrintSticker(service, vehicle)}
+                                  style={styles.serviceItemActionButton}
+                                  disabled={printingStickerId === service.id}
+                                  testID={`print-sticker-${service.id}`}
+                                >
+                                  {printingStickerId === service.id ? (
+                                    <ActivityIndicator size="small" color="#b45309" />
+                                  ) : (
+                                    <MaterialCommunityIcons name="oil" size={18} color="#b45309" />
+                                  )}
+                                </TouchableOpacity>
+                              )}
                               <TouchableOpacity
                                 onPress={() => handlePrintService(service, vehicle)}
                                 style={styles.serviceItemActionButton}

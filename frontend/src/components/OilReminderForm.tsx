@@ -167,14 +167,14 @@ export default function OilReminderForm({ value, onChange }: Props) {
           <Text style={styles.unit}>km</Text>
         </View>
         <View style={styles.presetRow}>
+          <TouchableOpacity style={styles.presetBtn} onPress={() => presetMileage(3000)} testID="oil-mileage-3k">
+            <Text style={styles.presetBtnText}>+3,000 km</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.presetBtn} onPress={() => presetMileage(5000)} testID="oil-mileage-5k">
             <Text style={styles.presetBtnText}>+5,000 km</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.presetBtn} onPress={() => presetMileage(7500)} testID="oil-mileage-75">
-            <Text style={styles.presetBtnText}>+7,500 km</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.presetBtn} onPress={() => presetMileage(10000)} testID="oil-mileage-10k">
-            <Text style={styles.presetBtnText}>+10,000 km</Text>
+          <TouchableOpacity style={styles.presetBtn} onPress={() => presetMileage(7000)} testID="oil-mileage-7k">
+            <Text style={styles.presetBtnText}>+7,000 km</Text>
           </TouchableOpacity>
         </View>
       </View>

@@ -229,3 +229,146 @@ export function buildThermalReceiptHtml(
 }
 
 export { esc, formatDashLights };
+
+/** Standalone 55mm thermal HTML that prints ONLY the oil-change reminder sticker.
+ *  Uses the same expo-print + system-print pipeline as the receipt — so any
+ *  Bluetooth thermal printer / print service (PrinterShare, RawBT, etc.) the user
+ *  has set up will receive it.
+ *
+ *  Minimal layout (per user spec):
+ *    - Shop name
+ *    - Car brand (vehicle.make only — e.g. "BMW")
+ *    - Next oil change mileage
+ *    - Next oil change date
+ *    - Pen-tickable "FILTER CHANGE" checkbox
+ */
+export function buildOilStickerHtml(
+  customer: Customer,
+  vehicle: Vehicle,
+  service: Service,
+  settings: AppSettings
+): string {
+  const nextDateFormatted = service.next_service_date
+    ? new Date(service.next_service_date).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
+    : '';
+  const nextMileage = service.next_service_mileage;
+
+  return `<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8" />
+<style>
+  @page { size: 55mm auto; margin: 2mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Arial Black', 'Arial', sans-serif;
+    font-size: 12px;
+    color: #000;
+    margin: 0;
+    padding: 0;
+    width: 55mm;
+    text-align: center;
+  }
+  .sticker {
+    border: 3px solid #000;
+    padding: 8px 6px;
+    margin: 4px 2px;
+  }
+  .shop {
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #000;
+    margin-bottom: 6px;
+  }
+  .brand {
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 4px 0 8px 0;
+    border-bottom: 1px dashed #000;
+    margin-bottom: 8px;
+  }
+  .heading {
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .field-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin: 6px 4px;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 1px;
+  }
+  .field-label { text-align: left; }
+  .field-value {
+    text-align: right;
+    font-size: 14px;
+  }
+  .divider {
+    border-top: 1px dashed #000;
+    margin: 8px 4px;
+  }
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 10px 4px 4px 4px;
+  }
+  .checkbox {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border: 2px solid #000;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+  .checkbox-label {
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    vertical-align: middle;
+  }
+</style>
+</head><body>
+  <div class="sticker">
+    <div class="shop">${esc(settings.garageName)}</div>
+    <div class="brand">${esc(vehicle.make || '')}</div>
+    <div class="heading">Next Oil Change</div>
+    ${
+      nextMileage
+        ? `<div class="field-row">
+             <span class="field-label">MILEAGE:</span>
+             <span class="field-value">${nextMileage.toLocaleString()} KM</span>
+           </div>`
+        : ''
+    }
+    ${
+      nextDateFormatted
+        ? `<div class="field-row">
+             <span class="field-label">DATE:</span>
+             <span class="field-value">${esc(nextDateFormatted)}</span>
+           </div>`
+        : ''
+    }
+    <div class="divider"></div>
+    <div class="checkbox-row">
+      <span class="checkbox"></span>
+      <span class="checkbox-label">Filter Change</span>
+    </div>
+  </div>
+  <div style="height: 18px;"></div>
+</body></html>`;
+}
