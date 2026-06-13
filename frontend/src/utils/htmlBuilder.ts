@@ -345,7 +345,7 @@ export function buildOilStickerHtml(
 </head><body>
   <div class="sticker">
     <div class="shop">${esc(settings.garageName)}</div>
-    <div class="brand">${esc(vehicle.make || '')}</div>
+    <div class="brand">${esc([vehicle.make, vehicle.model].filter(Boolean).join(' ').trim())}</div>
     <div class="heading">Next Oil Change</div>
     ${
       nextMileage

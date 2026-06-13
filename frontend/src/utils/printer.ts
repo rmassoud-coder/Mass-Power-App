@@ -26,11 +26,13 @@ export async function printHtml(html: string): Promise<void> {
   }
 }
 
-/** Web-only: print just the provided HTML by injecting an iframe. */
+/** Web-only: print just the provided HTML.
+ *  Uses window.open (most reliable for printing only the popup content) and
+ *  falls back to a hidden iframe if popups are blocked.
+ */
 function printHtmlOnWeb(html: string): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     try {
-      // Some web targets don't have `document` (SSR). Bail safely.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const w: any = typeof window !== 'undefined' ? window : null;
       const doc = w && w.document;
@@ -39,6 +41,59 @@ function printHtmlOnWeb(html: string): Promise<void> {
         return;
       }
 
+      // Preferred path: open a new tab/window with ONLY the sticker HTML and print from there.
+      // This guarantees the printer receives exactly this HTML and not the parent page.
+      const popup = w.open('', 'mp-print-sticker', 'width=420,height=640');
+      if (popup && !popup.closed) {
+        try {
+          popup.document.open();
+          popup.document.write(html);
+          popup.document.close();
+
+          const triggerPrint = () => {
+            try {
+              popup.focus();
+              popup.print();
+              // Close shortly after the print dialog opens so the user
+              // isn't left with an extra tab.
+              setTimeout(() => {
+                try {
+                  popup.close();
+                } catch {
+                  // ignore
+                }
+              }, 600);
+              resolve();
+            } catch (err) {
+              try {
+                popup.close();
+              } catch {
+                /* ignore */
+              }
+              reject(err);
+            }
+          };
+
+          // Wait for the popup document to load before printing.
+          if (popup.document.readyState === 'complete') {
+            triggerPrint();
+          } else {
+            popup.addEventListener('load', triggerPrint, { once: true });
+            // Safety timeout in case `load` never fires
+            setTimeout(triggerPrint, 800);
+          }
+          return;
+        } catch (err) {
+          try {
+            popup.close();
+          } catch {
+            /* ignore */
+          }
+          // fall through to iframe fallback
+        }
+      }
+
+      // Fallback: hidden iframe (used when popups are blocked).
       const iframe = doc.createElement('iframe');
       iframe.style.position = 'fixed';
       iframe.style.right = '0';
@@ -50,17 +105,16 @@ function printHtmlOnWeb(html: string): Promise<void> {
       doc.body.appendChild(iframe);
 
       const cleanup = () => {
-        // small delay so the print dialog can fully open before we tear down
         setTimeout(() => {
           try {
             iframe.parentNode && iframe.parentNode.removeChild(iframe);
           } catch {
-            // ignore
+            /* ignore */
           }
         }, 500);
       };
 
-      const onLoad = () => {
+      iframe.onload = () => {
         try {
           const cw = iframe.contentWindow;
           if (!cw) {
@@ -77,9 +131,6 @@ function printHtmlOnWeb(html: string): Promise<void> {
           reject(err);
         }
       };
-
-      iframe.onload = onLoad;
-      // Use srcdoc so the HTML is parsed in the iframe (sandboxed and independent of parent doc)
       iframe.srcdoc = html;
     } catch (err) {
       reject(err);
