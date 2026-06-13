@@ -118,7 +118,7 @@ export default function SettingsScreen() {
       const stamp = new Date().toISOString().slice(0, 10);
       const zipPath = `${FileSystem.cacheDirectory}vehicle-profiles-${stamp}.zip`;
       await FileSystem.writeAsStringAsync(zipPath, base64, {
-        encoding: FileSystem.EncodingType.Base64,
+        encoding: 'base64',
       });
 
       setExportProgress('Opening share sheet...');

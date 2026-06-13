@@ -165,7 +165,7 @@ export async function sharePdfFromHtml(html: string, fileName: string): Promise<
  */
 export async function shareHtml(html: string, fileName: string): Promise<void> {
   const path = `${FileSystem.cacheDirectory}${fileName}.html`;
-  await FileSystem.writeAsStringAsync(path, html, { encoding: FileSystem.EncodingType.UTF8 });
+  await FileSystem.writeAsStringAsync(path, html, { encoding: 'utf8' });
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(path, { mimeType: 'text/html', dialogTitle: fileName });
   } else {
