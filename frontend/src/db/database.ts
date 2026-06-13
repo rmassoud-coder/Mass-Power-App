@@ -53,6 +53,10 @@ export interface Service {
   dash_brake?: boolean;
   dash_airbag?: boolean;
   dash_immobilizer?: boolean;
+  // Oil change reminder fields (only relevant when service_description === 'Oil Services')
+  current_mileage?: number | null;
+  next_service_date?: string | null; // ISO date
+  next_service_mileage?: number | null;
 }
 
 // Service category options for dropdown
@@ -82,6 +86,18 @@ export const EMPTY_DASH_LIGHTS: DashLights = {
   brake: false,
   airbag: false,
   immobilizer: false,
+};
+
+export interface OilReminder {
+  currentMileage: number | null;
+  nextServiceDate: string | null; // ISO YYYY-MM-DD
+  nextServiceMileage: number | null;
+}
+
+export const EMPTY_OIL_REMINDER: OilReminder = {
+  currentMileage: null,
+  nextServiceDate: null,
+  nextServiceMileage: null,
 };
 
 export interface SearchResult {
@@ -180,6 +196,20 @@ export async function initDatabase() {
   for (const col of dashColumns) {
     try {
       await db.execAsync(`ALTER TABLE services ADD COLUMN ${col} INTEGER NOT NULL DEFAULT 0`);
+    } catch {
+      // Column already exists - ignore
+    }
+  }
+
+  // Migration: oil service reminder columns
+  const oilReminderColumns: Array<[string, string]> = [
+    ['current_mileage', 'INTEGER'],
+    ['next_service_date', 'TEXT'],
+    ['next_service_mileage', 'INTEGER'],
+  ];
+  for (const [col, type] of oilReminderColumns) {
+    try {
+      await db.execAsync(`ALTER TABLE services ADD COLUMN ${col} ${type}`);
     } catch {
       // Column already exists - ignore
     }
@@ -414,7 +444,8 @@ export async function createService(
   additionalInfo: string | undefined,
   cost: number,
   isPaid: boolean,
-  dashLights?: DashLights
+  dashLights?: DashLights,
+  oilReminder?: OilReminder
 ): Promise<Service> {
   const db = await getDb();
   const vehicle = await db.getFirstAsync<Vehicle>(
@@ -427,8 +458,9 @@ export async function createService(
   const id = generateId();
   const now = new Date().toISOString();
   const d = dashLights || EMPTY_DASH_LIGHTS;
+  const o = oilReminder || EMPTY_OIL_REMINDER;
   await db.runAsync(
-    `INSERT INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, service_date, created_at, dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, service_date, created_at, dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, current_mileage, next_service_date, next_service_mileage) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       vehicleId,
@@ -444,6 +476,9 @@ export async function createService(
       d.brake ? 1 : 0,
       d.airbag ? 1 : 0,
       d.immobilizer ? 1 : 0,
+      o.currentMileage,
+      o.nextServiceDate,
+      o.nextServiceMileage,
     ]
   );
   return {
@@ -461,6 +496,9 @@ export async function createService(
     dash_brake: d.brake,
     dash_airbag: d.airbag,
     dash_immobilizer: d.immobilizer,
+    current_mileage: o.currentMileage,
+    next_service_date: o.nextServiceDate,
+    next_service_mileage: o.nextServiceMileage,
   };
 }
 
@@ -470,12 +508,14 @@ export async function updateService(
   additionalInfo: string | undefined,
   cost: number,
   isPaid: boolean,
-  dashLights?: DashLights
+  dashLights?: DashLights,
+  oilReminder?: OilReminder
 ): Promise<void> {
   const db = await getDb();
   const d = dashLights || EMPTY_DASH_LIGHTS;
+  const o = oilReminder || EMPTY_OIL_REMINDER;
   await db.runAsync(
-    `UPDATE services SET service_description = ?, additional_info = ?, cost = ?, is_paid = ?, dash_abs = ?, dash_check_engine = ?, dash_brake = ?, dash_airbag = ?, dash_immobilizer = ? WHERE id = ?`,
+    `UPDATE services SET service_description = ?, additional_info = ?, cost = ?, is_paid = ?, dash_abs = ?, dash_check_engine = ?, dash_brake = ?, dash_airbag = ?, dash_immobilizer = ?, current_mileage = ?, next_service_date = ?, next_service_mileage = ? WHERE id = ?`,
     [
       serviceDescription,
       additionalInfo || null,
@@ -486,6 +526,9 @@ export async function updateService(
       d.brake ? 1 : 0,
       d.airbag ? 1 : 0,
       d.immobilizer ? 1 : 0,
+      o.currentMileage,
+      o.nextServiceDate,
+      o.nextServiceMileage,
       id,
     ]
   );

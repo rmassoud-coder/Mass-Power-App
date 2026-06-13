@@ -153,6 +153,14 @@ export function buildThermalReceiptHtml(
   settings: AppSettings
 ): string {
   const lights = formatDashLights(service);
+  const hasOilReminder = !!(service.next_service_date || service.next_service_mileage);
+  const nextDateFormatted = service.next_service_date
+    ? new Date(service.next_service_date).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
+    : '';
   // 55mm width ~= 208px at 96dpi; we use 200px to leave margin
   return `<!DOCTYPE html>
 <html><head>
@@ -169,6 +177,13 @@ export function buildThermalReceiptHtml(
   .row { display: flex; justify-content: space-between; gap: 4px; }
   hr { border: none; border-top: 1px dashed #000; margin: 4px 0; }
   .box { border: 1px solid #000; padding: 3px; margin: 4px 0; }
+  /* Oil reminder sticker */
+  .sticker { border: 2px solid #000; padding: 8px 6px; margin: 6px 0; text-align: center; }
+  .sticker-title { font-size: 13px; font-weight: bold; letter-spacing: 1px; margin-bottom: 4px; }
+  .sticker-icon { font-size: 22px; line-height: 1; margin: 2px 0; }
+  .sticker-field { font-size: 10px; margin-top: 6px; }
+  .sticker-value { font-size: 14px; font-weight: bold; letter-spacing: 0.5px; margin-top: 2px; }
+  .sticker-divider { border-top: 1px dashed #000; margin: 6px 0; }
 </style>
 </head><body>
   <div class="center bold lg">${esc(settings.garageName)}</div>
@@ -185,6 +200,7 @@ export function buildThermalReceiptHtml(
   <div>${esc(vehicle.year || '')} ${esc(vehicle.make)} ${esc(vehicle.model)}</div>
   <div class="sm">Plate: ${esc(vehicle.plate_number)}</div>
   <div class="sm">VIN: ${esc(vehicle.vin)}</div>
+  ${service.current_mileage ? `<div class="sm">Mileage: ${service.current_mileage.toLocaleString()} km</div>` : ''}
   <hr />
   <div class="bold">Service:</div>
   <div>${esc(service.service_description)}</div>
@@ -195,7 +211,17 @@ export function buildThermalReceiptHtml(
     <span>TOTAL:</span><span>$${service.cost.toFixed(2)}</span>
   </div>
   <div class="center bold" style="margin-top:4px;">${service.is_paid ? '*** PAID ***' : '*** UNPAID ***'}</div>
-  <hr />
+  ${
+    hasOilReminder
+      ? `<div class="sticker">
+            <div class="sticker-title">NEXT OIL CHANGE</div>
+            <div class="sticker-icon">🛢️</div>
+            ${nextDateFormatted ? `<div class="sticker-field">DATE</div><div class="sticker-value">${esc(nextDateFormatted)}</div>` : ''}
+            ${service.next_service_date && service.next_service_mileage ? '<div class="sticker-divider"></div>' : ''}
+            ${service.next_service_mileage ? `<div class="sticker-field">MILEAGE</div><div class="sticker-value">${service.next_service_mileage.toLocaleString()} KM</div>` : ''}
+         </div>`
+      : '<hr />'
+  }
   <div class="center sm">Thank You!</div>
   <div class="center sm">${esc(settings.garageName)}</div>
   <div style="height: 20px;"></div>

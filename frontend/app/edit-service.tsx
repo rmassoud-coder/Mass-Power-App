@@ -15,19 +15,24 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
-import { updateService, SERVICE_CATEGORIES, DashLights } from '../src/db/database';
+import {
+  updateService,
+  SERVICE_CATEGORIES,
+  DashLights,
+  OilReminder,
+  EMPTY_OIL_REMINDER,
+} from '../src/db/database';
 import DashLightsPicker from '../src/components/DashLightsPicker';
+import OilReminderForm from '../src/components/OilReminderForm';
 
 export default function EditServiceScreen() {
   const params = useLocalSearchParams();
 
   const initialDesc = (params.serviceDescription as string) || SERVICE_CATEGORIES[0];
-  // If existing description isn't in the categories list, default to "Other Services"
   const initialCategory = (SERVICE_CATEGORIES as readonly string[]).includes(initialDesc)
     ? initialDesc
     : 'Other Services';
 
-  // If the existing description didn't match a category, prepend it to additional info so we don't lose it
   const initialAdditional =
     initialCategory !== initialDesc
       ? `${initialDesc}${params.additionalInfo ? ` - ${params.additionalInfo as string}` : ''}`
@@ -44,8 +49,17 @@ export default function EditServiceScreen() {
     airbag: params.dashAirbag === 'true',
     immobilizer: params.dashImmobilizer === 'true',
   });
+  const [oilReminder, setOilReminder] = useState<OilReminder>({
+    currentMileage: params.currentMileage ? parseInt(params.currentMileage as string, 10) : null,
+    nextServiceDate: (params.nextServiceDate as string) || null,
+    nextServiceMileage: params.nextServiceMileage
+      ? parseInt(params.nextServiceMileage as string, 10)
+      : null,
+  });
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  const isOilService = serviceCategory === 'Oil Services';
 
   const handleSubmit = async () => {
     if (!serviceCategory || !cost.trim()) {
@@ -67,7 +81,8 @@ export default function EditServiceScreen() {
         additionalInfo.trim() || undefined,
         costNumber,
         isPaid,
-        dashLights
+        dashLights,
+        isOilService ? oilReminder : EMPTY_OIL_REMINDER
       );
 
       router.back();
@@ -115,6 +130,12 @@ export default function EditServiceScreen() {
               </View>
             </View>
 
+            {isOilService && (
+              <View style={styles.oilCard}>
+                <OilReminderForm value={oilReminder} onChange={setOilReminder} />
+              </View>
+            )}
+
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Notes / Description</Text>
               <View style={[styles.inputContainer, styles.textAreaContainer]}>
@@ -130,7 +151,6 @@ export default function EditServiceScreen() {
               </View>
             </View>
 
-            {/* Dashboard Warning Lights */}
             <View style={styles.dashCard}>
               <DashLightsPicker value={dashLights} onChange={setDashLights} />
             </View>
@@ -248,6 +268,14 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    marginBottom: 20,
+  },
+  oilCard: {
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#fcd34d',
+    backgroundColor: '#fffbeb',
     marginBottom: 20,
   },
   submitButton: {

@@ -353,6 +353,20 @@ export default function CustomerDetailScreen() {
                                 <Text style={styles.dashBadgeText}>{dashOn.join(' \u2022 ')}</Text>
                               </View>
                             )}
+                            {(service.next_service_date || service.next_service_mileage) && (
+                              <View style={styles.oilBadgeRow}>
+                                <MaterialCommunityIcons name="oil" size={11} color="#b45309" />
+                                <Text style={styles.oilBadgeText}>
+                                  Next oil:
+                                  {service.next_service_date
+                                    ? ` ${new Date(service.next_service_date).toLocaleDateString()}`
+                                    : ''}
+                                  {service.next_service_mileage
+                                    ? `${service.next_service_date ? ' \u2022 ' : ' '}${service.next_service_mileage.toLocaleString()} km`
+                                    : ''}
+                                </Text>
+                              </View>
+                            )}
                             <Text style={styles.serviceItemDate}>
                               {new Date(service.service_date).toLocaleDateString()}
                             </Text>
@@ -389,6 +403,9 @@ export default function CustomerDetailScreen() {
                                       dashBrake: service.dash_brake ? 'true' : 'false',
                                       dashAirbag: service.dash_airbag ? 'true' : 'false',
                                       dashImmobilizer: service.dash_immobilizer ? 'true' : 'false',
+                                      currentMileage: service.current_mileage != null ? String(service.current_mileage) : '',
+                                      nextServiceDate: service.next_service_date || '',
+                                      nextServiceMileage: service.next_service_mileage != null ? String(service.next_service_mileage) : '',
                                     },
                                   })
                                 }
@@ -828,6 +845,22 @@ const styles = StyleSheet.create({
   dashBadgeText: {
     fontSize: 10,
     color: '#ea580c',
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  oilBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    backgroundColor: '#fef3c7',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    alignSelf: 'flex-start',
+  },
+  oilBadgeText: {
+    fontSize: 10,
+    color: '#b45309',
     fontWeight: '600',
     marginLeft: 4,
   },

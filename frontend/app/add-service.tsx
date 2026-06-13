@@ -13,10 +13,18 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { createService, SERVICE_CATEGORIES, EMPTY_DASH_LIGHTS, DashLights } from '../src/db/database';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
+import {
+  createService,
+  SERVICE_CATEGORIES,
+  EMPTY_DASH_LIGHTS,
+  EMPTY_OIL_REMINDER,
+  DashLights,
+  OilReminder,
+} from '../src/db/database';
 import DashLightsPicker from '../src/components/DashLightsPicker';
+import OilReminderForm from '../src/components/OilReminderForm';
 
 interface Vehicle {
   id: string;
@@ -37,8 +45,11 @@ export default function AddServiceScreen() {
   const [cost, setCost] = useState('');
   const [isPaid, setIsPaid] = useState(false);
   const [dashLights, setDashLights] = useState<DashLights>(EMPTY_DASH_LIGHTS);
+  const [oilReminder, setOilReminder] = useState<OilReminder>(EMPTY_OIL_REMINDER);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  const isOilService = serviceCategory === 'Oil Services';
 
   const handleSubmit = async () => {
     if (!selectedVehicleId || !serviceCategory || !cost.trim()) {
@@ -60,7 +71,8 @@ export default function AddServiceScreen() {
         additionalInfo.trim() || undefined,
         costNumber,
         isPaid,
-        dashLights
+        dashLights,
+        isOilService ? oilReminder : EMPTY_OIL_REMINDER
       );
 
       router.back();
@@ -129,6 +141,13 @@ export default function AddServiceScreen() {
                 </Picker>
               </View>
             </View>
+
+            {/* Oil Service Reminder (conditional) */}
+            {isOilService && (
+              <View style={styles.oilCard}>
+                <OilReminderForm value={oilReminder} onChange={setOilReminder} />
+              </View>
+            )}
 
             {/* Additional Info / Description */}
             <View style={styles.inputGroup}>
@@ -266,6 +285,14 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    marginBottom: 20,
+  },
+  oilCard: {
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#fcd34d',
+    backgroundColor: '#fffbeb',
     marginBottom: 20,
   },
   submitButton: {

@@ -21,7 +21,6 @@ const LIGHTS: LightDef[] = [
   { key: 'check_engine', label: 'Check Engine', iconLib: 'mc', icon: 'engine', color: '#dc2626' },
   { key: 'brake', label: 'Brake', iconLib: 'mc', icon: 'car-brake-alert', color: '#ef4444' },
   { key: 'airbag', label: 'Airbag', iconLib: 'mc', icon: 'airbag', color: '#f97316' },
-  { key: 'immobilizer', label: 'Immobilizer Key', iconLib: 'mc', icon: 'key-alert-outline', color: '#eab308' },
 ];
 
 export default function DashLightsPicker({ value, onChange }: Props) {
