@@ -13,6 +13,7 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import ConfirmDialog from '../src/components/ConfirmDialog';
 import VehicleQrModal from '../src/components/VehicleQrModal';
+import BrandLogo from '../src/components/BrandLogo';
 import {
   getCustomerDetails,
   deleteCustomer,
@@ -262,7 +263,7 @@ export default function CustomerDetailScreen() {
                 {/* Vehicle Header */}
                 <View style={styles.vehicleGroupHeader}>
                   <View style={styles.vehicleGroupIconContainer}>
-                    <Ionicons name="car-sport" size={24} color="#2563eb" />
+                    <BrandLogo make={vehicle.make} size={32} fallbackColor="#2563eb" />
                   </View>
                   <View style={styles.vehicleGroupInfo}>
                     <Text style={styles.vehicleGroupName}>

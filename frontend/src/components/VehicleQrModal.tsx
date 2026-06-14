@@ -17,6 +17,7 @@ import { loadSettings, buildVehicleQrUrl, AppSettings, isGithubConfigured } from
 import { buildVehicleHistoryHtml } from '../utils/htmlBuilder';
 import { shareHtml, sharePdfFromHtml } from '../utils/printer';
 import { uploadVehicleProfile } from '../utils/githubUploader';
+import { printHtml } from '../utils/printer';
 
 interface Props {
   visible: boolean;
@@ -26,10 +27,15 @@ interface Props {
   onClose: () => void;
 }
 
+function esc(s: string): string {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 export default function VehicleQrModal({ visible, customer, vehicle, services, onClose }: Props) {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [printingQr, setPrintingQr] = useState(false);
   const qrRef = useRef<any>(null);
 
   useEffect(() => {
@@ -66,6 +72,49 @@ export default function VehicleQrModal({ visible, customer, vehicle, services, o
       Alert.alert('Export failed', e?.message || 'Unable to export PDF');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handlePrintQr = async () => {
+    if (!settings || !vehicle) return;
+    setPrintingQr(true);
+    try {
+      // Use a public QR-as-image service so the printer renders a real QR PNG.
+      // The QR encodes the same URL shown in the modal.
+      const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=1&data=${encodeURIComponent(url)}`;
+      const safeMake = esc(vehicle.make || '');
+      const safeModel = esc(vehicle.model || '');
+      const safePlate = esc(vehicle.plate_number || '');
+      const safeShop = esc(settings.garageName || '');
+      const html = `<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8" />
+<style>
+  @page { size: 55mm auto; margin: 2mm; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Arial', sans-serif; color: #000; margin: 0; padding: 0; width: 55mm; text-align: center; }
+  .wrap { border: 2px solid #000; padding: 6px 4px; margin: 2px; }
+  .shop { font-size: 12px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; padding-bottom: 4px; border-bottom: 1px dashed #000; margin-bottom: 6px; }
+  .brand { font-size: 14px; font-weight: 900; letter-spacing: 1px; padding: 2px 0 4px 0; }
+  .plate { font-size: 10px; font-weight: bold; padding-bottom: 6px; }
+  .qr { display: block; width: 48mm; height: 48mm; margin: 0 auto 4px auto; }
+  .scan { font-size: 9px; letter-spacing: 1px; }
+</style>
+</head><body>
+  <div class="wrap">
+    <div class="shop">${safeShop}</div>
+    <div class="brand">${safeMake} ${safeModel}</div>
+    <div class="plate">${safePlate}</div>
+    <img src="${qrSrc}" class="qr" alt="QR" />
+    <div class="scan">SCAN FOR SERVICE HISTORY</div>
+  </div>
+  <div style="height: 18px;"></div>
+</body></html>`;
+      await printHtml(html);
+    } catch (e: any) {
+      Alert.alert('Print failed', e?.message || 'Unable to open printer.');
+    } finally {
+      setPrintingQr(false);
     }
   };
 
@@ -139,11 +188,36 @@ export default function VehicleQrModal({ visible, customer, vehicle, services, o
             <Pressable
               style={({ pressed }) => [
                 styles.actionBtn,
+                { backgroundColor: '#7c3aed' },
+                pressed && { opacity: 0.85 },
+              ]}
+              onPress={handlePrintQr}
+              disabled={printingQr || syncing || busy}
+              testID="print-vehicle-qr"
+            >
+              <View style={styles.btnInner}>
+                {printingQr ? (
+                  <>
+                    <ActivityIndicator color="#fff" />
+                    <Text style={styles.btnText}>Preparing...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="print" size={20} color="#fff" />
+                    <Text style={styles.btnText}>Print QR (55mm)</Text>
+                  </>
+                )}
+              </View>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.actionBtn,
                 styles.syncBtn,
                 pressed && { opacity: 0.85 },
               ]}
               onPress={handleSyncToGithub}
-              disabled={syncing || busy}
+              disabled={syncing || busy || printingQr}
               testID="sync-vehicle-github"
             >
               <View style={styles.btnInner}>
