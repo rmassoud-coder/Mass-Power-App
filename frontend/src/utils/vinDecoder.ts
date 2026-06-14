@@ -32,14 +32,32 @@ const YEAR_CODES_OLD: Record<string, number> = {
   '6': 2006, '7': 2007, '8': 2008, '9': 2009,
 };
 
-function resolveYear(vin: string): string | undefined {
-  if (vin.length !== 17) return undefined;
+function resolveYear(vin: string): { year?: string; uncertain?: boolean } {
+  if (vin.length !== 17) return {};
   const yearChar = vin.charAt(9);
   const pos7 = vin.charAt(6);
   const isNewCycle = /[A-Z]/.test(pos7); // letter at pos 7 → 2010-2039
+  const wmi = vin.substring(0, 3);
+
+  // German/European manufacturers (Mercedes-Benz, BMW, Audi, VW, Porsche) often
+  // don't follow ISO 3779 strictly for cars sold outside North America — position 10
+  // can be the body version, not the year. So for these WMIs we ONLY trust the
+  // year when it's clearly in the 2010-2039 cycle (post-2010 cars).
+  const isGermanWmi =
+    wmi.startsWith('WD') || // Mercedes (WDB/WDC/WDD/WDF)
+    wmi.startsWith('WB') || // BMW
+    wmi.startsWith('WA') || // Audi
+    wmi === 'WVW' || wmi.startsWith('WV1') || wmi.startsWith('WV2') || // VW
+    wmi.startsWith('WP') || // Porsche
+    wmi === 'TRU'; // Audi Hungary
+  if (isGermanWmi && !isNewCycle) {
+    // Old cycle + German WMI = unreliable. Don't guess.
+    return {};
+  }
+
   const table = isNewCycle ? YEAR_CODES_NEW : YEAR_CODES_OLD;
   const y = table[yearChar];
-  return y ? String(y) : undefined;
+  return y ? { year: String(y) } : {};
 }
 
 // Position 1 of VIN → country/region (first digit identifies the country of origin)
@@ -211,7 +229,7 @@ function parseVinLocally(vin: string): {
 
   const make = WMI_MAKE[wmi];
   const model = decodeModelFromVin(v);
-  const year = resolveYear(v);
+  const year = resolveYear(v).year;
   const country = COUNTRY_CODES[countryChar];
 
   return { make, model, year, country };
