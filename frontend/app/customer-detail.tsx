@@ -439,6 +439,7 @@ export default function CustomerDetailScreen() {
                                       currentMileage: service.current_mileage != null ? String(service.current_mileage) : '',
                                       nextServiceDate: service.next_service_date || '',
                                       nextServiceMileage: service.next_service_mileage != null ? String(service.next_service_mileage) : '',
+                                      oilGrade: service.oil_grade || '',
                                     },
                                   })
                                 }

@@ -67,6 +67,11 @@ export default function EditServiceScreen() {
       return;
     }
 
+    if (isOilService && !oilReminder.oilGrade.trim()) {
+      Alert.alert('Error', 'Oil grade is required for Oil Services (e.g. 5W-30)');
+      return;
+    }
+
     const costNumber = parseFloat(cost);
     if (isNaN(costNumber) || costNumber < 0) {
       Alert.alert('Error', 'Please enter a valid cost');

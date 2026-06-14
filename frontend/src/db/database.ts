@@ -89,12 +89,14 @@ export const EMPTY_DASH_LIGHTS: DashLights = {
 };
 
 export interface OilReminder {
+  oilGrade: string;
   currentMileage: number | null;
   nextServiceDate: string | null; // ISO YYYY-MM-DD
   nextServiceMileage: number | null;
 }
 
 export const EMPTY_OIL_REMINDER: OilReminder = {
+  oilGrade: '',
   currentMileage: null,
   nextServiceDate: null,
   nextServiceMileage: null,
@@ -206,6 +208,7 @@ export async function initDatabase() {
     ['current_mileage', 'INTEGER'],
     ['next_service_date', 'TEXT'],
     ['next_service_mileage', 'INTEGER'],
+    ['oil_grade', 'TEXT'],
   ];
   for (const [col, type] of oilReminderColumns) {
     try {
@@ -460,7 +463,7 @@ export async function createService(
   const d = dashLights || EMPTY_DASH_LIGHTS;
   const o = oilReminder || EMPTY_OIL_REMINDER;
   await db.runAsync(
-    `INSERT INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, service_date, created_at, dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, current_mileage, next_service_date, next_service_mileage) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, service_date, created_at, dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, current_mileage, next_service_date, next_service_mileage, oil_grade) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       vehicleId,
@@ -479,6 +482,7 @@ export async function createService(
       o.currentMileage,
       o.nextServiceDate,
       o.nextServiceMileage,
+      o.oilGrade || null,
     ]
   );
   return {
@@ -499,6 +503,7 @@ export async function createService(
     current_mileage: o.currentMileage,
     next_service_date: o.nextServiceDate,
     next_service_mileage: o.nextServiceMileage,
+    oil_grade: o.oilGrade || null,
   };
 }
 
@@ -515,7 +520,7 @@ export async function updateService(
   const d = dashLights || EMPTY_DASH_LIGHTS;
   const o = oilReminder || EMPTY_OIL_REMINDER;
   await db.runAsync(
-    `UPDATE services SET service_description = ?, additional_info = ?, cost = ?, is_paid = ?, dash_abs = ?, dash_check_engine = ?, dash_brake = ?, dash_airbag = ?, dash_immobilizer = ?, current_mileage = ?, next_service_date = ?, next_service_mileage = ? WHERE id = ?`,
+    `UPDATE services SET service_description = ?, additional_info = ?, cost = ?, is_paid = ?, dash_abs = ?, dash_check_engine = ?, dash_brake = ?, dash_airbag = ?, dash_immobilizer = ?, current_mileage = ?, next_service_date = ?, next_service_mileage = ?, oil_grade = ? WHERE id = ?`,
     [
       serviceDescription,
       additionalInfo || null,
@@ -529,6 +534,7 @@ export async function updateService(
       o.currentMileage,
       o.nextServiceDate,
       o.nextServiceMileage,
+      o.oilGrade || null,
       id,
     ]
   );
@@ -746,4 +752,5 @@ export async function importData(jsonString: string, mergeMode: boolean): Promis
   }
 
   return { customers: customersAdded, vehicles: vehiclesAdded, services: servicesAdded };
+}
 }

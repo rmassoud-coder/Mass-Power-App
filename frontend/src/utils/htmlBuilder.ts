@@ -348,6 +348,14 @@ export function buildOilStickerHtml(
     <div class="brand">${esc([vehicle.make, vehicle.model].filter(Boolean).join(' ').trim())}</div>
     <div class="heading">Next Oil Change</div>
     ${
+      service.oil_grade
+        ? `<div class="field-row">
+             <span class="field-label">OIL:</span>
+             <span class="field-value">${esc(service.oil_grade)}</span>
+           </div>`
+        : ''
+    }
+    ${
       nextMileage
         ? `<div class="field-row">
              <span class="field-label">MILEAGE:</span>

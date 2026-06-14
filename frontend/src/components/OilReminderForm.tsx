@@ -94,6 +94,16 @@ export default function OilReminderForm({ value, onChange }: Props) {
     onChange({ ...value, nextServiceMileage: cleaned ? parseInt(cleaned, 10) : null });
   };
 
+  const onOilGradeChange = (txt: string) => {
+    onChange({ ...value, oilGrade: txt });
+  };
+
+  const setOilGrade = (grade: string) => {
+    onChange({ ...value, oilGrade: grade });
+  };
+
+  const COMMON_GRADES = ['0W-20', '5W-30', '5W-40', '10W-40'];
+
   return (
     <View>
       <View style={styles.headerRow}>
@@ -101,6 +111,36 @@ export default function OilReminderForm({ value, onChange }: Props) {
         <Text style={styles.headerText}>Next Oil Change Reminder</Text>
       </View>
       <Text style={styles.subtitle}>Captured on the printed receipt so the customer remembers when to come back.</Text>
+
+      {/* Oil Grade (REQUIRED) */}
+      <View style={styles.fieldGroup}>
+        <Text style={styles.label}>Oil Grade <Text style={styles.required}>*</Text></Text>
+        <View style={styles.inputRow}>
+          <MaterialCommunityIcons name="water" size={18} color="#64748b" style={styles.icon} />
+          <TextInput
+            style={styles.input}
+            value={value.oilGrade}
+            onChangeText={onOilGradeChange}
+            placeholder="e.g. 5W-30"
+            placeholderTextColor="#94a3b8"
+            autoCapitalize="characters"
+            autoCorrect={false}
+            testID="oil-grade-input"
+          />
+        </View>
+        <View style={styles.presetRow}>
+          {COMMON_GRADES.map((g) => (
+            <TouchableOpacity
+              key={g}
+              style={[styles.presetBtn, value.oilGrade === g && styles.presetBtnActive]}
+              onPress={() => setOilGrade(g)}
+              testID={`oil-grade-${g}`}
+            >
+              <Text style={[styles.presetBtnText, value.oilGrade === g && styles.presetBtnTextActive]}>{g}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
 
       {/* Current Mileage */}
       <View style={styles.fieldGroup}>
@@ -211,5 +251,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#fde68a',
   },
+  presetBtnActive: {
+    backgroundColor: '#b45309',
+    borderColor: '#b45309',
+  },
   presetBtnText: { fontSize: 11, fontWeight: '600', color: '#b45309' },
+  presetBtnTextActive: { color: '#fff' },
 });
