@@ -10,9 +10,26 @@ interface FetchFileResponse {
   message?: string;
 }
 
-/** Convert a UTF-8 string to base64 reliably across platforms by going through
- *  a temp cache file (works on RN, no TextEncoder polyfill needed). */
+/** Convert a UTF-8 string to base64 reliably across web + native.
+ *  - Browsers + Hermes (modern RN): use TextEncoder + btoa
+ *  - Older RN fallback: route through an expo-file-system cache file
+ */
 async function utf8ToBase64(html: string): Promise<string> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const g: any = globalThis as any;
+  if (typeof g.TextEncoder !== 'undefined' && typeof g.btoa === 'function') {
+    const bytes: Uint8Array = new g.TextEncoder().encode(html);
+    // Build a binary string in chunks to avoid call-stack overflow on large HTML
+    let binary = '';
+    const CHUNK = 0x8000;
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      const slice = bytes.subarray(i, Math.min(i + CHUNK, bytes.length));
+      binary += String.fromCharCode.apply(null, Array.from(slice) as number[]);
+    }
+    return g.btoa(binary);
+  }
+
+  // Fallback: native FileSystem temp file path (works on older RN where TextEncoder is missing)
   const tmp = `${FileSystem.cacheDirectory}gh-upload-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`;
   try {
     await FileSystem.writeAsStringAsync(tmp, html, { encoding: 'utf8' });
@@ -82,7 +99,9 @@ async function fetchCurrentSha(settings: AppSettings, fileName: string): Promise
   return body.sha;
 }
 
-/** Create or update a single file on GitHub. Last-write-wins (we always overwrite). */
+/** Create or update a single file on GitHub. Last-write-wins (we always overwrite).
+ *  If GitHub responds 409/422 because the SHA we sent is stale (rare race when the
+ *  file changed between our GET and PUT), we refetch the latest SHA and retry once. */
 export async function uploadFileToGithub(
   settings: AppSettings,
   fileName: string,
@@ -93,20 +112,35 @@ export async function uploadFileToGithub(
     throw new Error('GitHub token not configured. Open Settings to add one.');
   }
   const base64 = await utf8ToBase64(html);
-  // Look up existing SHA so we overwrite (otherwise GitHub rejects with 422)
-  const sha = await fetchCurrentSha(settings, fileName);
 
-  const url = buildContentsUrl(settings, fileName);
-  const res = await timedFetch(url, {
-    method: 'PUT',
-    headers: { ...authHeaders(settings.githubToken), 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message: commitMessage,
-      content: base64,
-      branch: settings.githubBranch,
-      ...(sha ? { sha } : {}),
-    }),
-  });
+  const tryPut = async (sha: string | undefined) => {
+    const url = buildContentsUrl(settings, fileName);
+    return timedFetch(url, {
+      method: 'PUT',
+      headers: { ...authHeaders(settings.githubToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: commitMessage,
+        content: base64,
+        branch: settings.githubBranch,
+        ...(sha ? { sha } : {}),
+      }),
+    });
+  };
+
+  // First attempt with the SHA we currently know about
+  let sha = await fetchCurrentSha(settings, fileName);
+  let res = await tryPut(sha);
+
+  // Retry once on SHA conflict (409 / 422) — fetch latest sha and overwrite
+  if (res.status === 409 || res.status === 422) {
+    const freshSha = await fetchCurrentSha(settings, fileName);
+    if (freshSha && freshSha !== sha) {
+      res = await tryPut(freshSha);
+    } else if (!sha && freshSha) {
+      res = await tryPut(freshSha);
+    }
+  }
+
   const body = (await res.json().catch(() => ({}))) as any;
   if (!res.ok) {
     const msg = body?.message || res.statusText;
