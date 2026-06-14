@@ -4,6 +4,7 @@ import {
   View,
   Text,
   TouchableOpacity,
+  Pressable,
   StyleSheet,
   ActivityIndicator,
   Alert,
@@ -135,8 +136,12 @@ export default function VehicleQrModal({ visible, customer, vehicle, services, o
               </Text>
             </View>
 
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.syncBtn]}
+            <Pressable
+              style={({ pressed }) => [
+                styles.actionBtn,
+                styles.syncBtn,
+                pressed && { opacity: 0.85 },
+              ]}
               onPress={handleSyncToGithub}
               disabled={syncing || busy}
               testID="sync-vehicle-github"
@@ -154,7 +159,7 @@ export default function VehicleQrModal({ visible, customer, vehicle, services, o
                   </>
                 )}
               </View>
-            </TouchableOpacity>
+            </Pressable>
 
             <TouchableOpacity
               style={[styles.actionBtn, styles.primaryBtn]}

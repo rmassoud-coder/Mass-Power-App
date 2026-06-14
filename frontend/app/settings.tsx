@@ -44,6 +44,7 @@ export default function SettingsScreen() {
   const [syncingAll, setSyncingAll] = useState(false);
   const [syncProgress, setSyncProgress] = useState('');
   const [showToken, setShowToken] = useState(false);
+  const [ghStatus, setGhStatus] = useState<{ kind: 'ok' | 'err' | 'info'; text: string } | null>(null);
 
   useEffect(() => {
     loadSettings()
@@ -159,55 +160,69 @@ export default function SettingsScreen() {
   };
 
   const handleTestGithub = async () => {
+    // eslint-disable-next-line no-console
+    console.log('[gh-test] starting');
     setTestingGh(true);
+    setGhStatus({ kind: 'info', text: 'Testing GitHub connection...' });
     try {
-      // Save first so the test uses what's currently in the inputs
       await saveSettings(settings);
       const result = await testGithubConnection(settings);
       if (result.ok) {
-        Alert.alert(
-          'GitHub connection OK ✓',
-          `Authenticated as @${result.user}\nRepo: ${settings.githubOwner}/${settings.githubRepo}\nBranch: ${settings.githubBranch} — reachable.`
-        );
+        const msg = `✓ Connected as @${result.user} — ${settings.githubOwner}/${settings.githubRepo}@${settings.githubBranch}`;
+        setGhStatus({ kind: 'ok', text: msg });
+        Alert.alert('GitHub connection OK ✓', msg);
       } else {
+        setGhStatus({ kind: 'err', text: result.message });
         Alert.alert('Connection failed', result.message);
       }
     } catch (e: any) {
-      Alert.alert('Test failed', e?.message || 'Unable to test connection');
+      const msg = e?.message || 'Unable to test connection';
+      setGhStatus({ kind: 'err', text: msg });
+      Alert.alert('Test failed', msg);
     } finally {
       setTestingGh(false);
     }
   };
 
   const handleSyncAll = async () => {
+    // eslint-disable-next-line no-console
+    console.log('[gh-sync-all] starting');
     if (!isGithubConfigured(settings)) {
+      setGhStatus({ kind: 'err', text: 'Add your Personal Access Token first.' });
       Alert.alert('GitHub not configured', 'Add your Personal Access Token first.');
       return;
     }
     setSyncingAll(true);
     setSyncProgress('Loading vehicles...');
+    setGhStatus({ kind: 'info', text: 'Loading vehicles...' });
     try {
       await saveSettings(settings);
       const all = await getAllVehiclesWithDetails();
       if (all.length === 0) {
+        setGhStatus({ kind: 'info', text: 'No vehicles in the database.' });
         Alert.alert('Nothing to sync', 'No vehicles in the database.');
         return;
       }
       const result = await uploadAllVehicleProfiles(all, settings, (i, total, label) => {
-        setSyncProgress(`Uploading ${i}/${total}: ${label}`);
+        const t = `Uploading ${i}/${total}: ${label}`;
+        setSyncProgress(t);
+        setGhStatus({ kind: 'info', text: t });
       });
       if (result.failed.length === 0) {
-        Alert.alert('Sync complete ✓', `${result.uploaded} vehicle profile${result.uploaded === 1 ? '' : 's'} uploaded to GitHub.\n\nGitHub Pages may take 30-60s to refresh.`);
+        const msg = `✓ ${result.uploaded} profile${result.uploaded === 1 ? '' : 's'} uploaded`;
+        setGhStatus({ kind: 'ok', text: msg });
+        Alert.alert('Sync complete ✓', `${msg}\n\nGitHub Pages may take 30-60s to refresh.`);
       } else {
         const failList = result.failed.slice(0, 3).map((f) => `• ${f.label}: ${f.error}`).join('\n');
         const more = result.failed.length > 3 ? `\n…and ${result.failed.length - 3} more` : '';
-        Alert.alert(
-          `Synced ${result.uploaded}/${all.length}`,
-          `Failed:\n${failList}${more}`
-        );
+        const summary = `Synced ${result.uploaded}/${all.length}. Failures:\n${failList}${more}`;
+        setGhStatus({ kind: 'err', text: summary });
+        Alert.alert(`Synced ${result.uploaded}/${all.length}`, `Failed:\n${failList}${more}`);
       }
     } catch (e: any) {
-      Alert.alert('Sync failed', e?.message || 'Unable to sync to GitHub');
+      const msg = e?.message || 'Unable to sync to GitHub';
+      setGhStatus({ kind: 'err', text: msg });
+      Alert.alert('Sync failed', msg);
     } finally {
       setSyncingAll(false);
       setSyncProgress('');
@@ -386,21 +401,49 @@ export default function SettingsScreen() {
               </View>
             </View>
 
-            <TouchableOpacity
-              style={[styles.uploadHelpBtn, { marginTop: 4 }]}
+            <Pressable
+              style={({ pressed }) => [
+                styles.uploadHelpBtn,
+                { marginTop: 4 },
+                pressed && { opacity: 0.85 },
+              ]}
               onPress={handleTestGithub}
               disabled={testingGh || !settings.githubToken}
               testID="github-test-button"
             >
-              {testingGh ? (
-                <ActivityIndicator color="#2563eb" />
-              ) : (
-                <>
-                  <Ionicons name="checkmark-circle-outline" size={18} color="#2563eb" />
-                  <Text style={styles.uploadHelpText}>Test Connection</Text>
-                </>
-              )}
-            </TouchableOpacity>
+              <View style={styles.btnInner}>
+                {testingGh ? (
+                  <ActivityIndicator color="#2563eb" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle-outline" size={18} color="#2563eb" />
+                    <Text style={styles.uploadHelpText}>Test Connection</Text>
+                  </>
+                )}
+              </View>
+            </Pressable>
+
+            {ghStatus && (
+              <View
+                style={[
+                  styles.statusBox,
+                  ghStatus.kind === 'ok' && styles.statusOk,
+                  ghStatus.kind === 'err' && styles.statusErr,
+                  ghStatus.kind === 'info' && styles.statusInfo,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.statusText,
+                    ghStatus.kind === 'ok' && { color: '#065f46' },
+                    ghStatus.kind === 'err' && { color: '#991b1b' },
+                    ghStatus.kind === 'info' && { color: '#1e40af' },
+                  ]}
+                >
+                  {ghStatus.text}
+                </Text>
+              </View>
+            )}
 
             <Pressable
               style={({ pressed }) => [
@@ -637,6 +680,16 @@ const styles = StyleSheet.create({
   },
   linkText: { flex: 1, fontSize: 13, color: '#1e293b', marginLeft: 8 },
   row2: { flexDirection: 'row' },
+  statusBox: {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  statusOk: { backgroundColor: '#d1fae5', borderColor: '#a7f3d0' },
+  statusErr: { backgroundColor: '#fee2e2', borderColor: '#fecaca' },
+  statusInfo: { backgroundColor: '#dbeafe', borderColor: '#bfdbfe' },
+  statusText: { fontSize: 12, lineHeight: 17 },
   exportBtn: {
     flexDirection: 'row',
     alignItems: 'center',

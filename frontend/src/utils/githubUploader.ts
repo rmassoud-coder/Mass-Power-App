@@ -51,10 +51,28 @@ function authHeaders(token: string) {
   };
 }
 
+/** Wrap fetch with a hard timeout so a hung request becomes a visible error
+ *  instead of an indefinite spinner. */
+async function timedFetch(url: string, init: RequestInit, timeoutMs = 20000): Promise<Response> {
+  // eslint-disable-next-line no-undef
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (e: any) {
+    if (e?.name === 'AbortError') {
+      throw new Error(`Network timeout after ${Math.round(timeoutMs / 1000)}s - check your internet and GitHub status`);
+    }
+    throw new Error(e?.message || 'Network error reaching GitHub');
+  } finally {
+    clearTimeout(id);
+  }
+}
+
 /** GETs the current file's SHA so we can overwrite. Returns undefined if file doesn't exist. */
 async function fetchCurrentSha(settings: AppSettings, fileName: string): Promise<string | undefined> {
   const url = buildContentsUrl(settings, fileName, settings.githubBranch);
-  const res = await fetch(url, { method: 'GET', headers: authHeaders(settings.githubToken) });
+  const res = await timedFetch(url, { method: 'GET', headers: authHeaders(settings.githubToken) });
   if (res.status === 404) return undefined;
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as FetchFileResponse;
@@ -79,7 +97,7 @@ export async function uploadFileToGithub(
   const sha = await fetchCurrentSha(settings, fileName);
 
   const url = buildContentsUrl(settings, fileName);
-  const res = await fetch(url, {
+  const res = await timedFetch(url, {
     method: 'PUT',
     headers: { ...authHeaders(settings.githubToken), 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -127,7 +145,7 @@ export async function testGithubConnection(
   try {
     if (!settings.githubToken) return { ok: false, message: 'No token configured' };
     // 1. Validate the token itself
-    const meRes = await fetch(`${GITHUB_API}/user`, { headers: authHeaders(settings.githubToken) });
+    const meRes = await timedFetch(`${GITHUB_API}/user`, { method: 'GET', headers: authHeaders(settings.githubToken) });
     if (!meRes.ok) {
       const body = await meRes.json().catch(() => ({}));
       return { ok: false, message: `Token check failed (${meRes.status}): ${body.message || meRes.statusText}` };
@@ -137,7 +155,7 @@ export async function testGithubConnection(
     const repoUrl = `${GITHUB_API}/repos/${encodeURIComponent(settings.githubOwner)}/${encodeURIComponent(
       settings.githubRepo
     )}/branches/${encodeURIComponent(settings.githubBranch)}`;
-    const repoRes = await fetch(repoUrl, { headers: authHeaders(settings.githubToken) });
+    const repoRes = await timedFetch(repoUrl, { method: 'GET', headers: authHeaders(settings.githubToken) });
     if (!repoRes.ok) {
       const body = await repoRes.json().catch(() => ({}));
       return { ok: false, message: `Repo/branch check failed (${repoRes.status}): ${body.message || repoRes.statusText}` };
