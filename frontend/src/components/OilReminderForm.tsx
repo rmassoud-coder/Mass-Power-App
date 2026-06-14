@@ -228,6 +228,7 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 11, color: '#a16207', marginBottom: 12 },
   fieldGroup: { marginBottom: 12 },
   label: { fontSize: 12, fontWeight: '600', color: '#78350f', marginBottom: 6 },
+  required: { color: '#dc2626', fontWeight: '700' },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',

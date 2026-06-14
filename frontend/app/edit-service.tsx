@@ -50,6 +50,7 @@ export default function EditServiceScreen() {
     immobilizer: params.dashImmobilizer === 'true',
   });
   const [oilReminder, setOilReminder] = useState<OilReminder>({
+    oilGrade: (params.oilGrade as string) || '',
     currentMileage: params.currentMileage ? parseInt(params.currentMileage as string, 10) : null,
     nextServiceDate: (params.nextServiceDate as string) || null,
     nextServiceMileage: params.nextServiceMileage

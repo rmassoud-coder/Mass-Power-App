@@ -57,6 +57,7 @@ export interface Service {
   current_mileage?: number | null;
   next_service_date?: string | null; // ISO date
   next_service_mileage?: number | null;
+  oil_grade?: string | null;
 }
 
 // Service category options for dropdown
@@ -752,5 +753,4 @@ export async function importData(jsonString: string, mergeMode: boolean): Promis
   }
 
   return { customers: customersAdded, vehicles: vehiclesAdded, services: servicesAdded };
-}
 }
