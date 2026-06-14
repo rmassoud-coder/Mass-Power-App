@@ -15,13 +15,32 @@ export interface VinDecodeResult {
 
 // Position 10 of VIN → model year. The cycle repeats every 30 years (1980-2009, 2010-2039).
 // We assume modern vehicles (2010-2039) since older cars don't usually need this.
-const YEAR_CODES: Record<string, number> = {
+// Position 10 of VIN → model year. The cycle repeats every 30 years.
+// Position 7 disambiguates: alpha → 2010-2039 cycle, numeric → 1980-2009 cycle.
+const YEAR_CODES_NEW: Record<string, number> = {
   A: 2010, B: 2011, C: 2012, D: 2013, E: 2014, F: 2015, G: 2016, H: 2017,
   J: 2018, K: 2019, L: 2020, M: 2021, N: 2022, P: 2023, R: 2024, S: 2025,
   T: 2026, V: 2027, W: 2028, X: 2029, Y: 2030,
   '1': 2031, '2': 2032, '3': 2033, '4': 2034, '5': 2035,
   '6': 2036, '7': 2037, '8': 2038, '9': 2039,
 };
+const YEAR_CODES_OLD: Record<string, number> = {
+  A: 1980, B: 1981, C: 1982, D: 1983, E: 1984, F: 1985, G: 1986, H: 1987,
+  J: 1988, K: 1989, L: 1990, M: 1991, N: 1992, P: 1993, R: 1994, S: 1995,
+  T: 1996, V: 1997, W: 1998, X: 1999, Y: 2000,
+  '1': 2001, '2': 2002, '3': 2003, '4': 2004, '5': 2005,
+  '6': 2006, '7': 2007, '8': 2008, '9': 2009,
+};
+
+function resolveYear(vin: string): string | undefined {
+  if (vin.length !== 17) return undefined;
+  const yearChar = vin.charAt(9);
+  const pos7 = vin.charAt(6);
+  const isNewCycle = /[A-Z]/.test(pos7); // letter at pos 7 → 2010-2039
+  const table = isNewCycle ? YEAR_CODES_NEW : YEAR_CODES_OLD;
+  const y = table[yearChar];
+  return y ? String(y) : undefined;
+}
 
 // Position 1 of VIN → country/region (first digit identifies the country of origin)
 const COUNTRY_CODES: Record<string, string> = {
@@ -113,26 +132,89 @@ const WMI_MAKE: Record<string, string> = {
   '5YJ': 'Tesla', '7SA': 'Tesla',
 };
 
+// ============================================================================
+// Make-specific model resolution from VDS (positions 4-6 / 4-8)
+// ============================================================================
+
+// Mercedes-Benz chassis code → model line. The 3 digits at positions 4-6 of any
+// modern Mercedes VIN identify the platform/chassis.
+const MERCEDES_CHASSIS: Record<string, string> = {
+  '124': 'E-Class (W124)', '210': 'E-Class (W210)', '211': 'E-Class (W211)',
+  '212': 'E-Class (W212)', '213': 'E-Class (W213)', '214': 'E-Class (W214)',
+  '207': 'E-Class Coupe (C207)',
+  '202': 'C-Class (W202)', '203': 'C-Class (W203)', '204': 'C-Class (W204)',
+  '205': 'C-Class (W205)', '206': 'C-Class (W206)',
+  '208': 'CLK (W208)', '209': 'CLK (W209)',
+  '218': 'CLS (W218)', '219': 'CLS (W219)', '257': 'CLS (C257)',
+  '220': 'S-Class (W220)', '221': 'S-Class (W221)', '222': 'S-Class (W222)',
+  '223': 'S-Class (W223)',
+  '215': 'CL (C215)', '216': 'CL (C216)',
+  '129': 'SL (R129)', '230': 'SL (R230)', '231': 'SL (R231)', '232': 'SL (R232)',
+  '170': 'SLK (R170)', '171': 'SLK (R171)', '172': 'SLK (R172)',
+  '199': 'SLR McLaren', '197': 'SLS AMG', '190': 'AMG GT',
+  '163': 'M-Class (W163)', '164': 'M-Class (W164)', '166': 'M-Class (W166)',
+  '167': 'GLE (W167)',
+  '156': 'GL (X156)', '253': 'GLC (X253)', '254': 'GLC (X254)',
+  '169': 'A-Class (W169)', '176': 'A-Class (W176)', '177': 'A-Class (W177)',
+  '245': 'B-Class (W245)', '246': 'B-Class (W246)', '247': 'B-Class (W247)',
+  '242': 'B-Class Electric',
+  '251': 'R-Class (W251)',
+  '463': 'G-Class (W463)',
+  '156-AMG': 'GLA',
+  '117': 'CLA (C117)', '118': 'CLA (C118)',
+  '156X': 'GLA (X156)',
+  '639': 'Vito / V-Class',
+  '447': 'V-Class (W447)',
+  '906': 'Sprinter',
+};
+
+// BMW chassis code (VDS positions 4-7 → "E"/"F"/"G" series). Detected from the
+// 4th and 5th characters of the VIN combined with the WMI.
+function decodeBmwModel(vin: string): string | undefined {
+  if (!vin.startsWith('WBA') && !vin.startsWith('WBS') && !vin.startsWith('WBY') && !vin.startsWith('WBX')) {
+    return undefined;
+  }
+  const c4 = vin.charAt(3);
+  // The series letter is in pos 4 for many BMW VINs (e.g. WBA**5**…  = 5-Series)
+  const seriesByChar: Record<string, string> = {
+    '1': '1 Series', '2': '2 Series', '3': '3 Series', '4': '4 Series',
+    '5': '5 Series', '6': '6 Series', '7': '7 Series', '8': '8 Series',
+    A: '3 Series', B: '5 Series', C: '7 Series',
+    F: 'X3', G: 'X5', H: 'X6', J: 'X7',
+    K: 'i3', L: 'i8', N: 'X1', P: 'X2', R: 'X4',
+  };
+  return seriesByChar[c4];
+}
+
+function decodeMercedesModel(vin: string): string | undefined {
+  if (!vin.length || vin.length < 6) return undefined;
+  const wmi = vin.substring(0, 3);
+  if (!['WDB', 'WDC', 'WDD', 'WDF', 'WMX', '4JG', '55S'].includes(wmi)) return undefined;
+  const chassis = vin.substring(3, 6); // positions 4-6
+  return MERCEDES_CHASSIS[chassis];
+}
+
+function decodeModelFromVin(vin: string): string | undefined {
+  return decodeMercedesModel(vin) || decodeBmwModel(vin);
+}
+
 function parseVinLocally(vin: string): {
   make?: string;
+  model?: string;
   year?: string;
   country?: string;
 } {
   const v = vin.trim().toUpperCase();
   if (v.length !== 17) return {};
   const wmi = v.substring(0, 3);
-  const yearChar = v.charAt(9);
   const countryChar = v.charAt(0);
 
   const make = WMI_MAKE[wmi];
-  const yearNum = YEAR_CODES[yearChar];
+  const model = decodeModelFromVin(v);
+  const year = resolveYear(v);
   const country = COUNTRY_CODES[countryChar];
 
-  return {
-    make,
-    year: yearNum ? String(yearNum) : undefined,
-    country,
-  };
+  return { make, model, year, country };
 }
 
 // ============================================================================
