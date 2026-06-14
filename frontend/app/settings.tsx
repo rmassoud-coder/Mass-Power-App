@@ -25,9 +25,11 @@ import {
   AppSettings,
   DEFAULT_SETTINGS,
   buildGithubUploadHelpUrl,
+  isGithubConfigured,
 } from '../src/utils/settings';
 import { getAllVehiclesWithDetails } from '../src/db/database';
 import { buildVehicleHistoryHtml } from '../src/utils/htmlBuilder';
+import { testGithubConnection, uploadAllVehicleProfiles } from '../src/utils/githubUploader';
 
 const GITHUB_REPO_URL = 'https://github.com/rmassoud-coder/Mass-Power-App';
 
@@ -38,6 +40,10 @@ export default function SettingsScreen() {
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState('');
+  const [testingGh, setTestingGh] = useState(false);
+  const [syncingAll, setSyncingAll] = useState(false);
+  const [syncProgress, setSyncProgress] = useState('');
+  const [showToken, setShowToken] = useState(false);
 
   useEffect(() => {
     loadSettings()
@@ -152,6 +158,62 @@ export default function SettingsScreen() {
     Linking.openURL(GITHUB_REPO_URL).catch(() => {});
   };
 
+  const handleTestGithub = async () => {
+    setTestingGh(true);
+    try {
+      // Save first so the test uses what's currently in the inputs
+      await saveSettings(settings);
+      const result = await testGithubConnection(settings);
+      if (result.ok) {
+        Alert.alert(
+          'GitHub connection OK ✓',
+          `Authenticated as @${result.user}\nRepo: ${settings.githubOwner}/${settings.githubRepo}\nBranch: ${settings.githubBranch} — reachable.`
+        );
+      } else {
+        Alert.alert('Connection failed', result.message);
+      }
+    } catch (e: any) {
+      Alert.alert('Test failed', e?.message || 'Unable to test connection');
+    } finally {
+      setTestingGh(false);
+    }
+  };
+
+  const handleSyncAll = async () => {
+    if (!isGithubConfigured(settings)) {
+      Alert.alert('GitHub not configured', 'Add your Personal Access Token first.');
+      return;
+    }
+    setSyncingAll(true);
+    setSyncProgress('Loading vehicles...');
+    try {
+      await saveSettings(settings);
+      const all = await getAllVehiclesWithDetails();
+      if (all.length === 0) {
+        Alert.alert('Nothing to sync', 'No vehicles in the database.');
+        return;
+      }
+      const result = await uploadAllVehicleProfiles(all, settings, (i, total, label) => {
+        setSyncProgress(`Uploading ${i}/${total}: ${label}`);
+      });
+      if (result.failed.length === 0) {
+        Alert.alert('Sync complete ✓', `${result.uploaded} vehicle profile${result.uploaded === 1 ? '' : 's'} uploaded to GitHub.\n\nGitHub Pages may take 30-60s to refresh.`);
+      } else {
+        const failList = result.failed.slice(0, 3).map((f) => `• ${f.label}: ${f.error}`).join('\n');
+        const more = result.failed.length > 3 ? `\n…and ${result.failed.length - 3} more` : '';
+        Alert.alert(
+          `Synced ${result.uploaded}/${all.length}`,
+          `Failed:\n${failList}${more}`
+        );
+      }
+    } catch (e: any) {
+      Alert.alert('Sync failed', e?.message || 'Unable to sync to GitHub');
+    } finally {
+      setSyncingAll(false);
+      setSyncProgress('');
+    }
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -241,6 +303,151 @@ export default function SettingsScreen() {
               <Text style={styles.linkText}>Open repo: rmassoud-coder/Mass-Power-App</Text>
               <Ionicons name="open-outline" size={14} color="#64748b" />
             </TouchableOpacity>
+          </View>
+
+          {/* GITHUB AUTO-SYNC */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>GitHub Auto-Sync</Text>
+            <Text style={styles.sectionDesc}>
+              Push vehicle profile HTML files directly to your repo from inside the app — no manual upload needed. Requires a Personal Access Token.
+            </Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Personal Access Token</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="key-outline" size={18} color="#666" style={styles.icon} />
+                <TextInput
+                  style={styles.input}
+                  value={settings.githubToken}
+                  onChangeText={(v) => setSettings({ ...settings, githubToken: v })}
+                  placeholder="ghp_..."
+                  secureTextEntry={!showToken}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  testID="github-token-input"
+                />
+                <TouchableOpacity onPress={() => setShowToken(!showToken)}>
+                  <Ionicons name={showToken ? 'eye-off' : 'eye'} size={18} color="#64748b" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.row2}>
+              <View style={[styles.inputGroup, { flex: 1, marginRight: 6 }]}>
+                <Text style={styles.label}>Owner</Text>
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.input}
+                    value={settings.githubOwner}
+                    onChangeText={(v) => setSettings({ ...settings, githubOwner: v })}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
+              <View style={[styles.inputGroup, { flex: 1, marginLeft: 6 }]}>
+                <Text style={styles.label}>Repo</Text>
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.input}
+                    value={settings.githubRepo}
+                    onChangeText={(v) => setSettings({ ...settings, githubRepo: v })}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.row2}>
+              <View style={[styles.inputGroup, { flex: 1, marginRight: 6 }]}>
+                <Text style={styles.label}>Branch</Text>
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.input}
+                    value={settings.githubBranch}
+                    onChangeText={(v) => setSettings({ ...settings, githubBranch: v })}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
+              <View style={[styles.inputGroup, { flex: 1, marginLeft: 6 }]}>
+                <Text style={styles.label}>Folder</Text>
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.input}
+                    value={settings.githubFolder}
+                    onChangeText={(v) => setSettings({ ...settings, githubFolder: v })}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.uploadHelpBtn, { marginTop: 4 }]}
+              onPress={handleTestGithub}
+              disabled={testingGh || !settings.githubToken}
+              testID="github-test-button"
+            >
+              {testingGh ? (
+                <ActivityIndicator color="#2563eb" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle-outline" size={18} color="#2563eb" />
+                  <Text style={styles.uploadHelpText}>Test Connection</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.exportBtn,
+                { backgroundColor: '#16a34a', marginTop: 10 },
+                syncingAll && styles.exportBtnDisabled,
+                pressed && { opacity: 0.85 },
+              ]}
+              onPress={handleSyncAll}
+              disabled={syncingAll || !isGithubConfigured(settings)}
+              testID="github-sync-all-button"
+            >
+              <View style={styles.btnInner}>
+                {syncingAll ? (
+                  <>
+                    <ActivityIndicator color="#fff" />
+                    <Text style={styles.exportBtnText}>{syncProgress || 'Uploading...'}</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="cloud-upload" size={20} color="#fff" />
+                    <Text style={styles.exportBtnText}>Sync ALL Vehicles to GitHub</Text>
+                  </>
+                )}
+              </View>
+            </Pressable>
+
+            <View style={[styles.infoCard, { marginTop: 12 }]}>
+              <Ionicons name="information-circle" size={20} color="#2563eb" />
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                <Text style={styles.infoTitle}>How to get a token</Text>
+                <Text style={styles.infoText}>
+                  1. Open{' '}
+                  <Text
+                    style={{ textDecorationLine: 'underline' }}
+                    onPress={() => Linking.openURL('https://github.com/settings/tokens/new')}
+                  >
+                    github.com/settings/tokens/new
+                  </Text>
+                  {'\n'}2. Note: <Text style={styles.code}>Mass Power App</Text>{'\n'}
+                  3. Expiration: 90 days (or No expiration){'\n'}
+                  4. Tick the <Text style={styles.code}>public_repo</Text> checkbox (or <Text style={styles.code}>repo</Text> if your repo is private){'\n'}
+                  5. Click Generate token → copy &amp; paste it above{'\n'}
+                  6. Tap <Text style={{ fontWeight: 'bold' }}>Test Connection</Text> to verify
+                </Text>
+              </View>
+            </View>
           </View>
 
           {/* BULK EXPORT */}
@@ -429,6 +636,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   linkText: { flex: 1, fontSize: 13, color: '#1e293b', marginLeft: 8 },
+  row2: { flexDirection: 'row' },
   exportBtn: {
     flexDirection: 'row',
     alignItems: 'center',

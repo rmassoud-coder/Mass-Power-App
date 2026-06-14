@@ -12,9 +12,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 import type { Customer, Vehicle, Service } from '../db/database';
-import { loadSettings, buildVehicleQrUrl, AppSettings } from '../utils/settings';
+import { loadSettings, buildVehicleQrUrl, AppSettings, isGithubConfigured } from '../utils/settings';
 import { buildVehicleHistoryHtml } from '../utils/htmlBuilder';
 import { shareHtml, sharePdfFromHtml } from '../utils/printer';
+import { uploadVehicleProfile } from '../utils/githubUploader';
 
 interface Props {
   visible: boolean;
@@ -27,6 +28,7 @@ interface Props {
 export default function VehicleQrModal({ visible, customer, vehicle, services, onClose }: Props) {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [busy, setBusy] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const qrRef = useRef<any>(null);
 
   useEffect(() => {
@@ -63,6 +65,29 @@ export default function VehicleQrModal({ visible, customer, vehicle, services, o
       Alert.alert('Export failed', e?.message || 'Unable to export PDF');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleSyncToGithub = async () => {
+    if (!settings) return;
+    if (!isGithubConfigured(settings)) {
+      Alert.alert(
+        'GitHub not configured',
+        'Open Settings → GitHub Auto-Sync and add your Personal Access Token first.'
+      );
+      return;
+    }
+    setSyncing(true);
+    try {
+      const result = await uploadVehicleProfile(customer, vehicle, services, settings);
+      Alert.alert(
+        'Synced to GitHub ✓',
+        `Vehicle profile uploaded successfully.\n\nLive at:\n${result.pagesUrl}\n\n(GitHub Pages may take 30-60s to update.)`
+      );
+    } catch (e: any) {
+      Alert.alert('Sync failed', e?.message || 'Unable to upload to GitHub');
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -111,9 +136,30 @@ export default function VehicleQrModal({ visible, customer, vehicle, services, o
             </View>
 
             <TouchableOpacity
+              style={[styles.actionBtn, styles.syncBtn]}
+              onPress={handleSyncToGithub}
+              disabled={syncing || busy}
+              testID="sync-vehicle-github"
+            >
+              <View style={styles.btnInner}>
+                {syncing ? (
+                  <>
+                    <ActivityIndicator color="#fff" />
+                    <Text style={styles.btnText}>Uploading...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="cloud-upload" size={20} color="#fff" />
+                    <Text style={styles.btnText}>Sync to GitHub</Text>
+                  </>
+                )}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={[styles.actionBtn, styles.primaryBtn]}
               onPress={handleExportHtml}
-              disabled={busy}
+              disabled={busy || syncing}
             >
               {busy ? (
                 <ActivityIndicator color="#fff" />
@@ -128,7 +174,7 @@ export default function VehicleQrModal({ visible, customer, vehicle, services, o
             <TouchableOpacity
               style={[styles.actionBtn, styles.secondaryBtn]}
               onPress={handleExportPdf}
-              disabled={busy}
+              disabled={busy || syncing}
             >
               <Ionicons name="document-text" size={20} color="#2563eb" />
               <Text style={[styles.btnText, { color: '#2563eb' }]}>Export PDF (printable)</Text>
@@ -218,6 +264,8 @@ const styles = StyleSheet.create({
   },
   primaryBtn: { backgroundColor: '#2563eb' },
   secondaryBtn: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#2563eb' },
+  syncBtn: { backgroundColor: '#16a34a' },
+  btnInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   btnText: { color: '#fff', fontWeight: '600', fontSize: 15, marginLeft: 8 },
   serviceCount: { fontSize: 12, color: '#94a3b8', marginTop: 8 },
 });
