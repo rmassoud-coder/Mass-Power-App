@@ -160,7 +160,7 @@ export default function OilReminderForm({ value, onChange, make, model }: Props)
       <View style={styles.fieldGroup}>
         <Text style={styles.label}>Cylinders (optional, for accuracy)</Text>
         <View style={styles.presetRow}>
-          {[4, 5, 6, 8, 10, 12].map((c) => (
+          {[4, 6, 8, 12].map((c) => (
             <TouchableOpacity
               key={c}
               style={[styles.presetBtn, cylinders === c && styles.presetBtnActive]}
