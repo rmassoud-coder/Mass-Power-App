@@ -138,7 +138,12 @@ export default function EditServiceScreen() {
 
             {isOilService && (
               <View style={styles.oilCard}>
-                <OilReminderForm value={oilReminder} onChange={setOilReminder} />
+                <OilReminderForm
+                  value={oilReminder}
+                  onChange={setOilReminder}
+                  make={params.vehicleMake as string | undefined}
+                  model={params.vehicleModel as string | undefined}
+                />
               </View>
             )}
 

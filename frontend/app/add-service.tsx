@@ -50,6 +50,7 @@ export default function AddServiceScreen() {
   const router = useRouter();
 
   const isOilService = serviceCategory === 'Oil Services';
+  const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId);
 
   const handleSubmit = async () => {
     if (!selectedVehicleId || !serviceCategory || !cost.trim()) {
@@ -150,7 +151,12 @@ export default function AddServiceScreen() {
             {/* Oil Service Reminder (conditional) */}
             {isOilService && (
               <View style={styles.oilCard}>
-                <OilReminderForm value={oilReminder} onChange={setOilReminder} />
+                <OilReminderForm
+                  value={oilReminder}
+                  onChange={setOilReminder}
+                  make={selectedVehicle?.make}
+                  model={selectedVehicle?.model}
+                />
               </View>
             )}
 
