@@ -327,12 +327,17 @@ export function buildOilStickerHtml(
     margin: 10px 4px 4px 4px;
   }
   .checkbox {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 18px;
     height: 18px;
     border: 2px solid #000;
     margin-right: 8px;
     vertical-align: middle;
+    font-size: 16px;
+    font-weight: 900;
+    line-height: 1;
   }
   .checkbox-label {
     font-size: 13px;
@@ -373,7 +378,7 @@ export function buildOilStickerHtml(
     }
     <div class="divider"></div>
     <div class="checkbox-row">
-      <span class="checkbox"></span>
+      <span class="checkbox">${service.oil_filter_changed ? '&#10003;' : ''}</span>
       <span class="checkbox-label">Filter Change</span>
     </div>
   </div>
