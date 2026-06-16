@@ -387,6 +387,14 @@ export default function CustomerDetailScreen() {
                                 </Text>
                               </View>
                             )}
+                            {service.oil_filter_changed && (
+                              <View style={styles.oilBadgeRow}>
+                                <MaterialCommunityIcons name="air-filter" size={11} color="#0f766e" />
+                                <Text style={[styles.oilBadgeText, { color: '#0f766e' }]}>
+                                  Oil filter changed
+                                </Text>
+                              </View>
+                            )}
                             <Text style={styles.serviceItemDate}>
                               {new Date(service.service_date).toLocaleDateString()}
                             </Text>
@@ -441,6 +449,7 @@ export default function CustomerDetailScreen() {
                                       nextServiceDate: service.next_service_date || '',
                                       nextServiceMileage: service.next_service_mileage != null ? String(service.next_service_mileage) : '',
                                       oilGrade: service.oil_grade || '',
+                                      oilFilterChanged: service.oil_filter_changed ? 'true' : 'false',
                                       vehicleMake: vehicle.make || '',
                                       vehicleModel: vehicle.model || '',
                                     },

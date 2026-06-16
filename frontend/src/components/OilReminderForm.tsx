@@ -219,6 +219,38 @@ export default function OilReminderForm({ value, onChange, make, model }: Props)
         </View>
       </View>
 
+      {/* With Filter checkbox */}
+      <View style={styles.fieldGroup}>
+        <TouchableOpacity
+          style={styles.filterRow}
+          onPress={() => onChange({ ...value, oilFilterChanged: !value.oilFilterChanged })}
+          testID="oil-filter-checkbox"
+          activeOpacity={0.7}
+        >
+          <View
+            style={[
+              styles.filterCheckbox,
+              value.oilFilterChanged && styles.filterCheckboxChecked,
+            ]}
+          >
+            {value.oilFilterChanged && (
+              <MaterialCommunityIcons name="check" size={16} color="#fff" />
+            )}
+          </View>
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={styles.filterLabel}>With Filter</Text>
+            <Text style={styles.filterHint}>
+              Tick if the oil filter was changed too — kept in history for future reference.
+            </Text>
+          </View>
+          <MaterialCommunityIcons
+            name="air-filter"
+            size={22}
+            color={value.oilFilterChanged ? '#b45309' : '#cbd5e1'}
+          />
+        </TouchableOpacity>
+      </View>
+
       {/* Current Mileage */}
       <View style={styles.fieldGroup}>
         <Text style={styles.label}>Current Mileage (km)</Text>
@@ -348,4 +380,30 @@ const styles = StyleSheet.create({
   },
   presetBtnText: { fontSize: 11, fontWeight: '600', color: '#b45309' },
   presetBtnTextActive: { color: '#fff' },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: '#fde68a',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  filterCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#fcd34d',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterCheckboxChecked: {
+    backgroundColor: '#b45309',
+    borderColor: '#b45309',
+  },
+  filterLabel: { fontSize: 13, fontWeight: '700', color: '#78350f' },
+  filterHint: { fontSize: 11, color: '#a16207', marginTop: 2 },
 });

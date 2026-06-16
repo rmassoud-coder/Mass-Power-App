@@ -58,6 +58,7 @@ export interface Service {
   next_service_date?: string | null; // ISO date
   next_service_mileage?: number | null;
   oil_grade?: string | null;
+  oil_filter_changed?: boolean;
 }
 
 // Service category options for dropdown
@@ -94,6 +95,7 @@ export interface OilReminder {
   currentMileage: number | null;
   nextServiceDate: string | null; // ISO YYYY-MM-DD
   nextServiceMileage: number | null;
+  oilFilterChanged: boolean;
 }
 
 export const EMPTY_OIL_REMINDER: OilReminder = {
@@ -101,6 +103,7 @@ export const EMPTY_OIL_REMINDER: OilReminder = {
   currentMileage: null,
   nextServiceDate: null,
   nextServiceMileage: null,
+  oilFilterChanged: false,
 };
 
 export interface SearchResult {
@@ -210,6 +213,7 @@ export async function initDatabase() {
     ['next_service_date', 'TEXT'],
     ['next_service_mileage', 'INTEGER'],
     ['oil_grade', 'TEXT'],
+    ['oil_filter_changed', 'INTEGER NOT NULL DEFAULT 0'],
   ];
   for (const [col, type] of oilReminderColumns) {
     try {
@@ -335,6 +339,7 @@ export async function getCustomerDetails(customerId: string): Promise<CustomerDe
     dash_brake: s.dash_brake === 1,
     dash_airbag: s.dash_airbag === 1,
     dash_immobilizer: s.dash_immobilizer === 1,
+    oil_filter_changed: s.oil_filter_changed === 1,
   }));
   return { customer, vehicles, services };
 }
@@ -464,7 +469,7 @@ export async function createService(
   const d = dashLights || EMPTY_DASH_LIGHTS;
   const o = oilReminder || EMPTY_OIL_REMINDER;
   await db.runAsync(
-    `INSERT INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, service_date, created_at, dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, current_mileage, next_service_date, next_service_mileage, oil_grade) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, service_date, created_at, dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, current_mileage, next_service_date, next_service_mileage, oil_grade, oil_filter_changed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       vehicleId,
@@ -484,6 +489,7 @@ export async function createService(
       o.nextServiceDate,
       o.nextServiceMileage,
       o.oilGrade || null,
+      o.oilFilterChanged ? 1 : 0,
     ]
   );
   return {
@@ -505,6 +511,7 @@ export async function createService(
     next_service_date: o.nextServiceDate,
     next_service_mileage: o.nextServiceMileage,
     oil_grade: o.oilGrade || null,
+    oil_filter_changed: o.oilFilterChanged,
   };
 }
 
@@ -521,7 +528,7 @@ export async function updateService(
   const d = dashLights || EMPTY_DASH_LIGHTS;
   const o = oilReminder || EMPTY_OIL_REMINDER;
   await db.runAsync(
-    `UPDATE services SET service_description = ?, additional_info = ?, cost = ?, is_paid = ?, dash_abs = ?, dash_check_engine = ?, dash_brake = ?, dash_airbag = ?, dash_immobilizer = ?, current_mileage = ?, next_service_date = ?, next_service_mileage = ?, oil_grade = ? WHERE id = ?`,
+    `UPDATE services SET service_description = ?, additional_info = ?, cost = ?, is_paid = ?, dash_abs = ?, dash_check_engine = ?, dash_brake = ?, dash_airbag = ?, dash_immobilizer = ?, current_mileage = ?, next_service_date = ?, next_service_mileage = ?, oil_grade = ?, oil_filter_changed = ? WHERE id = ?`,
     [
       serviceDescription,
       additionalInfo || null,
@@ -536,6 +543,7 @@ export async function updateService(
       o.nextServiceDate,
       o.nextServiceMileage,
       o.oilGrade || null,
+      o.oilFilterChanged ? 1 : 0,
       id,
     ]
   );
@@ -652,6 +660,7 @@ export async function exportAllData(): Promise<string> {
     dash_brake: s.dash_brake === 1,
     dash_airbag: s.dash_airbag === 1,
     dash_immobilizer: s.dash_immobilizer === 1,
+    oil_filter_changed: s.oil_filter_changed === 1,
   }));
   const exportData = {
     version: 1,
@@ -679,6 +688,7 @@ export async function getAllVehiclesWithDetails(): Promise<
     dash_brake: s.dash_brake === 1,
     dash_airbag: s.dash_airbag === 1,
     dash_immobilizer: s.dash_immobilizer === 1,
+    oil_filter_changed: s.oil_filter_changed === 1,
   }));
 
   const customerById = new Map(customers.map((c) => [c.id, c]));

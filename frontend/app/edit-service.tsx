@@ -56,6 +56,7 @@ export default function EditServiceScreen() {
     nextServiceMileage: params.nextServiceMileage
       ? parseInt(params.nextServiceMileage as string, 10)
       : null,
+    oilFilterChanged: params.oilFilterChanged === 'true',
   });
   const [loading, setLoading] = useState(false);
   const router = useRouter();
