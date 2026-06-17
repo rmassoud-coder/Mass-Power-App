@@ -9,6 +9,7 @@ import {
   Platform,
   Alert,
   ScrollView,
+  Image,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -80,9 +81,11 @@ export default function HomeScreen() {
       >
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <View style={styles.headerIcon}>
-              <Ionicons name="car-sport" size={32} color="#2563eb" />
-            </View>
+            <Image
+              source={require('../assets/images/mass-power-logo.png')}
+              style={styles.headerLogo}
+              resizeMode="contain"
+            />
             <View>
               <Text style={styles.headerTitle}>Mass Power</Text>
               <Text style={styles.headerSubtitle}>Auto Services</Text>
@@ -268,6 +271,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+  },
+  headerLogo: {
+    width: 52,
+    height: 52,
+    marginRight: 12,
+    borderRadius: 26,
   },
   headerTitle: {
     fontSize: 22,

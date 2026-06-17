@@ -1,5 +1,6 @@
 import { Customer, Service, Vehicle } from '../db/database';
 import { AppSettings, buildVehicleQrUrl } from './settings';
+import { MASS_POWER_LOGO_PNG_BASE64 } from './logoBase64';
 
 function esc(s: string | undefined | null): string {
   if (!s) return '';
@@ -83,7 +84,10 @@ export function buildVehicleHistoryHtml(
 </head>
 <body>
   <div class="container">
-    <h1>${esc(settings.garageName)}</h1>
+    <div style="display:flex; align-items:center; gap:14px; margin-bottom:8px;">
+      <img src="${MASS_POWER_LOGO_PNG_BASE64}" alt="logo" style="width:64px; height:64px; border-radius:50%; flex:none;" />
+      <h1 style="margin:0;">${esc(settings.garageName)}</h1>
+    </div>
     <div class="subtitle">Vehicle Service History${settings.garagePhone ? ` &middot; ${esc(settings.garagePhone)}` : ''}</div>
 
     <div class="grid">
@@ -186,6 +190,7 @@ export function buildThermalReceiptHtml(
   .sticker-divider { border-top: 1px dashed #000; margin: 6px 0; }
 </style>
 </head><body>
+  <div class="center"><img src="${MASS_POWER_LOGO_PNG_BASE64}" alt="logo" style="width:90px; height:90px; border-radius:50%;" /></div>
   <div class="center bold lg">${esc(settings.garageName)}</div>
   ${settings.garagePhone ? `<div class="center sm">${esc(settings.garagePhone)}</div>` : ''}
   <hr />
