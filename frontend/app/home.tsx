@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,15 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { searchCustomers, searchVehiclesByVin, searchVehiclesByPlate } from '../src/db/database';
+import {
+  searchCustomers,
+  searchVehiclesByVin,
+  searchVehiclesByPlate,
+  listInventory,
+} from '../src/db/database';
+
+// Module-level flag so the out-of-stock reminder only triggers once per app session
+let outOfStockReminderShown = false;
 
 export default function HomeScreen() {
   const [mobileNumber, setMobileNumber] = useState('');
@@ -25,6 +33,50 @@ export default function HomeScreen() {
   
   const router = useRouter();
   const { height } = useWindowDimensions();
+
+  // Out-of-stock reminder — runs once per app session after the home screen loads
+  useEffect(() => {
+    if (outOfStockReminderShown) return;
+    outOfStockReminderShown = true;
+
+    const checkOutOfStock = async () => {
+      try {
+        const items = await listInventory();
+        const outOfStock = items.filter((it) => Number(it.item_quantity) === 0);
+        if (outOfStock.length === 0) return;
+
+        // Build a readable list (cap at first 8 to keep the alert tidy)
+        const preview = outOfStock
+          .slice(0, 8)
+          .map((it) => `• ${it.item_number} — ${it.item_type}`)
+          .join('\n');
+        const extra =
+          outOfStock.length > 8 ? `\n…and ${outOfStock.length - 8} more` : '';
+
+        // Small delay so the alert appears after the home screen settles
+        setTimeout(() => {
+          Alert.alert(
+            `Out of Stock (${outOfStock.length})`,
+            `The following inventory item${outOfStock.length === 1 ? '' : 's'} ` +
+              `${outOfStock.length === 1 ? 'is' : 'are'} at zero quantity:\n\n${preview}${extra}`,
+            [
+              { text: 'Dismiss', style: 'cancel' },
+              {
+                text: 'View Inventory',
+                onPress: () => router.push('/inventory'),
+              },
+            ],
+            { cancelable: true }
+          );
+        }, 350);
+      } catch (e) {
+        // Silently ignore — reminder is non-critical
+        console.warn('Out-of-stock check failed:', e);
+      }
+    };
+
+    checkOutOfStock();
+  }, [router]);
 
   // Responsive sizing
   const isSmallScreen = height < 700;
