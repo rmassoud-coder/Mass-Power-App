@@ -16,6 +16,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { createVehicle } from '../src/db/database';
 import { decodeVin } from '../src/utils/vinDecoder';
+import { scanVinWithCamera, isValidVin } from '../src/utils/vinScanner';
 
 export default function AddVehicleScreen() {
   const params = useLocalSearchParams();
@@ -26,8 +27,65 @@ export default function AddVehicleScreen() {
   const [year, setYear] = useState('');
   const [loading, setLoading] = useState(false);
   const [decoding, setDecoding] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const router = useRouter();
-  
+
+  const handleScanVIN = async () => {
+    if (scanning) return;
+    setScanning(true);
+    try {
+      const res = await scanVinWithCamera();
+      if (res.ok) {
+        setVin(res.vin);
+        if (res.candidates.length > 1) {
+          // Let user pick if multiple candidates found
+          Alert.alert(
+            'VIN Detected',
+            `Best match: ${res.vin}\n\nOther possibilities:\n${res.candidates
+              .slice(1, 5)
+              .map((c) => `• ${c}`)
+              .join('\n')}`,
+            [{ text: 'OK' }]
+          );
+        } else {
+          Alert.alert('VIN Detected', `Captured: ${res.vin}`, [
+            { text: 'OK' },
+          ]);
+        }
+        return;
+      }
+      // Non-OK paths
+      if (res.reason === 'cancelled') return; // silent
+      if (res.reason === 'no_vin' && res.candidates && res.candidates.length > 0) {
+        // Offer the longest readable lines as fallbacks
+        const choices = res.candidates
+          .map((c) => c.toUpperCase().replace(/\s+/g, ''))
+          .filter((c) => c.length >= 11 && c.length <= 19)
+          .slice(0, 4);
+        if (choices.length > 0) {
+          Alert.alert(
+            'No exact VIN found',
+            'Pick the closest reading or try again:',
+            [
+              ...choices.map((c) => ({
+                text: c,
+                onPress: () => setVin(c.slice(0, 17)),
+              })),
+              { text: 'Retake', onPress: handleScanVIN },
+              { text: 'Cancel', style: 'cancel' as const },
+            ]
+          );
+          return;
+        }
+      }
+      Alert.alert('Scan Failed', res.message);
+    } catch (e: any) {
+      Alert.alert('Scan Error', e?.message || 'Unexpected error during scan.');
+    } finally {
+      setScanning(false);
+    }
+  };
+
   const handleDecodeVIN = async () => {
     if (!vin.trim()) {
       Alert.alert('Error', 'Please enter a VIN number');
@@ -37,6 +95,11 @@ export default function AddVehicleScreen() {
     if (vin.length < 11 || vin.length > 17) {
       Alert.alert('Error', 'VIN must be between 11 and 17 characters');
       return;
+    }
+
+    if (vin.length === 17 && !isValidVin(vin)) {
+      // Soft warning — still attempt decode (NHTSA may handle it)
+      console.warn('VIN charset looks off — decoder may not return data.');
     }
 
     setDecoding(true);
@@ -109,7 +172,7 @@ export default function AddVehicleScreen() {
               <Ionicons name="car-sport" size={48} color="#2563eb" />
             </View>
 
-            {/* VIN Number with Decoder */}
+            {/* VIN Number with Scanner + Decoder */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>VIN Number *</Text>
               <View style={styles.vinRow}>
@@ -125,9 +188,22 @@ export default function AddVehicleScreen() {
                   />
                 </View>
                 <TouchableOpacity
+                  style={[styles.scanButton, scanning && styles.decodeButtonDisabled]}
+                  onPress={handleScanVIN}
+                  disabled={scanning}
+                  accessibilityLabel="Scan VIN with camera"
+                >
+                  {scanning ? (
+                    <ActivityIndicator size="small" color="#0f766e" />
+                  ) : (
+                    <Ionicons name="camera" size={24} color="#0f766e" />
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
                   style={[styles.decodeButton, decoding && styles.decodeButtonDisabled]}
                   onPress={handleDecodeVIN}
                   disabled={decoding}
+                  accessibilityLabel="Decode VIN via NHTSA"
                 >
                   {decoding ? (
                     <ActivityIndicator size="small" color="#2563eb" />
@@ -136,7 +212,9 @@ export default function AddVehicleScreen() {
                   )}
                 </TouchableOpacity>
               </View>
-              <Text style={styles.hint}>Tap the lightning icon to auto-fill vehicle details</Text>
+              <Text style={styles.hint}>
+                Tap the camera to scan the VIN, or the lightning icon to auto-fill from a typed VIN.
+              </Text>
             </View>
 
             {/* Plate Number */}
@@ -304,6 +382,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#bfdbfe',
+  },
+  scanButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: '#ecfdf5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    marginRight: 8,
   },
   decodeButtonDisabled: {
     opacity: 0.6,

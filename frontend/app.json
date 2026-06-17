@@ -10,7 +10,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.garageservice.app"
+      "bundleIdentifier": "com.garageservice.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Scan VIN plates to auto-fill vehicle details"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +21,8 @@
         "backgroundColor": "#2563eb"
       },
       "package": "com.garageservice.app",
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": ["android.permission.CAMERA"]
     },
     "web": {
       "bundler": "metro",
