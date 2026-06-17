@@ -6,8 +6,11 @@ import * as SplashScreen from 'expo-splash-screen';
 import { Asset } from 'expo-asset';
 import { Image, Platform, View, Text } from 'react-native';
 import { initDatabase } from '../src/db/database';
+import RpmLoader from '../src/components/RpmLoader';
 
 SplashScreen.preventAutoHideAsync();
+
+const MIN_LOADER_MS = 1800; // give the revving animation room to play
 
 export default function RootLayout() {
   const [appIsReady, setAppIsReady] = useState(false);
@@ -15,6 +18,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     async function prepare() {
+      const startedAt = Date.now();
       try {
         // Initialize local SQLite database
         await initDatabase();
@@ -24,6 +28,7 @@ export default function RootLayout() {
           const iconAssets = [
             require('../assets/images/icon.png'),
             require('../assets/images/adaptive-icon.png'),
+            require('../assets/images/mass-power-logo.png'),
           ];
 
           const cacheImages = iconAssets.map((icon) => {
@@ -43,8 +48,14 @@ export default function RootLayout() {
         console.warn(e);
         setInitError(e?.message || 'Failed to initialize database');
       } finally {
-        setAppIsReady(true);
+        // Hide the native splash so our RpmLoader becomes visible
         await SplashScreen.hideAsync();
+        const elapsed = Date.now() - startedAt;
+        const remaining = Math.max(0, MIN_LOADER_MS - elapsed);
+        if (remaining > 0) {
+          await new Promise((r) => setTimeout(r, remaining));
+        }
+        setAppIsReady(true);
       }
     }
 
@@ -52,7 +63,24 @@ export default function RootLayout() {
   }, []);
 
   if (!appIsReady) {
-    return null;
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: '#fff',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 20,
+        }}
+      >
+        <Image
+          source={require('../assets/images/mass-power-logo.png')}
+          style={{ width: 88, height: 88, borderRadius: 44, marginBottom: 18 }}
+          resizeMode="contain"
+        />
+        <RpmLoader />
+      </View>
+    );
   }
 
   if (initError) {
