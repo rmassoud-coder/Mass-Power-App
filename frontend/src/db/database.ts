@@ -59,6 +59,34 @@ export interface Service {
   next_service_mileage?: number | null;
   oil_grade?: string | null;
   oil_filter_changed?: boolean;
+  // Inventory items used on this service (loaded on demand)
+  items?: ServiceItem[];
+}
+
+export interface InventoryItem {
+  id: string;
+  item_number: string; // e.g. INV-001
+  item_type: string;
+  item_quantity: number;
+  item_price: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ServiceItem {
+  id: string;
+  service_id: string;
+  inventory_id: string;
+  item_type: string; // snapshot of inventory item type at the time of save
+  quantity: number;
+  unit_price: number; // snapshot of price at the time of save
+  created_at: string;
+}
+
+// Used by add/edit-service when posting items
+export interface ServiceItemInput {
+  inventory_id: string;
+  quantity: number;
 }
 
 // Service category options for dropdown
@@ -182,6 +210,29 @@ export async function initDatabase() {
       key TEXT PRIMARY KEY,
       value TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS inventory (
+      id TEXT PRIMARY KEY,
+      item_number TEXT NOT NULL UNIQUE,
+      item_type TEXT NOT NULL,
+      item_quantity INTEGER NOT NULL DEFAULT 0,
+      item_price REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_inventory_type ON inventory(item_type);
+
+    CREATE TABLE IF NOT EXISTS service_items (
+      id TEXT PRIMARY KEY,
+      service_id TEXT NOT NULL,
+      inventory_id TEXT NOT NULL,
+      item_type TEXT NOT NULL,
+      quantity INTEGER NOT NULL,
+      unit_price REAL NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_service_items_service ON service_items(service_id);
+    CREATE INDEX IF NOT EXISTS idx_service_items_inventory ON service_items(inventory_id);
   `);
 
   // Migration: add is_paid column if missing (defaults to 1=paid for existing records)
@@ -341,6 +392,13 @@ export async function getCustomerDetails(customerId: string): Promise<CustomerDe
     dash_immobilizer: s.dash_immobilizer === 1,
     oil_filter_changed: s.oil_filter_changed === 1,
   }));
+  // Attach inventory items used per service (so customer-detail can show them)
+  for (const svc of services) {
+    svc.items = await db.getAllAsync<ServiceItem>(
+      `SELECT * FROM service_items WHERE service_id = ? ORDER BY created_at ASC`,
+      [svc.id]
+    );
+  }
   return { customer, vehicles, services };
 }
 
@@ -454,7 +512,8 @@ export async function createService(
   cost: number,
   isPaid: boolean,
   dashLights?: DashLights,
-  oilReminder?: OilReminder
+  oilReminder?: OilReminder,
+  items?: ServiceItemInput[]
 ): Promise<Service> {
   const db = await getDb();
   const vehicle = await db.getFirstAsync<Vehicle>(
@@ -492,6 +551,10 @@ export async function createService(
       o.oilFilterChanged ? 1 : 0,
     ]
   );
+
+  // Attach inventory items + deduct stock
+  const savedItems = await attachItemsToService(id, items || []);
+
   return {
     id,
     vehicle_id: vehicleId,
@@ -512,6 +575,7 @@ export async function createService(
     next_service_mileage: o.nextServiceMileage,
     oil_grade: o.oilGrade || null,
     oil_filter_changed: o.oilFilterChanged,
+    items: savedItems,
   };
 }
 
@@ -522,7 +586,8 @@ export async function updateService(
   cost: number,
   isPaid: boolean,
   dashLights?: DashLights,
-  oilReminder?: OilReminder
+  oilReminder?: OilReminder,
+  items?: ServiceItemInput[]
 ): Promise<void> {
   const db = await getDb();
   const d = dashLights || EMPTY_DASH_LIGHTS;
@@ -547,11 +612,180 @@ export async function updateService(
       id,
     ]
   );
+
+  // Replace inventory items: restore old, attach new
+  if (items !== undefined) {
+    await restoreInventoryFromServiceItems(id);
+    await attachItemsToService(id, items);
+  }
 }
 
 export async function deleteService(id: string): Promise<void> {
   const db = await getDb();
+  // Restore inventory stock before deleting
+  await restoreInventoryFromServiceItems(id);
   await db.runAsync(`DELETE FROM services WHERE id = ?`, [id]);
+}
+
+// ============ Inventory Operations ============
+
+/** Generate next inventory short code like INV-001, INV-002 */
+async function generateInventoryItemNumber(): Promise<string> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ max_num: number | null }>(
+    `SELECT MAX(CAST(SUBSTR(item_number, 5) AS INTEGER)) as max_num
+     FROM inventory
+     WHERE item_number LIKE 'INV-%'`
+  );
+  const next = (row?.max_num || 0) + 1;
+  return `INV-${String(next).padStart(3, '0')}`;
+}
+
+export async function listInventory(): Promise<InventoryItem[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<InventoryItem>(
+    `SELECT * FROM inventory ORDER BY item_quantity ASC, item_type ASC`
+  );
+  return rows;
+}
+
+export async function getInventoryItem(id: string): Promise<InventoryItem | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<InventoryItem>(
+    `SELECT * FROM inventory WHERE id = ?`,
+    [id]
+  );
+  return row || null;
+}
+
+export async function addInventoryItem(
+  itemType: string,
+  itemQuantity: number,
+  itemPrice: number
+): Promise<InventoryItem> {
+  const db = await getDb();
+  if (!itemType.trim()) {
+    throw new Error('Item Type is required');
+  }
+  if (!isFinite(itemQuantity) || itemQuantity < 0) {
+    throw new Error('Quantity must be 0 or greater');
+  }
+  if (!isFinite(itemPrice) || itemPrice < 0) {
+    throw new Error('Price must be 0 or greater');
+  }
+  const id = generateId();
+  const itemNumber = await generateInventoryItemNumber();
+  const now = new Date().toISOString();
+  await db.runAsync(
+    `INSERT INTO inventory (id, item_number, item_type, item_quantity, item_price, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id, itemNumber, itemType.trim(), Math.floor(itemQuantity), itemPrice, now, now]
+  );
+  return {
+    id,
+    item_number: itemNumber,
+    item_type: itemType.trim(),
+    item_quantity: Math.floor(itemQuantity),
+    item_price: itemPrice,
+    created_at: now,
+    updated_at: now,
+  };
+}
+
+export async function updateInventoryItem(
+  id: string,
+  itemType: string,
+  itemQuantity: number,
+  itemPrice: number
+): Promise<void> {
+  const db = await getDb();
+  if (!itemType.trim()) {
+    throw new Error('Item Type is required');
+  }
+  if (!isFinite(itemQuantity) || itemQuantity < 0) {
+    throw new Error('Quantity must be 0 or greater');
+  }
+  if (!isFinite(itemPrice) || itemPrice < 0) {
+    throw new Error('Price must be 0 or greater');
+  }
+  const now = new Date().toISOString();
+  await db.runAsync(
+    `UPDATE inventory SET item_type = ?, item_quantity = ?, item_price = ?, updated_at = ? WHERE id = ?`,
+    [itemType.trim(), Math.floor(itemQuantity), itemPrice, now, id]
+  );
+}
+
+export async function deleteInventoryItem(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`DELETE FROM inventory WHERE id = ?`, [id]);
+}
+
+/** Get all service_items linked to a service, with current inventory snapshot */
+export async function getServiceItems(serviceId: string): Promise<ServiceItem[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<ServiceItem>(
+    `SELECT * FROM service_items WHERE service_id = ? ORDER BY created_at ASC`,
+    [serviceId]
+  );
+  return rows;
+}
+
+/** Internal: link items[] to a service & deduct from inventory. Returns the saved rows. */
+async function attachItemsToService(
+  serviceId: string,
+  items: ServiceItemInput[]
+): Promise<ServiceItem[]> {
+  const db = await getDb();
+  const saved: ServiceItem[] = [];
+  for (const it of items) {
+    if (!it.inventory_id || !it.quantity || it.quantity <= 0) continue;
+    const inv = await db.getFirstAsync<InventoryItem>(
+      `SELECT * FROM inventory WHERE id = ?`,
+      [it.inventory_id]
+    );
+    if (!inv) continue; // ignore deleted inventory items silently
+    const qty = Math.floor(it.quantity);
+    const rowId = generateId();
+    const now = new Date().toISOString();
+    await db.runAsync(
+      `INSERT INTO service_items (id, service_id, inventory_id, item_type, quantity, unit_price, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [rowId, serviceId, inv.id, inv.item_type, qty, inv.item_price, now]
+    );
+    // Deduct from stock (don't go below 0)
+    const newQty = Math.max(0, inv.item_quantity - qty);
+    await db.runAsync(
+      `UPDATE inventory SET item_quantity = ?, updated_at = ? WHERE id = ?`,
+      [newQty, now, inv.id]
+    );
+    saved.push({
+      id: rowId,
+      service_id: serviceId,
+      inventory_id: inv.id,
+      item_type: inv.item_type,
+      quantity: qty,
+      unit_price: inv.item_price,
+      created_at: now,
+    });
+  }
+  return saved;
+}
+
+/** Internal: restore stock for every item linked to this service, then delete the links. */
+async function restoreInventoryFromServiceItems(serviceId: string): Promise<void> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<ServiceItem>(
+    `SELECT * FROM service_items WHERE service_id = ?`,
+    [serviceId]
+  );
+  const now = new Date().toISOString();
+  for (const r of rows) {
+    await db.runAsync(
+      `UPDATE inventory SET item_quantity = item_quantity + ?, updated_at = ? WHERE id = ?`,
+      [r.quantity, now, r.inventory_id]
+    );
+  }
+  await db.runAsync(`DELETE FROM service_items WHERE service_id = ?`, [serviceId]);
 }
 
 // ============ Report ============

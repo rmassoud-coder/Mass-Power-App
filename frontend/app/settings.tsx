@@ -258,6 +258,25 @@ export default function SettingsScreen() {
             <Ionicons name="settings" size={40} color="#2563eb" />
           </View>
 
+          {/* INVENTORY */}
+          <TouchableOpacity
+            style={styles.linkCard}
+            onPress={() => router.push('/inventory' as any)}
+            testID="nav-inventory"
+            activeOpacity={0.75}
+          >
+            <View style={styles.linkCardIcon}>
+              <Ionicons name="cube" size={22} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.linkCardTitle}>Inventory</Text>
+              <Text style={styles.linkCardDesc}>
+                Manage stock items (auto INV-codes). Used by service product picker.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+          </TouchableOpacity>
+
           {/* GARAGE INFO */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Garage Information</Text>
@@ -756,4 +775,25 @@ const styles = StyleSheet.create({
   },
   saveBtnDisabled: { opacity: 0.6 },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '600', marginLeft: 8 },
+  linkCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  linkCardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  linkCardTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
+  linkCardDesc: { fontSize: 11, color: '#64748b', marginTop: 2 },
 });

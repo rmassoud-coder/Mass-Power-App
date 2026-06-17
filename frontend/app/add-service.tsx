@@ -25,6 +25,7 @@ import {
 } from '../src/db/database';
 import DashLightsPicker from '../src/components/DashLightsPicker';
 import OilReminderForm from '../src/components/OilReminderForm';
+import InventoryPicker, { PickedItem } from '../src/components/InventoryPicker';
 
 interface Vehicle {
   id: string;
@@ -46,11 +47,19 @@ export default function AddServiceScreen() {
   const [isPaid, setIsPaid] = useState(false);
   const [dashLights, setDashLights] = useState<DashLights>(EMPTY_DASH_LIGHTS);
   const [oilReminder, setOilReminder] = useState<OilReminder>(EMPTY_OIL_REMINDER);
+  const [pickedItems, setPickedItems] = useState<PickedItem[]>([]);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const isOilService = serviceCategory === 'Oil Services';
   const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId);
+
+  const productsSubtotal = pickedItems.reduce(
+    (sum, it) => sum + it.quantity * it.unit_price,
+    0
+  );
+  const laborCost = parseFloat(cost) || 0;
+  const totalCost = laborCost + productsSubtotal;
 
   const handleSubmit = async () => {
     if (!selectedVehicleId || !serviceCategory || !cost.trim()) {
@@ -75,10 +84,11 @@ export default function AddServiceScreen() {
         selectedVehicleId,
         serviceCategory,
         additionalInfo.trim() || undefined,
-        costNumber,
+        costNumber + productsSubtotal,
         isPaid,
         dashLights,
-        isOilService ? oilReminder : EMPTY_OIL_REMINDER
+        isOilService ? oilReminder : EMPTY_OIL_REMINDER,
+        pickedItems.map((p) => ({ inventory_id: p.inventory_id, quantity: p.quantity }))
       );
 
       router.back();
@@ -176,6 +186,9 @@ export default function AddServiceScreen() {
               </View>
             </View>
 
+            {/* Inventory Products Used */}
+            <InventoryPicker value={pickedItems} onChange={setPickedItems} />
+
             {/* Dashboard Warning Lights */}
             <View style={styles.dashCard}>
               <DashLightsPicker value={dashLights} onChange={setDashLights} />
@@ -183,7 +196,7 @@ export default function AddServiceScreen() {
 
             {/* Cost */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Cost *</Text>
+              <Text style={styles.label}>Labor / Service Cost *</Text>
               <View style={styles.inputContainer}>
                 <Ionicons name="cash-outline" size={20} color="#666" style={styles.inputIcon} />
                 <Text style={styles.currencySymbol}>$</Text>
@@ -195,6 +208,19 @@ export default function AddServiceScreen() {
                   keyboardType="decimal-pad"
                 />
               </View>
+              {productsSubtotal > 0 && (
+                <View style={styles.totalBreakdown}>
+                  <Text style={styles.totalLine}>
+                    Labor: ${laborCost.toFixed(2)}
+                  </Text>
+                  <Text style={styles.totalLine}>
+                    Products: ${productsSubtotal.toFixed(2)}
+                  </Text>
+                  <Text style={styles.totalGrand}>
+                    Total: ${totalCost.toFixed(2)}
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Paid Checkbox */}
@@ -342,4 +368,20 @@ const styles = StyleSheet.create({
   paidCheckboxSubtext: { fontSize: 12, color: '#64748b', marginTop: 2 },
   submitButtonDisabled: { opacity: 0.6 },
   submitButtonText: { color: '#fff', fontSize: 18, fontWeight: '600', marginLeft: 8 },
+  totalBreakdown: {
+    backgroundColor: '#f1f5f9',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 8,
+  },
+  totalLine: { fontSize: 12, color: '#475569', marginBottom: 2 },
+  totalGrand: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f766e',
+    marginTop: 4,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
 });

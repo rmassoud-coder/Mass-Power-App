@@ -24,6 +24,14 @@ import {
 } from '../src/db/database';
 import DashLightsPicker from '../src/components/DashLightsPicker';
 import OilReminderForm from '../src/components/OilReminderForm';
+import InventoryPicker, { PickedItem } from '../src/components/InventoryPicker';
+
+interface ServiceItemParam {
+  inventory_id: string;
+  item_type: string;
+  quantity: number;
+  unit_price: number;
+}
 
 export default function EditServiceScreen() {
   const params = useLocalSearchParams();
@@ -38,9 +46,25 @@ export default function EditServiceScreen() {
       ? `${initialDesc}${params.additionalInfo ? ` - ${params.additionalInfo as string}` : ''}`
       : (params.additionalInfo as string) || '';
 
+  // Parse pre-existing service items (passed from customer-detail)
+  const initialItems: ServiceItemParam[] = React.useMemo(() => {
+    try {
+      return params.items ? JSON.parse(params.items as string) : [];
+    } catch {
+      return [];
+    }
+  }, [params.items]);
+
+  const initialProductsSubtotal = initialItems.reduce(
+    (s, it) => s + it.quantity * it.unit_price,
+    0
+  );
+  const initialTotalCost = parseFloat((params.cost as string) || '0') || 0;
+  const initialLabor = Math.max(0, initialTotalCost - initialProductsSubtotal);
+
   const [serviceCategory, setServiceCategory] = useState<string>(initialCategory);
   const [additionalInfo, setAdditionalInfo] = useState(initialAdditional);
-  const [cost, setCost] = useState(params.cost as string);
+  const [cost, setCost] = useState(initialLabor.toFixed(2));
   const [isPaid, setIsPaid] = useState(params.isPaid === 'true');
   const [dashLights, setDashLights] = useState<DashLights>({
     abs: params.dashAbs === 'true',
@@ -58,10 +82,33 @@ export default function EditServiceScreen() {
       : null,
     oilFilterChanged: params.oilFilterChanged === 'true',
   });
+  const [pickedItems, setPickedItems] = useState<PickedItem[]>(
+    initialItems.map((it) => ({
+      inventory_id: it.inventory_id,
+      item_type: it.item_type,
+      unit_price: it.unit_price,
+      quantity: it.quantity,
+      stock_remaining: 0,
+      pre_existing_qty: it.quantity,
+    }))
+  );
+  // Map of inventory_id -> quantity already in this service (used so picker doesn't refuse to keep them)
+  const preExistingMap = React.useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const it of initialItems) m[it.inventory_id] = it.quantity;
+    return m;
+  }, [initialItems]);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const isOilService = serviceCategory === 'Oil Services';
+
+  const productsSubtotal = pickedItems.reduce(
+    (sum, it) => sum + it.quantity * it.unit_price,
+    0
+  );
+  const laborCost = parseFloat(cost) || 0;
+  const totalCost = laborCost + productsSubtotal;
 
   const handleSubmit = async () => {
     if (!serviceCategory || !cost.trim()) {
@@ -86,10 +133,11 @@ export default function EditServiceScreen() {
         params.serviceId as string,
         serviceCategory,
         additionalInfo.trim() || undefined,
-        costNumber,
+        costNumber + productsSubtotal,
         isPaid,
         dashLights,
-        isOilService ? oilReminder : EMPTY_OIL_REMINDER
+        isOilService ? oilReminder : EMPTY_OIL_REMINDER,
+        pickedItems.map((p) => ({ inventory_id: p.inventory_id, quantity: p.quantity }))
       );
 
       router.back();
@@ -167,8 +215,14 @@ export default function EditServiceScreen() {
               <DashLightsPicker value={dashLights} onChange={setDashLights} />
             </View>
 
+            <InventoryPicker
+              value={pickedItems}
+              onChange={setPickedItems}
+              preExistingByInventoryId={preExistingMap}
+            />
+
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Cost *</Text>
+              <Text style={styles.label}>Labor / Service Cost *</Text>
               <View style={styles.inputContainer}>
                 <Ionicons name="cash-outline" size={20} color="#666" style={styles.inputIcon} />
                 <Text style={styles.currencySymbol}>$</Text>
@@ -180,6 +234,13 @@ export default function EditServiceScreen() {
                   keyboardType="decimal-pad"
                 />
               </View>
+              {productsSubtotal > 0 && (
+                <View style={styles.totalBreakdown}>
+                  <Text style={styles.totalLine}>Labor: ${laborCost.toFixed(2)}</Text>
+                  <Text style={styles.totalLine}>Products: ${productsSubtotal.toFixed(2)}</Text>
+                  <Text style={styles.totalGrand}>Total: ${totalCost.toFixed(2)}</Text>
+                </View>
+              )}
             </View>
 
             <TouchableOpacity
@@ -326,4 +387,20 @@ const styles = StyleSheet.create({
   paidCheckboxSubtext: { fontSize: 12, color: '#64748b', marginTop: 2 },
   submitButtonDisabled: { opacity: 0.6 },
   submitButtonText: { color: '#fff', fontSize: 18, fontWeight: '600', marginLeft: 8 },
+  totalBreakdown: {
+    backgroundColor: '#f1f5f9',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 8,
+  },
+  totalLine: { fontSize: 12, color: '#475569', marginBottom: 2 },
+  totalGrand: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f766e',
+    marginTop: 4,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
 });

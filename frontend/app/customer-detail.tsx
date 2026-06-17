@@ -395,6 +395,25 @@ export default function CustomerDetailScreen() {
                                 </Text>
                               </View>
                             )}
+                            {service.items && service.items.length > 0 && (
+                              <View style={styles.productsBlock}>
+                                <View style={styles.productsHeader}>
+                                  <MaterialCommunityIcons
+                                    name="package-variant-closed"
+                                    size={11}
+                                    color="#475569"
+                                  />
+                                  <Text style={styles.productsHeaderText}>
+                                    Products used ({service.items.length})
+                                  </Text>
+                                </View>
+                                {service.items.map((it) => (
+                                  <Text key={it.id} style={styles.productsLine}>
+                                    {`\u2022 ${it.item_type} \u00d7 ${it.quantity} \u2014 $${(it.unit_price * it.quantity).toFixed(2)}`}
+                                  </Text>
+                                ))}
+                              </View>
+                            )}
                             <Text style={styles.serviceItemDate}>
                               {new Date(service.service_date).toLocaleDateString()}
                             </Text>
@@ -452,6 +471,7 @@ export default function CustomerDetailScreen() {
                                       oilFilterChanged: service.oil_filter_changed ? 'true' : 'false',
                                       vehicleMake: vehicle.make || '',
                                       vehicleModel: vehicle.model || '',
+                                      items: JSON.stringify(service.items || []),
                                     },
                                   })
                                 }
@@ -909,5 +929,30 @@ const styles = StyleSheet.create({
     color: '#b45309',
     fontWeight: '600',
     marginLeft: 4,
+  },
+  productsBlock: {
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    marginTop: 6,
+  },
+  productsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  productsHeaderText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+    marginLeft: 4,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  productsLine: {
+    fontSize: 11,
+    color: '#1e293b',
+    marginTop: 1,
   },
 });
