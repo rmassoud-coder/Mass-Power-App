@@ -354,6 +354,7 @@ export function buildOilStickerHtml(
 </style>
 </head><body>
   <div class="sticker">
+    <img src="${MASS_POWER_LOGO_PNG_BASE64}" alt="logo" style="width:60px; height:60px; border-radius:50%; display:block; margin:0 auto 4px auto;" />
     <div class="shop">${esc(settings.garageName)}</div>
     <div class="brand">${esc([vehicle.make, vehicle.model].filter(Boolean).join(' ').trim())}</div>
     <div class="heading">Next Oil Change</div>

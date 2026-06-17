@@ -15,6 +15,7 @@ import QRCode from 'react-native-qrcode-svg';
 import type { Customer, Vehicle, Service } from '../db/database';
 import { loadSettings, buildVehicleQrUrl, AppSettings, isGithubConfigured } from '../utils/settings';
 import { buildVehicleHistoryHtml } from '../utils/htmlBuilder';
+import { MASS_POWER_LOGO_PNG_BASE64 } from '../utils/logoBase64';
 import { shareHtml, sharePdfFromHtml } from '../utils/printer';
 import { uploadVehicleProfile } from '../utils/githubUploader';
 import { printHtml } from '../utils/printer';
@@ -102,6 +103,7 @@ export default function VehicleQrModal({ visible, customer, vehicle, services, o
 </style>
 </head><body>
   <div class="wrap">
+    <img src="${MASS_POWER_LOGO_PNG_BASE64}" alt="logo" style="width:48px; height:48px; border-radius:50%; display:block; margin:0 auto 4px auto;" />
     <div class="shop">${safeShop}</div>
     <div class="brand">${safeMake} ${safeModel}</div>
     <div class="plate">${safePlate}</div>
