@@ -73,11 +73,6 @@ export default function RootLayout() {
           padding: 20,
         }}
       >
-        <Image
-          source={require('../assets/images/mass-power-logo.png')}
-          style={{ width: 88, height: 88, borderRadius: 44, marginBottom: 18 }}
-          resizeMode="contain"
-        />
         <RpmLoader />
       </View>
     );
