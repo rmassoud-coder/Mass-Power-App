@@ -695,14 +695,14 @@ export interface OilReminderDue {
 /**
  * Returns all undismissed oil-change reminders whose next_service_date is
  * today or earlier (i.e., due now). Sorted by most overdue first.
+ *
+ * Only the *latest* (by service_date / created_at) reminder per vehicle is
+ * returned so a vehicle with many historical reminders only shows up once.
  */
 export async function listDueOilReminders(): Promise<OilReminderDue[]> {
   const db = await getDb();
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
-  // We only consider services that actually have a next_service_date
-  // and have NOT been dismissed. We pick the latest oil reminder per vehicle
-  // so the user isn't spammed with old reminders that were superseded.
   const rows = await db.getAllAsync<{
     service_id: string;
     customer_id: string;
@@ -719,6 +719,7 @@ export async function listDueOilReminders(): Promise<OilReminderDue[]> {
     current_mileage: number | null;
     oil_grade: string | null;
     service_date: string;
+    created_at: string;
   }>(
     `SELECT
         s.id            AS service_id,
@@ -735,33 +736,60 @@ export async function listDueOilReminders(): Promise<OilReminderDue[]> {
         s.next_service_mileage,
         s.current_mileage,
         s.oil_grade,
-        s.service_date
+        s.service_date,
+        s.created_at
       FROM services s
       INNER JOIN customers c ON c.id = s.customer_id
       INNER JOIN vehicles  v ON v.id = s.vehicle_id
       WHERE
         s.next_service_date IS NOT NULL
-        AND s.next_service_date != ''
-        AND s.next_service_date <= ?
+        AND TRIM(s.next_service_date) != ''
+        AND DATE(s.next_service_date) <= DATE(?)
         AND COALESCE(s.reminder_dismissed, 0) = 0
-        AND s.id IN (
-          /* keep only the most recent reminder per vehicle */
-          SELECT id FROM services s2
-          WHERE s2.vehicle_id = s.vehicle_id
-            AND s2.next_service_date IS NOT NULL
-            AND s2.next_service_date != ''
-          ORDER BY s2.service_date DESC, s2.created_at DESC
-          LIMIT 1
-        )
-      ORDER BY s.next_service_date ASC`,
+      ORDER BY s.next_service_date ASC, s.created_at DESC`,
     [today]
   );
 
+  // De-dup: keep only the *latest* reminder per vehicle (latest service_date,
+  // tiebreaker created_at). Done in JS so the SQL stays simple & robust.
+  const latestByVehicle = new Map<string, (typeof rows)[number]>();
+  for (const r of rows) {
+    const existing = latestByVehicle.get(r.vehicle_id);
+    if (!existing) {
+      latestByVehicle.set(r.vehicle_id, r);
+      continue;
+    }
+    const better =
+      r.service_date > existing.service_date ||
+      (r.service_date === existing.service_date && r.created_at > existing.created_at);
+    if (better) latestByVehicle.set(r.vehicle_id, r);
+  }
+  const deduped = Array.from(latestByVehicle.values()).sort((a, b) =>
+    a.next_service_date < b.next_service_date ? -1 : 1
+  );
+
   const todayMs = new Date(today).getTime();
-  return rows.map((r) => {
+  return deduped.map((r) => {
     const dueMs = new Date(r.next_service_date).getTime();
     const daysOverdue = Math.max(0, Math.floor((todayMs - dueMs) / 86400000));
-    return { ...r, days_overdue: daysOverdue };
+    return {
+      service_id: r.service_id,
+      customer_id: r.customer_id,
+      customer_name: r.customer_name,
+      customer_mobile: r.customer_mobile,
+      vehicle_id: r.vehicle_id,
+      vehicle_make: r.vehicle_make,
+      vehicle_model: r.vehicle_model,
+      vehicle_year: r.vehicle_year,
+      vehicle_plate: r.vehicle_plate,
+      vehicle_vin: r.vehicle_vin,
+      next_service_date: r.next_service_date,
+      next_service_mileage: r.next_service_mileage,
+      current_mileage: r.current_mileage,
+      oil_grade: r.oil_grade,
+      service_date: r.service_date,
+      days_overdue: daysOverdue,
+    };
   });
 }
 
