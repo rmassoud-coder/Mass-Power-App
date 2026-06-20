@@ -72,6 +72,8 @@ export default function EditServiceScreen() {
     brake: params.dashBrake === 'true',
     airbag: params.dashAirbag === 'true',
     immobilizer: params.dashImmobilizer === 'true',
+    tpms: params.dashTpms === 'true',
+    oil_leak: params.dashOilLeak === 'true',
   });
   const [oilReminder, setOilReminder] = useState<OilReminder>({
     oilGrade: (params.oilGrade as string) || '',

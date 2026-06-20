@@ -464,6 +464,8 @@ export default function CustomerDetailScreen() {
                                       dashBrake: service.dash_brake ? 'true' : 'false',
                                       dashAirbag: service.dash_airbag ? 'true' : 'false',
                                       dashImmobilizer: service.dash_immobilizer ? 'true' : 'false',
+                                      dashTpms: service.dash_tpms ? 'true' : 'false',
+                                      dashOilLeak: service.dash_oil_leak ? 'true' : 'false',
                                       currentMileage: service.current_mileage != null ? String(service.current_mileage) : '',
                                       nextServiceDate: service.next_service_date || '',
                                       nextServiceMileage: service.next_service_mileage != null ? String(service.next_service_mileage) : '',

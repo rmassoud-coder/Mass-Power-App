@@ -53,6 +53,8 @@ export interface Service {
   dash_brake?: boolean;
   dash_airbag?: boolean;
   dash_immobilizer?: boolean;
+  dash_tpms?: boolean;
+  dash_oil_leak?: boolean;
   // Oil change reminder fields (only relevant when service_description === 'Oil Services')
   current_mileage?: number | null;
   next_service_date?: string | null; // ISO date
@@ -108,6 +110,8 @@ export interface DashLights {
   brake: boolean;
   airbag: boolean;
   immobilizer: boolean;
+  tpms: boolean;
+  oil_leak: boolean;
 }
 
 export const EMPTY_DASH_LIGHTS: DashLights = {
@@ -116,6 +120,8 @@ export const EMPTY_DASH_LIGHTS: DashLights = {
   brake: false,
   airbag: false,
   immobilizer: false,
+  tpms: false,
+  oil_leak: false,
 };
 
 export interface OilReminder {
@@ -249,6 +255,8 @@ export async function initDatabase() {
     'dash_brake',
     'dash_airbag',
     'dash_immobilizer',
+    'dash_tpms',
+    'dash_oil_leak',
   ];
   for (const col of dashColumns) {
     try {
@@ -390,6 +398,8 @@ export async function getCustomerDetails(customerId: string): Promise<CustomerDe
     dash_brake: s.dash_brake === 1,
     dash_airbag: s.dash_airbag === 1,
     dash_immobilizer: s.dash_immobilizer === 1,
+    dash_tpms: s.dash_tpms === 1,
+    dash_oil_leak: s.dash_oil_leak === 1,
     oil_filter_changed: s.oil_filter_changed === 1,
   }));
   // Attach inventory items used per service (so customer-detail can show them)
@@ -528,7 +538,7 @@ export async function createService(
   const d = dashLights || EMPTY_DASH_LIGHTS;
   const o = oilReminder || EMPTY_OIL_REMINDER;
   await db.runAsync(
-    `INSERT INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, service_date, created_at, dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, current_mileage, next_service_date, next_service_mileage, oil_grade, oil_filter_changed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, service_date, created_at, dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, dash_tpms, dash_oil_leak, current_mileage, next_service_date, next_service_mileage, oil_grade, oil_filter_changed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       vehicleId,
@@ -544,6 +554,8 @@ export async function createService(
       d.brake ? 1 : 0,
       d.airbag ? 1 : 0,
       d.immobilizer ? 1 : 0,
+      d.tpms ? 1 : 0,
+      d.oil_leak ? 1 : 0,
       o.currentMileage,
       o.nextServiceDate,
       o.nextServiceMileage,
@@ -570,6 +582,8 @@ export async function createService(
     dash_brake: d.brake,
     dash_airbag: d.airbag,
     dash_immobilizer: d.immobilizer,
+    dash_tpms: d.tpms,
+    dash_oil_leak: d.oil_leak,
     current_mileage: o.currentMileage,
     next_service_date: o.nextServiceDate,
     next_service_mileage: o.nextServiceMileage,
@@ -593,7 +607,7 @@ export async function updateService(
   const d = dashLights || EMPTY_DASH_LIGHTS;
   const o = oilReminder || EMPTY_OIL_REMINDER;
   await db.runAsync(
-    `UPDATE services SET service_description = ?, additional_info = ?, cost = ?, is_paid = ?, dash_abs = ?, dash_check_engine = ?, dash_brake = ?, dash_airbag = ?, dash_immobilizer = ?, current_mileage = ?, next_service_date = ?, next_service_mileage = ?, oil_grade = ?, oil_filter_changed = ? WHERE id = ?`,
+    `UPDATE services SET service_description = ?, additional_info = ?, cost = ?, is_paid = ?, dash_abs = ?, dash_check_engine = ?, dash_brake = ?, dash_airbag = ?, dash_immobilizer = ?, dash_tpms = ?, dash_oil_leak = ?, current_mileage = ?, next_service_date = ?, next_service_mileage = ?, oil_grade = ?, oil_filter_changed = ? WHERE id = ?`,
     [
       serviceDescription,
       additionalInfo || null,
@@ -604,6 +618,8 @@ export async function updateService(
       d.brake ? 1 : 0,
       d.airbag ? 1 : 0,
       d.immobilizer ? 1 : 0,
+      d.tpms ? 1 : 0,
+      d.oil_leak ? 1 : 0,
       o.currentMileage,
       o.nextServiceDate,
       o.nextServiceMileage,
@@ -894,6 +910,8 @@ export async function exportAllData(): Promise<string> {
     dash_brake: s.dash_brake === 1,
     dash_airbag: s.dash_airbag === 1,
     dash_immobilizer: s.dash_immobilizer === 1,
+    dash_tpms: s.dash_tpms === 1,
+    dash_oil_leak: s.dash_oil_leak === 1,
     oil_filter_changed: s.oil_filter_changed === 1,
   }));
   const exportData = {
@@ -922,6 +940,8 @@ export async function getAllVehiclesWithDetails(): Promise<
     dash_brake: s.dash_brake === 1,
     dash_airbag: s.dash_airbag === 1,
     dash_immobilizer: s.dash_immobilizer === 1,
+    dash_tpms: s.dash_tpms === 1,
+    dash_oil_leak: s.dash_oil_leak === 1,
     oil_filter_changed: s.oil_filter_changed === 1,
   }));
 
@@ -975,7 +995,7 @@ export async function importData(jsonString: string, mergeMode: boolean): Promis
   }
   for (const s of data.services) {
     const result = await db.runAsync(
-      `INSERT OR IGNORE INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, service_date, created_at, dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR IGNORE INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, service_date, created_at, dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, dash_tpms, dash_oil_leak) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         s.id,
         s.vehicle_id,
@@ -991,6 +1011,8 @@ export async function importData(jsonString: string, mergeMode: boolean): Promis
         s.dash_brake ? 1 : 0,
         s.dash_airbag ? 1 : 0,
         s.dash_immobilizer ? 1 : 0,
+        s.dash_tpms ? 1 : 0,
+        s.dash_oil_leak ? 1 : 0,
       ]
     );
     if (result.changes > 0) servicesAdded++;
