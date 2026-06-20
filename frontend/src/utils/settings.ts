@@ -8,6 +8,7 @@ const KEY_GH_OWNER = 'mp_gh_owner';
 const KEY_GH_REPO = 'mp_gh_repo';
 const KEY_GH_BRANCH = 'mp_gh_branch';
 const KEY_GH_FOLDER = 'mp_gh_folder';
+const KEY_DEFAULT_COUNTRY = 'mp_default_country';
 
 export interface AppSettings {
   githubBaseUrl: string;
@@ -19,6 +20,9 @@ export interface AppSettings {
   githubRepo: string;
   githubBranch: string;
   githubFolder: string;
+  // Country code (digits only, no +) used to prefix customer phone numbers
+  // missing an explicit country code when building WhatsApp links.
+  defaultCountryCode: string;
 }
 
 // Defaults tied to the user's repo
@@ -31,13 +35,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
   githubRepo: 'Mass-Power-App',
   githubBranch: 'main',
   githubFolder: 'vehicle profiles',
+  defaultCountryCode: '961', // Lebanon
 };
 
 // Legacy placeholder; auto-upgrade users who never changed the default URL
 const LEGACY_PLACEHOLDER = 'https://username.github.io/repo/';
 
 export async function loadSettings(): Promise<AppSettings> {
-  const [url, name, phone, token, owner, repo, branch, folder] = await Promise.all([
+  const [url, name, phone, token, owner, repo, branch, folder, country] = await Promise.all([
     AsyncStorage.getItem(KEY_GH_BASE_URL),
     AsyncStorage.getItem(KEY_GARAGE_NAME),
     AsyncStorage.getItem(KEY_GARAGE_PHONE),
@@ -46,6 +51,7 @@ export async function loadSettings(): Promise<AppSettings> {
     AsyncStorage.getItem(KEY_GH_REPO),
     AsyncStorage.getItem(KEY_GH_BRANCH),
     AsyncStorage.getItem(KEY_GH_FOLDER),
+    AsyncStorage.getItem(KEY_DEFAULT_COUNTRY),
   ]);
 
   let effectiveUrl = url || DEFAULT_SETTINGS.githubBaseUrl;
@@ -67,12 +73,17 @@ export async function loadSettings(): Promise<AppSettings> {
     githubRepo: repo || DEFAULT_SETTINGS.githubRepo,
     githubBranch: branch || DEFAULT_SETTINGS.githubBranch,
     githubFolder: folder || DEFAULT_SETTINGS.githubFolder,
+    defaultCountryCode:
+      country !== null && country !== undefined
+        ? country
+        : DEFAULT_SETTINGS.defaultCountryCode,
   };
 }
 
 export async function saveSettings(s: AppSettings): Promise<void> {
   let url = s.githubBaseUrl.trim();
   if (url && !url.endsWith('/')) url += '/';
+  const cc = (s.defaultCountryCode || '').replace(/[^\d]/g, '');
   await Promise.all([
     AsyncStorage.setItem(KEY_GH_BASE_URL, url),
     AsyncStorage.setItem(KEY_GARAGE_NAME, s.garageName.trim()),
@@ -82,6 +93,7 @@ export async function saveSettings(s: AppSettings): Promise<void> {
     AsyncStorage.setItem(KEY_GH_REPO, s.githubRepo.trim()),
     AsyncStorage.setItem(KEY_GH_BRANCH, s.githubBranch.trim() || 'main'),
     AsyncStorage.setItem(KEY_GH_FOLDER, s.githubFolder.trim() || 'vehicle profiles'),
+    AsyncStorage.setItem(KEY_DEFAULT_COUNTRY, cc),
   ]);
 }
 

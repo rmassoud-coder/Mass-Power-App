@@ -61,6 +61,7 @@ export default function RemindersScreen() {
     const res = await openWhatsAppReminder(r, {
       garageName: settings.garageName,
       garagePhone: settings.garagePhone,
+      defaultCountryCode: settings.defaultCountryCode,
     });
     if (!res.ok) {
       Alert.alert('WhatsApp', res.message || 'Could not open WhatsApp.');
@@ -106,7 +107,10 @@ export default function RemindersScreen() {
   };
 
   const renderItem = ({ item }: { item: OilReminderDue }) => {
-    const phone = sanitizePhoneForWhatsApp(item.customer_mobile);
+    const phone = sanitizePhoneForWhatsApp(
+      item.customer_mobile,
+      settings?.defaultCountryCode || ''
+    );
     const carBits = [item.vehicle_year, item.vehicle_make, item.vehicle_model]
       .filter(Boolean)
       .join(' ');

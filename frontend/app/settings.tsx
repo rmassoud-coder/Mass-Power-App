@@ -308,6 +308,26 @@ export default function SettingsScreen() {
                 />
               </View>
             </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Default Country Code (for WhatsApp)</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="globe-outline" size={18} color="#666" style={styles.icon} />
+                <TextInput
+                  style={styles.input}
+                  value={settings.defaultCountryCode}
+                  onChangeText={(v) =>
+                    setSettings({ ...settings, defaultCountryCode: v.replace(/[^\d]/g, '') })
+                  }
+                  placeholder="961"
+                  keyboardType="number-pad"
+                  maxLength={4}
+                />
+              </View>
+              <Text style={styles.sectionDesc}>
+                Prepended to customer numbers when sending WhatsApp reminders if they don&apos;t already include a country code. Leave blank to disable.
+              </Text>
+            </View>
           </View>
 
           {/* QR CODE HOSTING */}
