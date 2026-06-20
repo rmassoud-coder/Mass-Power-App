@@ -67,7 +67,7 @@ export function buildOilReminderMessage(
   lines.push(`مرحباً ${r.customer_name || ''}،`);
   lines.push('');
   lines.push(
-    `للتذكير — *نظن انه حان وقت تغيير الزيت او انه موعده قد اقترب الرجاء فحص الملصق على الباب للتاكد*.`
+    `للتذكير — *نظن انه حان وقت تغيير الزيت او ان موعده قد اقترب الرجاء فحص الملصق على الباب للتاكد*.`
   );
   lines.push('');
   if (carBits) lines.push(`🚗 السيارة: *${carBits}*`);
