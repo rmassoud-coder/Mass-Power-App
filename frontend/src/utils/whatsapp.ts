@@ -64,27 +64,28 @@ export function buildOilReminderMessage(
   const lines: string[] = [];
   lines.push(`🔧 *${garageName}*`);
   lines.push('');
-  lines.push(`Hi ${r.customer_name || 'there'},`);
+  lines.push(`مرحباً ${r.customer_name || ''}،`);
   lines.push('');
   lines.push(
     `للتذكير — *نظن انه حان وقت تغيير الزيت او انه موعده قد اقترب الرجاء فحص الملصق على الباب للتاكد*.`
   );
   lines.push('');
-  if (carBits) lines.push(`🚗 Vehicle: *${carBits}*`);
-  if (r.vehicle_plate) lines.push(`🔢 Plate: *${r.vehicle_plate}*`);
-  if (r.next_service_date) lines.push(`📅 Due date: ${formatDueDate(r.next_service_date)}`);
+  if (carBits) lines.push(`🚗 السيارة: *${carBits}*`);
+  if (r.vehicle_plate) lines.push(`🔢 رقم اللوحة: *${r.vehicle_plate}*`);
+  if (r.next_service_date)
+    lines.push(`📅 تاريخ الاستحقاق: ${formatDueDate(r.next_service_date)}`);
   if (r.next_service_mileage) {
-    lines.push(`🛣 Due mileage: ${r.next_service_mileage.toLocaleString()} km`);
+    lines.push(`🛣 العداد عند الاستحقاق: ${r.next_service_mileage.toLocaleString()} كم`);
   }
-  if (r.oil_grade) lines.push(`🛢 Recommended oil: ${r.oil_grade}`);
+  if (r.oil_grade) lines.push(`🛢 الزيت الموصى به: ${r.oil_grade}`);
   lines.push('');
   if (garagePhone) {
-    lines.push(`Call us on *${garagePhone}* to book your next service.`);
+    lines.push(`للحجز، يمكنكم الاتصال بنا على *${garagePhone}*.`);
   } else {
-    lines.push(`Reply to this message to book your next service.`);
+    lines.push(`للحجز، يرجى الرد على هذه الرسالة.`);
   }
   lines.push('');
-  lines.push(`Thank you,`);
+  lines.push(`شكراً لكم،`);
   lines.push(`— ${garageName}`);
 
   return lines.join('\n');
