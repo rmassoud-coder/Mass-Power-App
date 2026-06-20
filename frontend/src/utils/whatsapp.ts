@@ -66,15 +66,9 @@ export function buildOilReminderMessage(
   lines.push('');
   lines.push(`Hi ${r.customer_name || 'there'},`);
   lines.push('');
-  if (r.days_overdue > 0) {
-    lines.push(
-      `Friendly reminder — your *oil change is overdue by ${r.days_overdue} day${
-        r.days_overdue === 1 ? '' : 's'
-      }*.`
-    );
-  } else {
-    lines.push(`Friendly reminder — your *oil change is due today*.`);
-  }
+  lines.push(
+    `للتذكير — *نظن انه حان وقت تغيير الزيت او انه موعده قد اقترب الرجاء فحص الملصق على الباب للتاكد*.`
+  );
   lines.push('');
   if (carBits) lines.push(`🚗 Vehicle: *${carBits}*`);
   if (r.vehicle_plate) lines.push(`🔢 Plate: *${r.vehicle_plate}*`);
