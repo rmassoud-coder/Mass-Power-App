@@ -20,10 +20,12 @@ import {
   searchVehiclesByVin,
   searchVehiclesByPlate,
   listInventory,
+  listDueOilReminders,
 } from '../src/db/database';
 
-// Module-level flag so the out-of-stock reminder only triggers once per app session
+// Module-level flag so the out-of-stock + reminder alerts only trigger once per app session
 let outOfStockReminderShown = false;
+let oilReminderShown = false;
 
 export default function HomeScreen() {
   const [mobileNumber, setMobileNumber] = useState('');
@@ -76,6 +78,50 @@ export default function HomeScreen() {
     };
 
     checkOutOfStock();
+  }, [router]);
+
+  // Oil-change WhatsApp reminders — fire once per app session after launch
+  useEffect(() => {
+    if (oilReminderShown) return;
+    oilReminderShown = true;
+
+    const checkDueReminders = async () => {
+      try {
+        const due = await listDueOilReminders();
+        if (due.length === 0) return;
+
+        const preview = due
+          .slice(0, 6)
+          .map(
+            (r) =>
+              `• ${r.customer_name} — ${[r.vehicle_make, r.vehicle_model]
+                .filter(Boolean)
+                .join(' ') || 'vehicle'}`
+          )
+          .join('\n');
+        const extra = due.length > 6 ? `\n…and ${due.length - 6} more` : '';
+
+        // Give the inventory alert (if any) a chance to be dismissed first
+        setTimeout(() => {
+          Alert.alert(
+            `Oil Change Reminders (${due.length})`,
+            `${due.length} customer${due.length === 1 ? ' is' : 's are'} due for an oil change:\n\n${preview}${extra}`,
+            [
+              { text: 'Later', style: 'cancel' },
+              {
+                text: 'Open Reminders',
+                onPress: () => router.push('/reminders'),
+              },
+            ],
+            { cancelable: true }
+          );
+        }, 900);
+      } catch (e) {
+        console.warn('Oil reminder check failed:', e);
+      }
+    };
+
+    checkDueReminders();
   }, [router]);
 
   // Responsive sizing
@@ -245,6 +291,15 @@ export default function HomeScreen() {
           >
             <Ionicons name="person-add-outline" size={isSmallScreen ? 16 : 20} color="#2563eb" />
             <Text style={styles.addCustomerButtonText}>Add New Customer</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.reportButton, styles.remindersButton, { paddingVertical: buttonPadding }]}
+            onPress={() => router.push('/reminders')}
+            testID="reminders-button"
+          >
+            <Ionicons name="logo-whatsapp" size={isSmallScreen ? 16 : 20} color="#fff" />
+            <Text style={styles.reportButtonText}>Oil Change Reminders</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -444,5 +499,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  remindersButton: {
+    backgroundColor: '#25D366',
   },
 });

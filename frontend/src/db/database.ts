@@ -61,6 +61,8 @@ export interface Service {
   next_service_mileage?: number | null;
   oil_grade?: string | null;
   oil_filter_changed?: boolean;
+  // Reminder system: when 1 the oil-change reminder for this service is hidden permanently
+  reminder_dismissed?: boolean;
   // Inventory items used on this service (loaded on demand)
   items?: ServiceItem[];
 }
@@ -273,6 +275,7 @@ export async function initDatabase() {
     ['next_service_mileage', 'INTEGER'],
     ['oil_grade', 'TEXT'],
     ['oil_filter_changed', 'INTEGER NOT NULL DEFAULT 0'],
+    ['reminder_dismissed', 'INTEGER NOT NULL DEFAULT 0'],
   ];
   for (const [col, type] of oilReminderColumns) {
     try {
@@ -663,6 +666,121 @@ export async function listInventory(): Promise<InventoryItem[]> {
     `SELECT * FROM inventory ORDER BY item_quantity ASC, item_type ASC`
   );
   return rows;
+}
+
+// ---------------------------------------------------------------------------
+//  Oil change reminders (WhatsApp follow-ups)
+// ---------------------------------------------------------------------------
+
+export interface OilReminderDue {
+  service_id: string;
+  customer_id: string;
+  customer_name: string;
+  customer_mobile: string;
+  vehicle_id: string;
+  vehicle_make: string;
+  vehicle_model: string;
+  vehicle_year: string | null;
+  vehicle_plate: string;
+  vehicle_vin: string;
+  next_service_date: string; // ISO date (YYYY-MM-DD)
+  next_service_mileage: number | null;
+  current_mileage: number | null;
+  oil_grade: string | null;
+  service_date: string;
+  // days_overdue >= 0 means due today or later. We always return >=0 here.
+  days_overdue: number;
+}
+
+/**
+ * Returns all undismissed oil-change reminders whose next_service_date is
+ * today or earlier (i.e., due now). Sorted by most overdue first.
+ */
+export async function listDueOilReminders(): Promise<OilReminderDue[]> {
+  const db = await getDb();
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+  // We only consider services that actually have a next_service_date
+  // and have NOT been dismissed. We pick the latest oil reminder per vehicle
+  // so the user isn't spammed with old reminders that were superseded.
+  const rows = await db.getAllAsync<{
+    service_id: string;
+    customer_id: string;
+    customer_name: string;
+    customer_mobile: string;
+    vehicle_id: string;
+    vehicle_make: string;
+    vehicle_model: string;
+    vehicle_year: string | null;
+    vehicle_plate: string;
+    vehicle_vin: string;
+    next_service_date: string;
+    next_service_mileage: number | null;
+    current_mileage: number | null;
+    oil_grade: string | null;
+    service_date: string;
+  }>(
+    `SELECT
+        s.id            AS service_id,
+        c.id            AS customer_id,
+        c.name          AS customer_name,
+        c.mobile_number AS customer_mobile,
+        v.id            AS vehicle_id,
+        v.make          AS vehicle_make,
+        v.model         AS vehicle_model,
+        v.year          AS vehicle_year,
+        v.plate_number  AS vehicle_plate,
+        v.vin           AS vehicle_vin,
+        s.next_service_date,
+        s.next_service_mileage,
+        s.current_mileage,
+        s.oil_grade,
+        s.service_date
+      FROM services s
+      INNER JOIN customers c ON c.id = s.customer_id
+      INNER JOIN vehicles  v ON v.id = s.vehicle_id
+      WHERE
+        s.next_service_date IS NOT NULL
+        AND s.next_service_date != ''
+        AND s.next_service_date <= ?
+        AND COALESCE(s.reminder_dismissed, 0) = 0
+        AND s.id IN (
+          /* keep only the most recent reminder per vehicle */
+          SELECT id FROM services s2
+          WHERE s2.vehicle_id = s.vehicle_id
+            AND s2.next_service_date IS NOT NULL
+            AND s2.next_service_date != ''
+          ORDER BY s2.service_date DESC, s2.created_at DESC
+          LIMIT 1
+        )
+      ORDER BY s.next_service_date ASC`,
+    [today]
+  );
+
+  const todayMs = new Date(today).getTime();
+  return rows.map((r) => {
+    const dueMs = new Date(r.next_service_date).getTime();
+    const daysOverdue = Math.max(0, Math.floor((todayMs - dueMs) / 86400000));
+    return { ...r, days_overdue: daysOverdue };
+  });
+}
+
+/** Permanently hide the oil-change reminder for the given service. */
+export async function dismissReminder(serviceId: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE services SET reminder_dismissed = 1 WHERE id = ?`,
+    [serviceId]
+  );
+}
+
+/** Restore a previously dismissed reminder (used for "Undo" if needed). */
+export async function undismissReminder(serviceId: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE services SET reminder_dismissed = 0 WHERE id = ?`,
+    [serviceId]
+  );
 }
 
 export async function getInventoryItem(id: string): Promise<InventoryItem | null> {
