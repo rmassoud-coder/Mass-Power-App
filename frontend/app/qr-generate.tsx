@@ -13,6 +13,8 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import { currentMonthPayload } from '../src/utils/guaranteeQr';
 import { loadSettings, type AppSettings } from '../src/utils/settings';
 
@@ -21,6 +23,7 @@ export default function QrGenerateScreen() {
   const [now, setNow] = useState(() => currentMonthPayload());
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [printing, setPrinting] = useState(false);
+  const [saving, setSaving] = useState(false);
   const qrRef = useRef<{ toDataURL: (cb: (data: string) => void) => void } | null>(null);
 
   useEffect(() => {
@@ -126,6 +129,52 @@ export default function QrGenerateScreen() {
     }
   };
 
+  const handleSaveImage = async () => {
+    if (saving) return;
+    if (!qrRef.current) {
+      Alert.alert('QR not ready', 'The QR code is still rendering. Please try again.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        qrRef.current!.toDataURL((data: string) => {
+          if (!data) reject(new Error('Could not export QR.'));
+          else resolve(data);
+        });
+      });
+
+      const safeLabel = `${now.year}-${String(now.month).padStart(2, '0')}`;
+      const fileName = `mass-power-qr-${safeLabel}.png`;
+      const cacheDir = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
+      if (!cacheDir) throw new Error('No writable directory available.');
+      const fileUri = `${cacheDir}${fileName}`;
+
+      await FileSystem.writeAsStringAsync(fileUri, base64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (!canShare) {
+        Alert.alert(
+          'Saved',
+          `QR image saved to:\n${fileUri}\n\n(Sharing is not available on this device — open a file manager to access it.)`
+        );
+        return;
+      }
+
+      await Sharing.shareAsync(fileUri, {
+        mimeType: 'image/png',
+        dialogTitle: `Save QR — ${monthLabel}`,
+        UTI: 'public.png',
+      });
+    } catch (e: any) {
+      Alert.alert('Save failed', e?.message || 'Could not save the QR image.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
@@ -156,6 +205,22 @@ export default function QrGenerateScreen() {
             when printed.
           </Text>
         </View>
+
+        <TouchableOpacity
+          style={[styles.btn, styles.btnSave, saving && styles.btnDisabled]}
+          onPress={handleSaveImage}
+          disabled={saving}
+          activeOpacity={0.85}
+        >
+          {saving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="image" size={20} color="#fff" />
+              <Text style={styles.btnText}>Save as PNG / Share</Text>
+            </>
+          )}
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.btn, styles.btnPrint, printing && styles.btnDisabled]}
@@ -249,6 +314,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   btnPrint: { backgroundColor: '#7c3aed' },
+  btnSave: { backgroundColor: '#2563eb' },
   btnDisabled: { backgroundColor: '#94a3b8' },
   btnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
   footer: {
