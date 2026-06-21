@@ -294,39 +294,12 @@ export default function HomeScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.reportButton, styles.remindersButton, { paddingVertical: buttonPadding }]}
-            onPress={() => router.push('/reminders')}
-            testID="reminders-button"
+            style={[styles.reportButton, styles.managementButton, { paddingVertical: buttonPadding }]}
+            onPress={() => router.push('/management')}
+            testID="management-button"
           >
-            <Ionicons name="logo-whatsapp" size={isSmallScreen ? 16 : 20} color="#fff" />
-            <Text style={styles.reportButtonText}>Oil Change Reminders</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.reportButton, { paddingVertical: buttonPadding }]}
-            onPress={() => router.push('/report')}
-            testID="report-button"
-          >
-            <Ionicons name="document-text-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
-            <Text style={styles.reportButtonText}>View Services Report</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.backupButton, { paddingVertical: buttonPadding }]}
-            onPress={() => router.push('/backup')}
-            testID="backup-button"
-          >
-            <Ionicons name="cloud-download-outline" size={isSmallScreen ? 16 : 20} color="#1e293b" />
-            <Text style={styles.backupButtonText}>Backup & Restore</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.backupButton, { paddingVertical: buttonPadding }]}
-            onPress={() => router.push('/settings')}
-            testID="settings-button"
-          >
-            <Ionicons name="settings-outline" size={isSmallScreen ? 16 : 20} color="#1e293b" />
-            <Text style={styles.backupButtonText}>Settings</Text>
+            <Ionicons name="construct-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
+            <Text style={styles.reportButtonText}>Backend Management</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -502,5 +475,8 @@ const styles = StyleSheet.create({
   },
   remindersButton: {
     backgroundColor: '#25D366',
+  },
+  managementButton: {
+    backgroundColor: '#0f172a',
   },
 });

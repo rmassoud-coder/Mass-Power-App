@@ -42,6 +42,12 @@
       ],
       "expo-font",
       "expo-sqlite",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Scan VIN plates and guarantee QR stickers"
+        }
+      ],
       "@react-native-community/datetimepicker"
     ],
     "experiments": {
