@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -159,7 +160,7 @@ export default function QrGenerateScreen() {
 
   const handleSaveImage = async () => {
     if (saving) return;
-    if (!base64Body) {
+    if (!dataUrl || !base64Body) {
       Alert.alert('Not ready', 'The Data Matrix is still rendering. Please try again.');
       return;
     }
@@ -167,6 +168,28 @@ export default function QrGenerateScreen() {
     try {
       const safeLabel = `${now.year}-${String(now.month).padStart(2, '0')}`;
       const fileName = `mass-power-dm-${safeLabel}.png`;
+
+      // ---- Web preview path: trigger a real browser download ----
+      if (Platform.OS === 'web') {
+        try {
+          const doc: any = (globalThis as any).document;
+          if (doc?.createElement) {
+            const link = doc.createElement('a');
+            link.href = dataUrl;
+            link.download = fileName;
+            doc.body.appendChild(link);
+            link.click();
+            doc.body.removeChild(link);
+            return;
+          }
+        } catch {
+          // fall through to alert below
+        }
+        Alert.alert('Download', 'Could not start the download — long-press the image to save it.');
+        return;
+      }
+
+      // ---- Native path (Android / iOS): write file + share ----
       const cacheDir = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
       if (!cacheDir) throw new Error('No writable directory available.');
       const fileUri = `${cacheDir}${fileName}`;
