@@ -1,11 +1,13 @@
 /**
- * Helpers for the "monthly guarantee QR" feature.
+ * Helpers for the "monthly guarantee" sticker feature.
  *
  * Encoding:
- *   - We want the SMALLEST possible QR so it stays scannable at ~1cm × 1cm.
- *   - Encode the month/year as a 7-character ASCII string: `MP-YYYYMM` (e.g. `MP-202606`).
- *     With low error correction this fits in QR Version 1 (21×21 modules).
- *   - The `MP-` prefix lets us recognise our own stickers and reject random QR codes.
+ *   - The sticker is a **Data Matrix** (ECC200) at the smallest possible size
+ *     (10×10 modules). A 10×10 Data Matrix can encode up to **6 numeric
+ *     characters** — so we encode the month/year as exactly 6 digits: `YYYYMM`
+ *     (e.g. `202606` for June 2026). No prefix is added so the data fits.
+ *   - The scanner accepts both bare `YYYYMM` and the legacy `MP-YYYYMM` for
+ *     backwards compatibility with already-printed QR stickers.
  */
 
 const MONTH_NAMES = [
@@ -23,10 +25,10 @@ const MONTH_NAMES = [
   'December',
 ];
 
-/** Build the QR payload string for a given year/month (month is 1-12). */
+/** Build the Data Matrix payload string for a given year/month (month is 1-12). */
 export function buildGuaranteePayload(year: number, month1to12: number): string {
   const mm = String(month1to12).padStart(2, '0');
-  return `MP-${year}${mm}`;
+  return `${year}${mm}`;
 }
 
 /** Convenience: payload for "now" (current month/year of the device). */

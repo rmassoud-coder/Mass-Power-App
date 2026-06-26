@@ -119,7 +119,7 @@ export default function QrScanScreen() {
         <CameraView
           style={StyleSheet.absoluteFill}
           facing="back"
-          barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+          barcodeScannerSettings={{ barcodeTypes: ['datamatrix', 'qr'] }}
           onBarcodeScanned={result ? undefined : onBarcodeScanned}
         />
         {!result && (
