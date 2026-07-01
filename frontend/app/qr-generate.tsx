@@ -18,7 +18,6 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { currentMonthPayload } from '../src/utils/guaranteeQr';
-import { loadSettings, type AppSettings } from '../src/utils/settings';
 
 /**
  * Generates the monthly Mass Power guarantee sticker as a **Data Matrix** at
@@ -28,14 +27,12 @@ import { loadSettings, type AppSettings } from '../src/utils/settings';
 export default function QrGenerateScreen() {
   const router = useRouter();
   const [now, setNow] = useState(() => currentMonthPayload());
-  const [settings, setSettings] = useState<AppSettings | null>(null);
   const [printing, setPrinting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [bcError, setBcError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadSettings().then(setSettings);
     // Recompute payload each minute so a midnight month-rollover updates the screen.
     const interval = setInterval(() => setNow(currentMonthPayload()), 60_000);
     return () => clearInterval(interval);
@@ -87,52 +84,59 @@ export default function QrGenerateScreen() {
     return m ? m[1] : '';
   }, [dataUrl]);
 
-  const buildPrintHtml = (base64Png: string, label: string, payload: string): string => {
-    const garage = settings?.garageName || 'Mass Power Auto Services';
+  const buildPrintHtml = (imageUri: string, label: string): string => {
+    // Minimal, cutting-friendly sheet: no titles, no borders, no metadata.
+    // Just a tidy grid of Data Matrix stickers you can cut out. A thin dashed
+    // outline sits around each sticker (visible on paper, easy cutting guide).
     return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>${garage} – Guarantee ${label}</title>
+  <title>Guarantee Stickers ${label}</title>
   <style>
-    @page { size: A4; margin: 8mm; }
-    * { box-sizing: border-box; }
-    body { font-family: -apple-system, Helvetica, Arial, sans-serif; margin: 0; color: #000; }
-    h1 { font-size: 14px; margin: 0 0 6mm 0; }
-    .header { font-size: 11px; margin-bottom: 6mm; color: #333; }
+    @page { size: A4; margin: 6mm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: #fff; color: #000; }
+    body { font-family: -apple-system, Helvetica, Arial, sans-serif; }
     .grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 6mm;
+      gap: 4mm;
+      padding: 2mm;
     }
     .sticker {
-      width: 40mm;
-      padding: 2mm;
-      border: 0.2mm dashed #999;
-      text-align: center;
+      width: 46mm;
+      height: 30mm;
+      padding: 1.5mm;
+      border: 0.15mm dashed #999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
     }
     .sticker img {
       display: block;
-      width: 20mm;        /* doubled to 2cm */
-      height: 20mm;
-      margin: 0 auto 1.2mm auto;
-      image-rendering: pixelated;
+      width: 22mm;
+      height: 22mm;
+      object-fit: contain;
     }
-    .sticker .lbl { font-size: 10pt; font-weight: 800; line-height: 1; }
-    .sticker .sub { font-size: 8pt; color: #555; margin-top: 0.8mm; }
+    .sticker .lbl {
+      font-size: 8pt;
+      font-weight: 800;
+      line-height: 1;
+      margin-top: 1mm;
+      letter-spacing: 0.4pt;
+    }
   </style>
 </head>
 <body>
-  <h1>${garage} — Guarantee Stickers</h1>
-  <div class="header">Month: <b>${label}</b> &nbsp;•&nbsp; Code: ${payload}</div>
   <div class="grid">
     ${Array.from({ length: 28 })
       .map(
         () => `
       <div class="sticker">
-        <img src="data:image/png;base64,${base64Png}" alt="DM" />
+        <img src="${imageUri}" alt="" />
         <div class="lbl">${label}</div>
-        <div class="sub">MPAS</div>
       </div>`
       )
       .join('')}
@@ -143,13 +147,13 @@ export default function QrGenerateScreen() {
 
   const handlePrint = async () => {
     if (printing) return;
-    if (!base64Body) {
+    if (!dataUrl) {
       Alert.alert('Not ready', 'The Data Matrix is still rendering. Please try again.');
       return;
     }
     setPrinting(true);
     try {
-      const html = buildPrintHtml(base64Body, monthLabel, now.payload);
+      const html = buildPrintHtml(dataUrl, monthLabel);
       await Print.printAsync({ html });
     } catch (e: any) {
       Alert.alert('Print failed', e?.message || 'Could not open the print dialog.');
@@ -270,9 +274,9 @@ export default function QrGenerateScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.btn, styles.btnPrint, (printing || !base64Body) && styles.btnDisabled]}
+          style={[styles.btn, styles.btnPrint, (printing || !dataUrl) && styles.btnDisabled]}
           onPress={handlePrint}
-          disabled={printing || !base64Body}
+          disabled={printing || !dataUrl}
           activeOpacity={0.85}
         >
           {printing ? (
