@@ -75,15 +75,6 @@ const TILES: Tile[] = [
     testID: 'tile-qr-generate',
     description: 'Print this month\'s 10×10 Data Matrix guarantee sticker',
   },
-  {
-    label: 'Scan Guarantee',
-    icon: 'scan-outline',
-    color: '#fff',
-    bg: '#dc2626',
-    route: '/qr-scan',
-    testID: 'tile-qr-scan',
-    description: 'Read a sticker to see its month & year',
-  },
 ];
 
 export default function ManagementScreen() {

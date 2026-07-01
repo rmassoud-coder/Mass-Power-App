@@ -149,7 +149,36 @@ export default function InventoryScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: 80 }}>
+        <>
+          {/* Stock summary — totals of what's on hand */}
+          {(() => {
+            const totalUnits = items.reduce((s, it) => s + (it.item_quantity || 0), 0);
+            const totalWorth = items.reduce(
+              (s, it) => s + (it.item_quantity || 0) * (it.item_price || 0),
+              0
+            );
+            return (
+              <View style={styles.summaryBar}>
+                <View style={styles.summaryCell}>
+                  <Text style={styles.summaryLabel}>SKUs</Text>
+                  <Text style={styles.summaryValue}>{items.length}</Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryCell}>
+                  <Text style={styles.summaryLabel}>Units on hand</Text>
+                  <Text style={styles.summaryValue}>{totalUnits}</Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryCell}>
+                  <Text style={styles.summaryLabel}>Stock worth</Text>
+                  <Text style={[styles.summaryValue, { color: '#059669' }]}>
+                    ${totalWorth.toFixed(2)}
+                  </Text>
+                </View>
+              </View>
+            );
+          })()}
+          <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: 80 }}>
           {items.map((it) => {
             const low = it.item_quantity < 2;
             return (
@@ -195,6 +224,7 @@ export default function InventoryScreen() {
             );
           })}
         </ScrollView>
+        </>
       )}
 
       {/* Add/Edit Modal */}
@@ -402,4 +432,37 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   saveBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  summaryBar: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    marginHorizontal: 12,
+    marginTop: 10,
+    marginBottom: 4,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  summaryCell: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  summaryDivider: {
+    width: 1,
+    backgroundColor: '#e2e8f0',
+    marginVertical: 4,
+  },
+  summaryLabel: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  summaryValue: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
 });

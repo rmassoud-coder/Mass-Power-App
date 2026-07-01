@@ -102,31 +102,31 @@ export default function QrGenerateScreen() {
     .header { font-size: 11px; margin-bottom: 6mm; color: #333; }
     .grid {
       display: grid;
-      grid-template-columns: repeat(8, 1fr);
-      gap: 4mm;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6mm;
     }
     .sticker {
-      width: 18mm;
-      padding: 1mm;
+      width: 40mm;
+      padding: 2mm;
       border: 0.2mm dashed #999;
       text-align: center;
     }
     .sticker img {
       display: block;
-      width: 10mm;        /* exactly 1cm */
-      height: 10mm;
-      margin: 0 auto 0.6mm auto;
+      width: 20mm;        /* doubled to 2cm */
+      height: 20mm;
+      margin: 0 auto 1.2mm auto;
       image-rendering: pixelated;
     }
-    .sticker .lbl { font-size: 6pt; font-weight: 700; line-height: 1; }
-    .sticker .sub { font-size: 5pt; color: #555; margin-top: 0.4mm; }
+    .sticker .lbl { font-size: 10pt; font-weight: 800; line-height: 1; }
+    .sticker .sub { font-size: 8pt; color: #555; margin-top: 0.8mm; }
   </style>
 </head>
 <body>
   <h1>${garage} — Guarantee Stickers</h1>
   <div class="header">Month: <b>${label}</b> &nbsp;•&nbsp; Code: ${payload}</div>
   <div class="grid">
-    ${Array.from({ length: 56 })
+    ${Array.from({ length: 28 })
       .map(
         () => `
       <div class="sticker">
@@ -280,7 +280,7 @@ export default function QrGenerateScreen() {
           ) : (
             <>
               <Ionicons name="print" size={20} color="#fff" />
-              <Text style={styles.btnText}>Print Sheet (56 stickers)</Text>
+              <Text style={styles.btnText}>Print Sheet (28 stickers)</Text>
             </>
           )}
         </TouchableOpacity>

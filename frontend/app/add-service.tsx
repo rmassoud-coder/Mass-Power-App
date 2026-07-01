@@ -58,8 +58,9 @@ export default function AddServiceScreen() {
     (sum, it) => sum + it.quantity * it.unit_price,
     0
   );
-  const laborCost = parseFloat(cost) || 0;
-  const totalCost = laborCost + productsSubtotal;
+  // Inventory prices are tracked separately (for stock valuation) — they are
+  // NOT added to the service cost. The mechanic types the final price they
+  // want to charge and it stands alone.
 
   const handleSubmit = async () => {
     if (!selectedVehicleId || !serviceCategory || !cost.trim()) {
@@ -84,7 +85,7 @@ export default function AddServiceScreen() {
         selectedVehicleId,
         serviceCategory,
         additionalInfo.trim() || undefined,
-        costNumber + productsSubtotal,
+        costNumber,
         isPaid,
         dashLights,
         isOilService ? oilReminder : EMPTY_OIL_REMINDER,
@@ -196,7 +197,7 @@ export default function AddServiceScreen() {
 
             {/* Cost */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Labor / Service Cost *</Text>
+              <Text style={styles.label}>Service Cost *</Text>
               <View style={styles.inputContainer}>
                 <Ionicons name="cash-outline" size={20} color="#666" style={styles.inputIcon} />
                 <Text style={styles.currencySymbol}>$</Text>
@@ -209,17 +210,10 @@ export default function AddServiceScreen() {
                 />
               </View>
               {productsSubtotal > 0 && (
-                <View style={styles.totalBreakdown}>
-                  <Text style={styles.totalLine}>
-                    Labor: ${laborCost.toFixed(2)}
-                  </Text>
-                  <Text style={styles.totalLine}>
-                    Products: ${productsSubtotal.toFixed(2)}
-                  </Text>
-                  <Text style={styles.totalGrand}>
-                    Total: ${totalCost.toFixed(2)}
-                  </Text>
-                </View>
+                <Text style={styles.hint}>
+                  Note: inventory items are tracked for stock only. Set the customer&apos;s
+                  price above — parts pricing is not added automatically.
+                </Text>
               )}
             </View>
 
