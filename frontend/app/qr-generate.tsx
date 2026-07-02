@@ -45,12 +45,20 @@ export default function QrGenerateScreen() {
     setDataUrl(null);
     (async () => {
       try {
+        // Explicitly ask for a square Data Matrix (ECC200) at the 10×10 size.
+        // "columns"/"rows" pins the physical module count; "format:square" and
+        // "version:10x10" make bwip-js reject any fallback. "padding:1" leaves
+        // the standard 1-module quiet zone (larger padding would shrink the
+        // code visually inside a fixed print box).
         const png = await bwipjs.toDataURL({
           bcid: 'datamatrix',
           text: now.payload,
-          scale: 20,              // big preview, still crisp when printed small
-          padding: 2,             // quiet zone (modules)
-          version: '10x10',       // force smallest size
+          scale: 30,
+          padding: 1,
+          format: 'square',
+          version: '10x10',
+          columns: 10,
+          rows: 10,
           backgroundcolor: 'FFFFFF',
           barcolor: '000000',
         } as Record<string, unknown>);
@@ -86,52 +94,59 @@ export default function QrGenerateScreen() {
 
   const buildPrintHtml = (imageUri: string, label: string): string => {
     // Minimal, cutting-friendly sheet: no titles, no borders, no metadata.
-    // Just a tidy grid of Data Matrix stickers you can cut out. A thin dashed
-    // outline sits around each sticker (visible on paper, easy cutting guide).
+    // Just a tidy grid of Data Matrix stickers you can cut out. Wide margins
+    // + generous sticker size ensure the browser CANNOT shrink us to fit —
+    // the layout is comfortably under A4 printable width.
     return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
   <title>Guarantee Stickers ${label}</title>
   <style>
-    @page { size: A4; margin: 6mm; }
+    @page { size: A4; margin: 8mm; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { background: #fff; color: #000; }
+    html, body {
+      background: #fff;
+      color: #000;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
     body { font-family: -apple-system, Helvetica, Arial, sans-serif; }
     .grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 4mm;
+      grid-template-columns: repeat(3, 60mm);
+      justify-content: center;
+      gap: 6mm 6mm;
       padding: 2mm;
     }
     .sticker {
-      width: 46mm;
-      height: 30mm;
-      padding: 1.5mm;
-      border: 0.15mm dashed #999;
+      width: 60mm;
+      height: 42mm;
+      border: 0.2mm dashed #999;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
+      break-inside: avoid;
     }
     .sticker img {
       display: block;
-      width: 22mm;
-      height: 22mm;
+      width: 30mm;
+      height: 30mm;
       object-fit: contain;
     }
     .sticker .lbl {
-      font-size: 8pt;
+      font-size: 11pt;
       font-weight: 800;
       line-height: 1;
-      margin-top: 1mm;
-      letter-spacing: 0.4pt;
+      margin-top: 2mm;
+      letter-spacing: 0.5pt;
     }
   </style>
 </head>
 <body>
   <div class="grid">
-    ${Array.from({ length: 28 })
+    ${Array.from({ length: 18 })
       .map(
         () => `
       <div class="sticker">
@@ -284,7 +299,7 @@ export default function QrGenerateScreen() {
           ) : (
             <>
               <Ionicons name="print" size={20} color="#fff" />
-              <Text style={styles.btnText}>Print Sheet (28 stickers)</Text>
+              <Text style={styles.btnText}>Print Sheet (18 stickers)</Text>
             </>
           )}
         </TouchableOpacity>

@@ -1,0 +1,59 @@
+{
+  "summary": "CRITICAL FAILURE on /qr-generate. The Data Matrix image NEVER renders — bwip-js throws 'bwipp.datamatrixVersionRowsCols#25292: rows and columns must not be given if version is specified' and the screen shows that red error message where the barcode should be. Both action buttons (Save as PNG / Share and Print Sheet (18 stickers)) are aria-disabled=true with gray background #94a3b8 because !dataUrl. Consequently the feature is completely non-functional: cannot preview, cannot save PNG, cannot print. Root cause: /app/frontend/app/qr-generate.tsx passes BOTH `version: '10x10'` AND `columns: 10, rows: 10` to bwip-js.toDataURL() (lines 53-64). bwip-js validation rejects this combination — the two ways of pinning symbol size are mutually exclusive. The 'belt-and-suspenders' fix intended to force a 10x10 Data Matrix instead prevented any barcode from being produced. Because no image is generated, symbol-type decoding via zxing-cpp / pylibdmtx could not be performed — but no QR code is being emitted either (no image at all). Static code review: no `bcid:'qrcode'` string exists anywhere in the codebase (only `bcid: 'datamatrix'` at line 54), so once the conflicting params are resolved the output WILL be a Data Matrix. Payload string '202607' (YYYYMM for July 2026) IS computed and displayed correctly under the missing image, so `currentMonthPayload()` and the label logic work. Secondary bug in the print HTML: `buildPrintHtml` injects `<div class=\"lbl\">${label}</div>` inside every sticker (line 154 of qr-generate.tsx), which prints 'July 2026' text under every one of the 18 Data Matrix codes. The review explicitly requires 'NO headers, footers, garage names, or Month/Code text — just a clean grid of stickers.' — so the .lbl div and its CSS block (lines 138-144) must be removed. Grid geometry itself is correct: exactly 18 sticker divs, 3-column CSS grid `repeat(3, 60mm)`, 30mm × 30mm images, 60mm × 42mm boxes, gap 6mm, padding 2mm, @page A4 margin 8mm → total 200mm, safely under A4's 210mm — no browser fit-to-page shrinkage. Nav flow Home → Backend Management → Monthly Code correctly resolves to /qr-generate (management.tsx tile testID='tile-qr-generate', route '/qr-generate'). Also observed: pre-existing RN Web warnings 'shadow* deprecated / props.pointerEvents deprecated' — carried over, not new.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "qr-generate.tsx → bwipjs.toDataURL()",
+        "issue": "SHOWSTOPPER: bwip-js call passes both `version: '10x10'` (line 59) AND `columns: 10, rows: 10` (lines 60-61). bwip-js rejects this combination with error 'bwipp.datamatrixVersionRowsCols#25292: rows and columns must not be given if version is specified'. Result: dataUrl stays null forever, the <Image> is never rendered, the red error text is shown in the matrix frame, and both action buttons stay disabled. Fix: remove either `version: '10x10'` OR the `columns/rows` pair (keeping the other pins the symbol to a 10×10 ECC200). Recommended: keep `version: '10x10'` (unambiguous single source of truth) and drop `columns` + `rows`. After the fix, verify by grabbing the rendered <img data:image/png;base64,...> src, base64-decoding it, and running `zxingcpp.read_barcodes(PIL.Image.open('/tmp/dm.png'))` — the returned Result.format must be 'DataMatrix' and Result.text must equal the current YYYYMM (e.g. '202607').",
+        "testID": "n/a (Image inside matrixFrame — no testID present)",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "qr-generate.tsx → buildPrintHtml()",
+        "issue": "Print output violates the 'no headers/footers/garage names/Month-Code text' requirement. Each of the 18 sticker <div class=\"sticker\">…</div> blocks includes `<div class=\"lbl\">${label}</div>` (line 154) — which prints the month label (e.g. 'July 2026') under every Data Matrix. Fix: remove the label div from the template (line 154) and the `.sticker .lbl` CSS block (lines 138-144). Also consider centering the img in the box (justify-content: center) since removing the text will shift the composition. Optionally shrink the sticker box height (currently 42mm) since it no longer needs to fit two elements — 32mm-34mm would waste less paper. The `<title>Guarantee Stickers ${label}</title>` in <head> is only the browser tab title, not printed, so it is acceptable to leave.",
+        "testID": "n/a (print-only, not on-screen DOM)",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Home → Backend Management → Monthly Code → Data Matrix render → Save/Print",
+        "issue": "Full flow is blocked at the Data Matrix render step. Save-as-PNG button and Print Sheet button both remain aria-disabled=true because their disabled prop is `saving || !base64Body` and `printing || !dataUrl` respectively, and dataUrl is null due to the bwip-js error. Cannot end-to-end test PNG download or expo-print pipeline until the render bug is fixed.",
+        "affected_testIDs": ["tile-qr-generate"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "qr-generate",
+        "issues": [
+          "Matrix frame area (240×240) currently shows a wrapped red error message — should show the Data Matrix image at 220×220 after the fix.",
+          "Suggestion: add testID='dm-preview-image' to the <Image> and testID='dm-error' to the error <Text> so future test runs can assert on those specific nodes."
+        ]
+      }
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_3.json"],
+  "action_items": [
+    "CRITICAL: In /app/frontend/app/qr-generate.tsx lines 53-64, remove either `version: '10x10'` OR `columns: 10, rows: 10`. bwip-js rejects the two together (error #25292). Recommended: keep `version: '10x10'` (drops both `columns` and `rows`). This will restore Data Matrix rendering and re-enable the Save/Print buttons.",
+    "HIGH: In /app/frontend/app/qr-generate.tsx `buildPrintHtml`, remove `<div class=\"lbl\">${label}</div>` from the sticker template (line 154) AND the corresponding `.sticker .lbl { … }` CSS rule (lines 138-144). Also `.sticker` no longer needs `flex-direction: column` — switch to `justify-content: center; align-items: center` to center the Data Matrix in the 60×42mm box. This satisfies the 'no headers/footers/garage names/Month-Code text' requirement.",
+    "MEDIUM: Add testID='dm-preview-image' to the <Image> and testID='dm-error' to the error <Text> and testID='dm-payload' to the payload text so downstream automated tests can decode and validate deterministically.",
+    "LOW (carry-over): Replace RN Web 'shadow*' style props with 'boxShadow' and 'props.pointerEvents' with 'style.pointerEvents' to silence dev warnings."
+  ],
+  "critical_code_review_comments": [
+    "buildGuaranteePayload / currentMonthPayload correctly produce a 6-digit YYYYMM ('202607' displayed on-screen). parseGuaranteePayload also accepts both bare YYYYMM and legacy MP-YYYYMM — good backwards compatibility.",
+    "qr-generate.tsx over-specifies the bwip-js size parameters. The bwip-js JS API for Data Matrix accepts EITHER `format+version` OR `columns+rows`, not both. The main agent's intent to belt-and-suspender the 10×10 pin backfired.",
+    "Print HTML grid math is correct: 3*60mm + 2*6mm(gaps) + 2*2mm(padding) + 2*8mm(page margin) = 200mm ≤ 210mm (A4 width) — no shrink-to-fit will trigger. `-webkit-print-color-adjust: exact` + `print-color-adjust: exact` correctly forces black modules to print.",
+    "Exactly 18 sticker divs via `Array.from({length: 18}).map(...)` — matches the 3×6 requirement.",
+    "handleSaveImage has a proper web/native split (anchor download on web via document.createElement('a'); FileSystem+Sharing on native). Fine as-is.",
+    "No `bcid:'qrcode'` string exists anywhere — confirmed via grep. The problem is purely the parameter conflict, not a wrong barcode type."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped — frontend-only request)", "frontend": "0% for the Data Matrix feature (image never renders, buttons disabled). Nav & payload logic ✓, print HTML geometry ✓, but core render broken."},
+  "seed_data_creation": "None.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "After main agent removes the bwip-js parameter conflict AND strips the .lbl from buildPrintHtml, re-test by: (1) reload /qr-generate on mobile viewport 390x844, (2) wait for <img> in the matrix frame, (3) evaluate `document.querySelectorAll('img[src^=\"data:image\"]')[0].src`, (4) base64-decode to a file, (5) run `import zxingcpp, PIL.Image; r = zxingcpp.read_barcodes(PIL.Image.open('/tmp/dm.png'))[0]; assert str(r.format)=='BarcodeFormat.DataMatrix'; assert r.text == currentYYYYMM`. zxing-cpp 3.0.0 is already installed (pylibdmtx is installed but libdmtx.so missing — use zxing-cpp instead). Also print-preview the HTML via `await Print.printAsync({ html })` or by rendering buildPrintHtml result in a browser and count `.sticker` divs (must be exactly 18) and confirm no visible 'July 2026'/'MPAS'/garage text anywhere on the paper.",
+  "rca_of_issue": "RCA — Data Matrix does not render:\n  Symptom: Red text 'bwipp.datamatrixVersionRowsCols#25292: rows and columns must not be given if version is specified' displayed inside the 240×240 matrix frame; no <img> in DOM; both action buttons aria-disabled=true.\n  Root cause: /app/frontend/app/qr-generate.tsx lines 53-64 pass to bwip-js.toDataURL() the parameter set { bcid:'datamatrix', text, scale:30, padding:1, format:'square', version:'10x10', columns:10, rows:10, backgroundcolor, barcolor }. In bwip-js/BWIPP, the Data Matrix option 'version' internally computes (rows, columns). Passing all three simultaneously triggers the guard in datamatrix.ps → rendering aborts with error 25292 and bwipjs.toDataURL() rejects the promise. The React effect catches it into setBcError(...) and leaves dataUrl=null.\n  Reproduction: sudo supervisorctl restart expo; open https://mechanic-search-3.preview.emergentagent.com/qr-generate on any viewport; observe the red error text under 'July 2026' and both purple/blue buttons rendered gray with disabled=true.\n  Mitigation: pick ONE size specifier and drop the other. Either (A) `version:'10x10'` and remove columns+rows, or (B) `columns:10, rows:10` and remove `version`. `format:'square'` is fine to keep with either. Both options equally pin the smallest ECC200 symbol.\n\nRCA — Print sheet contains forbidden 'Month/Code' text:\n  Symptom: On paper, each of the 18 stickers shows 'July 2026' beneath the Data Matrix, which violates the explicit requirement.\n  Root cause: buildPrintHtml unconditionally emits `<div class=\"lbl\">${label}</div>` (line 154) inside every sticker div, with `.sticker .lbl` styled at font-size 11pt, weight 800.\n  Mitigation: delete the line and the corresponding CSS rules; adjust flex layout to center-only."
+}
