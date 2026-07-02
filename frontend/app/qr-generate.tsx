@@ -46,19 +46,17 @@ export default function QrGenerateScreen() {
     (async () => {
       try {
         // Explicitly ask for a square Data Matrix (ECC200) at the 10×10 size.
-        // "columns"/"rows" pins the physical module count; "format:square" and
-        // "version:10x10" make bwip-js reject any fallback. "padding:1" leaves
-        // the standard 1-module quiet zone (larger padding would shrink the
-        // code visually inside a fixed print box).
+        // NOTE: bwip-js does not allow BOTH `version` AND `columns`/`rows` — it
+        // treats them as mutually exclusive. `version: '10x10'` is sufficient
+        // to pin the physical module count. `padding: 1` leaves the standard
+        // 1-module quiet zone (larger padding shrinks the code inside a fixed
+        // print box).
         const png = await bwipjs.toDataURL({
           bcid: 'datamatrix',
           text: now.payload,
           scale: 30,
           padding: 1,
-          format: 'square',
           version: '10x10',
-          columns: 10,
-          rows: 10,
           backgroundcolor: 'FFFFFF',
           barcolor: '000000',
         } as Record<string, unknown>);
@@ -256,16 +254,22 @@ export default function QrGenerateScreen() {
                 source={{ uri: dataUrl }}
                 style={styles.matrixImage}
                 resizeMode="contain"
+                testID="dm-preview-image"
               />
             ) : bcError ? (
-              <Text style={{ color: '#dc2626', padding: 16, textAlign: 'center' }}>
+              <Text
+                testID="dm-error"
+                style={{ color: '#dc2626', padding: 16, textAlign: 'center' }}
+              >
                 {bcError}
               </Text>
             ) : (
               <ActivityIndicator size="large" color="#7c3aed" />
             )}
           </View>
-          <Text style={styles.payload}>{now.payload}</Text>
+          <Text testID="dm-payload" style={styles.payload}>
+            {now.payload}
+          </Text>
           <Text style={styles.hint}>
             Data Matrix (ECC200) at 10×10 modules — the smallest size available. Encodes
             6 numeric digits (YYYYMM) and remains readable at the 1cm × 1cm print size.
