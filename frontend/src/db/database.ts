@@ -478,16 +478,26 @@ export async function createVehicle(
   year?: string
 ): Promise<Vehicle> {
   const db = await getDb();
+  const cleanVin = vin.trim().toUpperCase();
+  if (cleanVin) {
+    const existing = await db.getFirstAsync<{ id: string }>(
+      `SELECT id FROM vehicles WHERE UPPER(TRIM(vin)) = ? LIMIT 1`,
+      [cleanVin]
+    );
+    if (existing) {
+      throw new Error(`A vehicle with VIN "${cleanVin}" already exists.`);
+    }
+  }
   const id = generateId();
   const now = new Date().toISOString();
   await db.runAsync(
     `INSERT INTO vehicles (id, customer_id, vin, plate_number, make, model, year, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, customerId, vin, plateNumber, make, model, year || null, now]
+    [id, customerId, cleanVin, plateNumber, make, model, year || null, now]
   );
   return {
     id,
     customer_id: customerId,
-    vin,
+    vin: cleanVin,
     plate_number: plateNumber,
     make,
     model,
@@ -505,9 +515,19 @@ export async function updateVehicle(
   year?: string
 ): Promise<void> {
   const db = await getDb();
+  const cleanVin = vin.trim().toUpperCase();
+  if (cleanVin) {
+    const existing = await db.getFirstAsync<{ id: string }>(
+      `SELECT id FROM vehicles WHERE UPPER(TRIM(vin)) = ? AND id != ? LIMIT 1`,
+      [cleanVin, id]
+    );
+    if (existing) {
+      throw new Error(`Another vehicle with VIN "${cleanVin}" already exists.`);
+    }
+  }
   await db.runAsync(
     `UPDATE vehicles SET vin = ?, plate_number = ?, make = ?, model = ?, year = ? WHERE id = ?`,
-    [vin, plateNumber, make, model, year || null, id]
+    [cleanVin, plateNumber, make, model, year || null, id]
   );
 }
 

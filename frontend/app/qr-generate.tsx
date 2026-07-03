@@ -91,10 +91,9 @@ export default function QrGenerateScreen() {
   }, [dataUrl]);
 
   const buildPrintHtml = (imageUri: string, label: string): string => {
-    // Minimal, cutting-friendly sheet: no titles, no borders, no metadata.
-    // Just a tidy grid of Data Matrix stickers you can cut out. Wide margins
-    // + generous sticker size ensure the browser CANNOT shrink us to fit —
-    // the layout is comfortably under A4 printable width.
+    // Big, cutting-friendly stickers. 2×4 = 8 stickers per A4 sheet.
+    // Each Data Matrix is 60mm × 60mm — twice the previous 30mm size.
+    // Total grid: 2 × 90mm + 6mm gap = 186mm ≤ A4 194mm printable width.
     return `<!DOCTYPE html>
 <html>
 <head>
@@ -112,14 +111,14 @@ export default function QrGenerateScreen() {
     body { font-family: -apple-system, Helvetica, Arial, sans-serif; }
     .grid {
       display: grid;
-      grid-template-columns: repeat(3, 60mm);
+      grid-template-columns: repeat(2, 90mm);
       justify-content: center;
       gap: 6mm 6mm;
       padding: 2mm;
     }
     .sticker {
-      width: 60mm;
-      height: 42mm;
+      width: 90mm;
+      height: 72mm;
       border: 0.2mm dashed #999;
       display: flex;
       flex-direction: column;
@@ -129,12 +128,12 @@ export default function QrGenerateScreen() {
     }
     .sticker img {
       display: block;
-      width: 30mm;
-      height: 30mm;
+      width: 60mm;
+      height: 60mm;
       object-fit: contain;
     }
     .sticker .lbl {
-      font-size: 11pt;
+      font-size: 12pt;
       font-weight: 800;
       line-height: 1;
       margin-top: 2mm;
@@ -144,7 +143,7 @@ export default function QrGenerateScreen() {
 </head>
 <body>
   <div class="grid">
-    ${Array.from({ length: 18 })
+    ${Array.from({ length: 8 })
       .map(
         () => `
       <div class="sticker">
@@ -303,7 +302,7 @@ export default function QrGenerateScreen() {
           ) : (
             <>
               <Ionicons name="print" size={20} color="#fff" />
-              <Text style={styles.btnText}>Print Sheet (18 stickers)</Text>
+              <Text style={styles.btnText}>Print Sheet (8 stickers)</Text>
             </>
           )}
         </TouchableOpacity>

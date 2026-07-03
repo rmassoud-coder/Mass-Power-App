@@ -140,9 +140,6 @@ export default function InventoryPicker({
                 <Text style={styles.rowTitle} numberOfLines={1}>
                   {it.item_type}
                 </Text>
-                <Text style={styles.rowSub}>
-                  ${it.unit_price.toFixed(2)} each
-                </Text>
               </View>
               <View style={styles.qtyWrap}>
                 <TouchableOpacity
@@ -164,18 +161,11 @@ export default function InventoryPicker({
                   <Ionicons name="add" size={16} color="#1e293b" />
                 </TouchableOpacity>
               </View>
-              <Text style={styles.lineTotal}>
-                ${(it.quantity * it.unit_price).toFixed(2)}
-              </Text>
               <TouchableOpacity onPress={() => onRemove(it.inventory_id)} style={styles.deleteBtn}>
                 <Ionicons name="close" size={16} color="#dc2626" />
               </TouchableOpacity>
             </View>
           ))}
-          <View style={styles.subtotalRow}>
-            <Text style={styles.subtotalLabel}>Products subtotal</Text>
-            <Text style={styles.subtotalValue}>${productsSubtotal.toFixed(2)}</Text>
-          </View>
         </View>
       )}
 
@@ -238,7 +228,6 @@ export default function InventoryPicker({
                           <Text style={lowStock ? styles.lowStockText : undefined}>
                             {inv.item_quantity}
                           </Text>
-                          {' '}• ${inv.item_price.toFixed(2)}
                         </Text>
                       </View>
                       {inListQty > 0 ? (
