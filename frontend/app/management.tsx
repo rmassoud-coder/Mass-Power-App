@@ -1,14 +1,26 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { loadSettings } from '../src/utils/settings';
+import {
+  runSync,
+  getLastSyncAt,
+  formatSyncedAt,
+  isDailyDue,
+} from '../src/utils/dbSync';
+
+// Fire the once-per-24h auto-sync only once per app session
+let autoSyncAttempted = false;
 
 type Tile = {
   label: string;
@@ -79,6 +91,67 @@ const TILES: Tile[] = [
 
 export default function ManagementScreen() {
   const router = useRouter();
+  const [syncing, setSyncing] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+
+  const refreshLast = useCallback(async () => {
+    setLastSyncAt(await getLastSyncAt());
+  }, []);
+
+  useEffect(() => {
+    refreshLast();
+  }, [refreshLast]);
+
+  const performSync = useCallback(
+    async (silent: boolean) => {
+      if (syncing) return;
+      setSyncing(true);
+      try {
+        const settings = await loadSettings();
+        if (!settings.githubToken) {
+          if (!silent) {
+            Alert.alert(
+              'Sync not configured',
+              'Add a GitHub Personal Access Token in Settings → Cloud Backup, then try again.'
+            );
+          }
+          return;
+        }
+        const res = await runSync(settings);
+        await refreshLast();
+        if (!silent) {
+          Alert.alert(
+            'Sync complete',
+            res.pulled
+              ? 'Pulled newer data from cloud and pushed local changes.'
+              : 'Local changes pushed to cloud.'
+          );
+        }
+      } catch (e: any) {
+        if (!silent) {
+          Alert.alert('Sync failed', e?.message || 'Unknown error');
+        } else {
+          console.warn('Auto-sync failed:', e?.message);
+        }
+      } finally {
+        setSyncing(false);
+      }
+    },
+    [refreshLast, syncing]
+  );
+
+  // Daily auto-sync — fires once per app session if >24h since the last one
+  useEffect(() => {
+    if (autoSyncAttempted) return;
+    autoSyncAttempted = true;
+    (async () => {
+      if (await isDailyDue()) {
+        // Small delay so screen animation completes first
+        setTimeout(() => performSync(true), 800);
+      }
+    })();
+  }, [performSync]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
@@ -90,6 +163,32 @@ export default function ManagementScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
+        {/* Sync bar */}
+        <TouchableOpacity
+          style={styles.syncBar}
+          onPress={() => performSync(false)}
+          activeOpacity={0.85}
+          disabled={syncing}
+          testID="sync-now-button"
+        >
+          <View style={styles.syncIconWrap}>
+            {syncing ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Ionicons name="cloud-upload" size={22} color="#fff" />
+            )}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.syncTitle}>
+              {syncing ? 'Syncing…' : 'Sync Now'}
+            </Text>
+            <Text style={styles.syncSub}>
+              Last synced: {formatSyncedAt(lastSyncAt)}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#e2e8f0" />
+        </TouchableOpacity>
+
         <View style={styles.grid}>
           {TILES.map((t) => (
             <TouchableOpacity
@@ -163,4 +262,24 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   tileDesc: { fontSize: 11, marginTop: 4, lineHeight: 14 },
+  syncBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#0f172a',
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 14,
+    elevation: 2,
+  },
+  syncIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  syncTitle: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  syncSub: { color: '#94a3b8', fontSize: 12, marginTop: 2 },
 });
