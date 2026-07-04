@@ -1285,8 +1285,8 @@ export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
   if (Array.isArray(snap.service_items)) {
     for (const si of snap.service_items) {
       await db.runAsync(
-        `INSERT INTO service_items (id, service_id, inventory_id, quantity, unit_price, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-        [si.id, si.service_id, si.inventory_id, si.quantity, si.unit_price, si.created_at]
+        `INSERT INTO service_items (id, service_id, inventory_id, item_type, quantity, unit_price, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [si.id, si.service_id, si.inventory_id, si.item_type, si.quantity, si.unit_price, si.created_at]
       );
     }
   }

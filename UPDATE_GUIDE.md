@@ -1,198 +1,115 @@
-# 🔄 How to Update Your APK
-## Quick Reference - Mass Power Auto Services
+# Update Guide — Ship Feature Changes Without Rebuilding the APK
 
-After making changes in Emergent, follow these steps to get the updates onto your phone.
-
-**Total time: ~15-20 minutes per update**
-
----
-
-## 📋 The 5-Step Update Process
-
-### ✅ Step 1: Save Changes from Emergent to GitHub
-
-1. In **Emergent**, look at the **TOP RIGHT** corner
-2. Click the **"Save to GitHub"** button
-3. Wait for the green **"Saved successfully"** message (~10 seconds)
-
-That's it for Emergent! Your changes are now on GitHub.
+Mass Power Auto Services is an Expo React Native app. Almost every feature
+you asked for (VIN scanner UI, oil-change reminders, WhatsApp messages,
+Data Matrix generator, Cloud Sync push/pull, etc.) is written in pure
+JavaScript/TypeScript. That means you can push those changes to the phones
+that already have the app installed **without rebuilding a new APK from
+scratch**, using Expo's **EAS Update** (Over-The-Air / "OTA" updates).
 
 ---
 
-### ✅ Step 2: Pull Changes to Your PC
+## When you can use OTA
 
-1. Press `Windows Key + R`, type `cmd`, press Enter
-2. Run these commands:
+✅ **Works for OTA (no rebuild needed):**
+- Any UI change (colours, layout, wording, new screens, sticker sizes).
+- Business logic (sync flow, oil-reminder rules, VIN duplicate check, etc.).
+- Adding tiles to the Backend Management page.
+- Updating text templates (Arabic WhatsApp body, receipts, etc.).
+- Bug-fixes in `.tsx` / `.ts` files.
+- Print HTML changes (guarantee sticker sheet, thermal receipt template).
 
-```cmd
-cd C:\MPapp
-```
+❌ **Requires a new APK build (no way around it):**
+- Anything that changes a **native module or permission**:
+  - Installing/removing a native library (e.g. `expo-camera`, `@bwip-js/react-native`, `@react-native-ml-kit/text-recognition`).
+  - Adding a new permission to `app.json` (Camera, Microphone, Location, etc.).
+- Changing the **app icon**, splash screen or bundle id.
+- Bumping the Expo SDK major version.
+- Anything under the `plugins` list in `app.json`.
 
-```cmd
-git pull
-```
-
-You'll see something like:
-```
-Updating abc123..def456
-Fast-forward
- frontend/app/home.tsx | 12 ++++++------
- 1 file changed, 6 insertions(+), 6 deletions(-)
-```
-
-If you see **"Already up to date"** → no changes to download (skip remaining steps)
-
----
-
-### ✅ Step 3: Update Dependencies (Only if Needed)
-
-**Only do this if Step 2 mentioned files like `package.json` or `yarn.lock`.**
-
-If yes, run:
-```cmd
-cd C:\MPapp\frontend
-```
-
-```cmd
-npm install
-```
-
-Wait 2-3 minutes.
-
-**If Step 2 didn't mention package.json, SKIP this step.**
+Rule of thumb: if you only edit files in `app/`, `src/`, or assets that
+are already bundled, an OTA update is enough. If you edit `app.json` /
+`package.json` / add native code, you must rebuild the APK.
 
 ---
 
-### ✅ Step 4: Build New APK
+## Publishing an OTA Update from Emergent
 
-```cmd
-cd C:\MPapp\frontend
-```
+1. **Save & commit** your latest code changes (they're already on disk if
+   you can see them in the preview).
+2. Click the **Publish** button in the top-right of Emergent.
+3. On the first time only, Emergent will ask if you want to enable
+   **EAS Update** for the project. Say **Yes** — it wires the runtime so
+   installed devices check for updates automatically.
+4. After the first APK/IPA build is on the phone, every subsequent Publish
+   sends a JavaScript-only bundle to that same channel. The phone downloads
+   it silently in the background the next time the app launches.
 
-```cmd
-eas build --platform android --profile preview
-```
-
-- If it asks about keystore → press `Y`
-- Wait 10-15 minutes ⏳
-
-When done, you'll see a URL like:
-```
-https://expo.dev/accounts/yourname/projects/mass-power-app/builds/xyz123
-```
-
----
-
-### ✅ Step 5: Install on Phone
-
-**Option A: Direct on Phone (Fastest)**
-1. Open the build URL on your PC browser
-2. Scan the QR code with your phone's camera
-3. Tap the notification → APK downloads
-4. Tap the APK → tap **"Install"** → tap **"Update"** (if it asks)
-5. Done! Your data stays intact 🎉
-
-**Option B: Via PC**
-1. Click **"Install"** button on the build page (PC browser)
-2. APK downloads to your PC's Downloads folder
-3. Transfer to phone (USB / WhatsApp / Email)
-4. On phone, tap the APK → **"Install"**
-
----
-
-## ⚡ Super Quick Reference (Copy/Paste All)
-
-If you're confident there were code changes, run all of this at once:
-
-```cmd
-cd C:\MPapp && git pull && cd frontend && npm install && eas build --platform android --profile preview
-```
-
-This does everything in one go. Wait 15-20 min, then install the APK.
-
----
-
-## 🆘 Common Issues During Updates
-
-### "Already up to date" but I made changes in Emergent
-→ You forgot to click **"Save to GitHub"** in Emergent. Go back to Step 1.
-
-### "ECONNRESET" or network error during build
-→ Just run the build command again. Expo servers occasionally hiccup.
-
-### Build fails with image errors
-→ Check the build URL logs. If it mentions icons not being square or missing splash, contact me.
-
-### "App not installed" on phone
-→ Some Android phones reject APKs signed with different keystores. Try:
-1. **Settings** → **Apps** → **Mass Power Auto Services** → **Uninstall**
-2. Install the new APK fresh
-3. ⚠️ **You lose local data** unless you backed up first via the app's Backup & Restore screen
-
-### Phone says "Update failed"
-→ Older APK is blocking. Uninstall first, then install new APK.
-
----
-
-## 💾 IMPORTANT: Before Major Updates
-
-If you've added important customer data, **back it up first!**
-
-1. Open the app on your phone
-2. Tap **"Backup & Restore"** button (home screen)
-3. Tap **"Export Backup"**
-4. Save the file to Google Drive / Email yourself
-5. **NOW** install the new APK
-6. If anything goes wrong, use **"Choose Backup File"** to restore
-
----
-
-## 📅 Free Tier Limits
-
-Expo gives you **30 free builds per month**. Each `eas build` command counts as 1 build.
-
-If you build daily, you'll hit the limit. Solutions:
-- Build only when you have meaningful changes (save up multiple changes)
-- Or upgrade Expo to $29/month for unlimited builds
-
----
-
-## 🎯 Visual Summary
+Behind the scenes Emergent runs the equivalent of:
 
 ```
-   [Emergent]              [GitHub]              [Your PC]              [Phone]
-       │                      │                      │                      │
-       ▼                      ▼                      ▼                      ▼
-  Make changes ──→ Save to GitHub ──→ git pull ──→ eas build ──→ Install APK
-                                                                            │
-                                                                            ▼
-                                                                       Use App! 🚗
+eas update --branch production --message "Sync push/pull buttons + Arabic reminder"
 ```
 
----
-
-## 📞 Need Help?
-
-If something doesn't work:
-1. Note the EXACT error message (screenshot helps!)
-2. Note which step failed
-3. Send to me with that info
+You do not need the CLI locally. Emergent handles it.
 
 ---
 
-## ✅ Update Checklist (Tick as you go)
+## How the phone picks up the update
 
-For each update, follow this checklist:
-
-- [ ] Step 1: Clicked "Save to GitHub" in Emergent
-- [ ] Step 2: Ran `git pull` on PC
-- [ ] Step 3: Ran `npm install` (only if dependencies changed)
-- [ ] Step 4: Built with `eas build --platform android --profile preview`
-- [ ] Step 5: Installed APK on phone
-- [ ] Verified app opens and data is still there ✅
+- **Background download**: When the user opens the app, the launcher checks
+  the EAS Update server for a newer JS bundle on the same branch/channel.
+  If one exists it downloads it in the background.
+- **Applies on next launch**: The new bundle is applied the *next* time the
+  app is opened. If the user is on the current session they keep the old
+  code until they close and reopen.
+- **No app store review**: For Android APK direct-installs this is instant.
+  If you ship the app through the Play Store, JS updates still bypass the
+  store review because they're delivered by EAS, not the store.
 
 ---
 
-**🎉 That's it! 15-20 minutes from "saved in Emergent" to "running on phone".**
+## Rollout plan for the current changes
 
-🚗 *Mass Power Auto Services - Built for the long haul!*
+The changes since the last APK you installed (Cloud Sync, Push/Pull
+buttons, Arabic reminder tweaks, bigger 8-sticker sheet, VIN duplicate
+protection, inventory price hiding on service screens) are ALL pure
+JavaScript. They can go out as an OTA:
+
+```
+1. Ensure last APK on the phone has EAS Update enabled (Emergent turns
+   this on when you publish once).
+2. Click "Publish" -> OTA update pushed to the branch tied to that APK.
+3. Close + reopen the app -> new bundle takes effect.
+```
+
+If the APK on the phone was built **before** EAS Update was enabled, do
+one final rebuild first (Publish -> Generate Android APK). From that point
+on all future JS/logic updates are OTA.
+
+---
+
+## Troubleshooting
+
+- **"App did not receive the update"** -> force-close the app twice and
+  reopen. The runtime downloads on launch, applies on the second launch.
+- **"I see the old sticker layout"** -> same behaviour — close the app
+  fully (not just background), reopen, wait 3 seconds, close, reopen.
+- **"I get an error about incompatible runtime"** -> you changed a native
+  plugin (added expo-camera, changed permissions, etc.). You must
+  regenerate the APK once, then OTA works again.
+
+---
+
+## Files that are 100% OTA-safe to edit later
+
+- `app/**/*.tsx` — every screen (management, reminders, qr-generate, …).
+- `src/**/*.ts` and `.tsx` — utilities, DB layer, components.
+- `assets/**` — only images referenced by URI/require in JS (icons in
+  `app.json` still need a rebuild).
+
+## Files that break OTA (require a rebuild)
+
+- `app.json`, `metro.config.js`, `babel.config.js`.
+- `package.json` (any dependency add/remove/upgrade).
+- Anything under `android/` or `ios/` if those folders exist.

@@ -173,6 +173,60 @@ export async function runSync(settings: AppSettings): Promise<SyncResult> {
   };
 }
 
+function assertConfigured(settings: AppSettings) {
+  if (!settings.githubToken) {
+    throw new Error('GitHub token is missing. Add it in Settings → Cloud Backup.');
+  }
+  if (!settings.githubOwner || !settings.githubRepo) {
+    throw new Error('GitHub owner/repo not configured. Update Settings.');
+  }
+}
+
+/** Upload-only: local → cloud. Overwrites `mass-power-db.json` in the configured repo. */
+export async function pushToCloud(settings: AppSettings): Promise<SyncResult> {
+  assertConfigured(settings);
+  const startedAt = new Date().toISOString();
+  const snap = await exportFullDatabase();
+  const json = JSON.stringify(snap, null, 2);
+  await uploadFileToGithub(
+    settings,
+    SYNC_FILE_NAME,
+    json,
+    `Mass Power push ${startedAt}`
+  );
+  await setLastSyncAt(startedAt);
+  return {
+    pulled: false,
+    pushed: true,
+    cloudExportedAt: null,
+    localExportedAt: snap.exported_at,
+    syncedAt: startedAt,
+  };
+}
+
+/**
+ * Download-only: cloud → local. **Unconditionally overwrites the local DB** with
+ * the cloud snapshot. Throws if no cloud file exists yet. Caller should confirm
+ * with the user before invoking — this is destructive to any unpushed local edits.
+ */
+export async function pullFromCloud(settings: AppSettings): Promise<SyncResult> {
+  assertConfigured(settings);
+  const startedAt = new Date().toISOString();
+  const cloud = await fetchCloudSnapshot(settings);
+  if (!cloud) {
+    throw new Error('No cloud snapshot found yet. Push from a device first.');
+  }
+  await replaceFullDatabase(cloud);
+  await setLastSyncAt(startedAt);
+  return {
+    pulled: true,
+    pushed: false,
+    cloudExportedAt: cloud.exported_at || null,
+    localExportedAt: cloud.exported_at || startedAt,
+    syncedAt: startedAt,
+  };
+}
+
 /** True when the last successful sync was more than 24h ago (or never). */
 export async function isDailyDue(): Promise<boolean> {
   const last = await getLastSyncAt();

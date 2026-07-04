@@ -14,6 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { loadSettings } from '../src/utils/settings';
 import {
   runSync,
+  pushToCloud,
+  pullFromCloud,
   getLastSyncAt,
   formatSyncedAt,
   isDailyDue,
@@ -103,7 +105,10 @@ export default function ManagementScreen() {
   }, [refreshLast]);
 
   const performSync = useCallback(
-    async (silent: boolean) => {
+    async (
+      op: 'auto' | 'push' | 'pull',
+      silent: boolean
+    ) => {
       if (syncing) return;
       setSyncing(true);
       try {
@@ -117,19 +122,29 @@ export default function ManagementScreen() {
           }
           return;
         }
-        const res = await runSync(settings);
+        let msg = '';
+        if (op === 'push') {
+          const res = await pushToCloud(settings);
+          msg = `Local database uploaded to cloud (${res.localExportedAt.slice(0, 19)}Z).`;
+        } else if (op === 'pull') {
+          const res = await pullFromCloud(settings);
+          msg = `Cloud snapshot pulled to this device (${(res.cloudExportedAt || '').slice(0, 19)}Z).`;
+        } else {
+          const res = await runSync(settings);
+          msg = res.pulled
+            ? 'Pulled newer data from cloud and pushed local changes.'
+            : 'Local changes pushed to cloud.';
+        }
         await refreshLast();
         if (!silent) {
-          Alert.alert(
-            'Sync complete',
-            res.pulled
-              ? 'Pulled newer data from cloud and pushed local changes.'
-              : 'Local changes pushed to cloud.'
-          );
+          Alert.alert(op === 'push' ? 'Push complete' : op === 'pull' ? 'Pull complete' : 'Sync complete', msg);
         }
       } catch (e: any) {
         if (!silent) {
-          Alert.alert('Sync failed', e?.message || 'Unknown error');
+          Alert.alert(
+            op === 'push' ? 'Push failed' : op === 'pull' ? 'Pull failed' : 'Sync failed',
+            e?.message || 'Unknown error'
+          );
         } else {
           console.warn('Auto-sync failed:', e?.message);
         }
@@ -146,11 +161,25 @@ export default function ManagementScreen() {
     autoSyncAttempted = true;
     (async () => {
       if (await isDailyDue()) {
-        // Small delay so screen animation completes first
-        setTimeout(() => performSync(true), 800);
+        setTimeout(() => performSync('auto', true), 800);
       }
     })();
   }, [performSync]);
+
+  const confirmPull = () => {
+    Alert.alert(
+      'Pull from Cloud?',
+      'This will REPLACE the local database with the online copy. Any local changes not yet pushed will be lost.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Pull & Overwrite',
+          style: 'destructive',
+          onPress: () => performSync('pull', false),
+        },
+      ]
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -163,31 +192,51 @@ export default function ManagementScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Sync bar */}
-        <TouchableOpacity
-          style={styles.syncBar}
-          onPress={() => performSync(false)}
-          activeOpacity={0.85}
-          disabled={syncing}
-          testID="sync-now-button"
-        >
-          <View style={styles.syncIconWrap}>
-            {syncing ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Ionicons name="cloud-upload" size={22} color="#fff" />
-            )}
+        {/* Cloud sync — two explicit buttons */}
+        <View style={styles.syncCard}>
+          <Text style={styles.syncCardTitle}>Cloud Sync</Text>
+          <Text style={styles.syncCardSub}>
+            Last synced: {formatSyncedAt(lastSyncAt)}
+          </Text>
+          <View style={styles.syncBtnRow}>
+            <TouchableOpacity
+              style={[styles.syncBtn, styles.syncBtnPush, syncing && styles.syncBtnDisabled]}
+              onPress={() => performSync('push', false)}
+              disabled={syncing}
+              activeOpacity={0.85}
+              testID="sync-push-button"
+            >
+              {syncing ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="cloud-upload" size={20} color="#fff" />
+                  <Text style={styles.syncBtnText}>Push</Text>
+                </>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.syncBtn, styles.syncBtnPull, syncing && styles.syncBtnDisabled]}
+              onPress={confirmPull}
+              disabled={syncing}
+              activeOpacity={0.85}
+              testID="sync-pull-button"
+            >
+              {syncing ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="cloud-download" size={20} color="#fff" />
+                  <Text style={styles.syncBtnText}>Pull</Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.syncTitle}>
-              {syncing ? 'Syncing…' : 'Sync Now'}
-            </Text>
-            <Text style={styles.syncSub}>
-              Last synced: {formatSyncedAt(lastSyncAt)}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#e2e8f0" />
-        </TouchableOpacity>
+          <Text style={styles.syncHint}>
+            Push uploads THIS device&apos;s data to the cloud. Pull replaces THIS device&apos;s data
+            with the cloud copy. Auto-pull+push runs once per day when you open the app.
+          </Text>
+        </View>
 
         <View style={styles.grid}>
           {TILES.map((t) => (
@@ -262,24 +311,48 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   tileDesc: { fontSize: 11, marginTop: 4, lineHeight: 14 },
-  syncBar: {
+  syncCard: {
+    backgroundColor: '#0f172a',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+  },
+  syncCardTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  syncCardSub: {
+    color: '#94a3b8',
+    fontSize: 12,
+    marginTop: 2,
+    marginBottom: 12,
+  },
+  syncBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  syncBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#0f172a',
-    padding: 14,
-    borderRadius: 14,
-    marginBottom: 14,
-    elevation: 2,
-  },
-  syncIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 10,
   },
-  syncTitle: { color: '#fff', fontWeight: '800', fontSize: 16 },
-  syncSub: { color: '#94a3b8', fontSize: 12, marginTop: 2 },
+  syncBtnPush: { backgroundColor: '#16a34a' },
+  syncBtnPull: { backgroundColor: '#2563eb' },
+  syncBtnDisabled: { backgroundColor: '#475569' },
+  syncBtnText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  syncHint: {
+    color: '#94a3b8',
+    fontSize: 11,
+    marginTop: 10,
+    lineHeight: 15,
+  },
 });
