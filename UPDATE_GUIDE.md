@@ -1,115 +1,123 @@
-# Update Guide — Ship Feature Changes Without Rebuilding the APK
+# Update Guide — Delivering Changes to a Phone Without Rebuilding Every Time
 
-Mass Power Auto Services is an Expo React Native app. Almost every feature
-you asked for (VIN scanner UI, oil-change reminders, WhatsApp messages,
-Data Matrix generator, Cloud Sync push/pull, etc.) is written in pure
-JavaScript/TypeScript. That means you can push those changes to the phones
-that already have the app installed **without rebuilding a new APK from
-scratch**, using Expo's **EAS Update** (Over-The-Air / "OTA" updates).
-
----
-
-## When you can use OTA
-
-✅ **Works for OTA (no rebuild needed):**
-- Any UI change (colours, layout, wording, new screens, sticker sizes).
-- Business logic (sync flow, oil-reminder rules, VIN duplicate check, etc.).
-- Adding tiles to the Backend Management page.
-- Updating text templates (Arabic WhatsApp body, receipts, etc.).
-- Bug-fixes in `.tsx` / `.ts` files.
-- Print HTML changes (guarantee sticker sheet, thermal receipt template).
-
-❌ **Requires a new APK build (no way around it):**
-- Anything that changes a **native module or permission**:
-  - Installing/removing a native library (e.g. `expo-camera`, `@bwip-js/react-native`, `@react-native-ml-kit/text-recognition`).
-  - Adding a new permission to `app.json` (Camera, Microphone, Location, etc.).
-- Changing the **app icon**, splash screen or bundle id.
-- Bumping the Expo SDK major version.
-- Anything under the `plugins` list in `app.json`.
-
-Rule of thumb: if you only edit files in `app/`, `src/`, or assets that
-are already bundled, an OTA update is enough. If you edit `app.json` /
-`package.json` / add native code, you must rebuild the APK.
+> **TL;DR — There is no "delta / patch APK" for a sideloaded Android app.
+> Once we finish one more full APK rebuild that includes `expo-updates`,
+> every future JavaScript / UI / business-logic change ships as a
+> **~1–3 MB OTA bundle** instead of a **~40 MB APK**. Native changes
+> (new permissions, new native modules, icon changes) still require a
+> full APK — there is no way around that on Android.**
 
 ---
 
-## Publishing an OTA Update from Emergent
+## Why the previous OTA update did NOT reach the phone
 
-1. **Save & commit** your latest code changes (they're already on disk if
-   you can see them in the preview).
-2. Click the **Publish** button in the top-right of Emergent.
-3. On the first time only, Emergent will ask if you want to enable
-   **EAS Update** for the project. Say **Yes** — it wires the runtime so
-   installed devices check for updates automatically.
-4. After the first APK/IPA build is on the phone, every subsequent Publish
-   sends a JavaScript-only bundle to that same channel. The phone downloads
-   it silently in the background the next time the app launches.
+The APK that's currently installed on the phone was built **before**
+`expo-updates` was in the project. Without that native module, the phone
+has no runtime to poll for JavaScript updates. That's why nothing arrived
+after the last Publish.
 
-Behind the scenes Emergent runs the equivalent of:
-
-```
-eas update --branch production --message "Sync push/pull buttons + Arabic reminder"
-```
-
-You do not need the CLI locally. Emergent handles it.
+I've now added `expo-updates@29.0.18` to the project and configured
+`app.json` with `runtimeVersion.policy = "appVersion"` and
+`updates.enabled = true, checkAutomatically = ON_LOAD`. Once you do
+**one more rebuild** with these changes baked in, the story completely
+flips.
 
 ---
 
-## How the phone picks up the update
+## What each type of update actually costs after the next rebuild
 
-- **Background download**: When the user opens the app, the launcher checks
-  the EAS Update server for a newer JS bundle on the same branch/channel.
-  If one exists it downloads it in the background.
-- **Applies on next launch**: The new bundle is applied the *next* time the
-  app is opened. If the user is on the current session they keep the old
-  code until they close and reopen.
-- **No app store review**: For Android APK direct-installs this is instant.
-  If you ship the app through the Play Store, JS updates still bypass the
-  store review because they're delivered by EAS, not the store.
+| Change type                         | Delivery                          | Rough size | User action              |
+|-------------------------------------|-----------------------------------|-----------|-------------------------|
+| Any `.tsx` / `.ts` code change      | OTA (EAS Update)                  | 1–3 MB    | Close & reopen app       |
+| Print HTML / sticker layout tweaks  | OTA                               | 1–3 MB    | Close & reopen app       |
+| Wording / Arabic text tweaks        | OTA                               | < 1 MB    | Close & reopen app       |
+| Image inside `assets/` used by JS   | OTA                               | 1–3 MB    | Close & reopen app       |
+| New JS-only package (`yarn add`)    | OTA                               | 1–5 MB    | Close & reopen app       |
+| **New native module** (camera, ML, printer) | **Full APK rebuild**    | 30–50 MB  | Reinstall APK            |
+| **New Android permission**          | **Full APK rebuild**              | 30–50 MB  | Reinstall APK            |
+| App icon / splash / bundle-id       | **Full APK rebuild**              | 30–50 MB  | Reinstall APK            |
+
+So the **average update is 1–3 MB, not 40 MB**, once expo-updates is on
+the phone.
 
 ---
 
-## Rollout plan for the current changes
+## Can Android just ship a "patch APK" like Windows patches?
 
-The changes since the last APK you installed (Cloud Sync, Push/Pull
-buttons, Arabic reminder tweaks, bigger 8-sticker sheet, VIN duplicate
-protection, inventory price hiding on service screens) are ALL pure
-JavaScript. They can go out as an OTA:
+Short answer: **not for sideloaded APKs**. The mechanisms that produce
+"smaller" APKs exist only in one of these forms:
 
-```
-1. Ensure last APK on the phone has EAS Update enabled (Emergent turns
-   this on when you publish once).
-2. Click "Publish" -> OTA update pushed to the branch tied to that APK.
-3. Close + reopen the app -> new bundle takes effect.
-```
+1. **Google Play delta / bsdiff patches** — only work when the app is
+   installed **through the Play Store**. Sideloaded (direct-install) APKs
+   always come as one whole file.
+2. **Android App Bundle (`.aab`) with dynamic delivery** — Play Store
+   splits the bundle per architecture / density and only delivers what
+   the phone needs. Again, Play-only.
+3. **APK Split by ABI** — reduces initial APK size (e.g. ~28 MB instead
+   of ~50 MB for arm64-only) but is still a full install each time.
+4. **Expo Updates / EAS Update (OTA)** — the JavaScript bundle only, ~1–3
+   MB. This is what we're setting up now. The **APK itself does not
+   change**; the app fetches the new JS at startup and swaps it in.
 
-If the APK on the phone was built **before** EAS Update was enabled, do
-one final rebuild first (Publish -> Generate Android APK). From that point
-on all future JS/logic updates are OTA.
+Option 4 is the only real "smaller update" path for a direct-install
+Android app. That's why I re-enabled it properly.
+
+---
+
+## What YOU need to do — one time only
+
+1. **Regenerate the APK once more with expo-updates baked in.**
+   - In Emergent, click **Publish** → **Generate Android APK**.
+   - The build will take a few minutes. Install the resulting APK on the
+     phone the usual way. This is the last "big" install.
+2. **Confirm updates are live** (optional sanity check).
+   - After installing, open the app. Navigate to Backend Management. If
+     the runtime is armed, subsequent Publishes will be picked up on the
+     next launch.
+
+From this point forward:
+
+3. **For every future JS/UI/logic change**:
+   - Click **Publish** in Emergent (top-right).
+   - Emergent runs `eas update --branch production` behind the scenes.
+   - Open the app on the phone → the phone downloads the ~1–3 MB bundle
+     silently in the background → close and reopen once → the new
+     version is running.
+   - No new APK, no reinstall.
+4. **For a native change** (rare — new sensor library, new permission,
+   etc.):
+   - Click Publish → Generate Android APK.
+   - Install the fresh APK once. Then future JS updates continue as OTA
+     on top of that.
 
 ---
 
 ## Troubleshooting
 
-- **"App did not receive the update"** -> force-close the app twice and
-  reopen. The runtime downloads on launch, applies on the second launch.
-- **"I see the old sticker layout"** -> same behaviour — close the app
-  fully (not just background), reopen, wait 3 seconds, close, reopen.
-- **"I get an error about incompatible runtime"** -> you changed a native
-  plugin (added expo-camera, changed permissions, etc.). You must
-  regenerate the APK once, then OTA works again.
+- **"I published but nothing arrived on the phone"**
+  - Confirm the phone is running the **new** APK that has expo-updates
+    (the one built AFTER this guide). Old APKs will never pick up an OTA
+    because they don't know how to look.
+  - Close the app **twice** and reopen — the download happens on launch,
+    the swap happens on the launch after.
+- **"App shows an error about incompatible runtime version"**
+  - You changed a native module or bumped `runtimeVersion`. Rebuild the
+    APK once and you're back on the OTA train.
+- **"Sync now doesn't work"**
+  - That's the in-app **data** sync (Backend Management → Cloud Sync
+    Push/Pull), not the app-code sync. Check that a GitHub Personal
+    Access Token is saved in Settings → Cloud Backup, and that
+    `githubOwner`, `githubRepo`, `githubBranch`, `githubFolder` are all
+    filled in.
 
 ---
 
-## Files that are 100% OTA-safe to edit later
+## Summary
 
-- `app/**/*.tsx` — every screen (management, reminders, qr-generate, …).
-- `src/**/*.ts` and `.tsx` — utilities, DB layer, components.
-- `assets/**` — only images referenced by URI/require in JS (icons in
-  `app.json` still need a rebuild).
-
-## Files that break OTA (require a rebuild)
-
-- `app.json`, `metro.config.js`, `babel.config.js`.
-- `package.json` (any dependency add/remove/upgrade).
-- Anything under `android/` or `ios/` if those folders exist.
+- **OTA didn't work because expo-updates was missing.** Fixed now.
+- **You still need ONE more full APK rebuild** to put the update runtime
+  onto the phone. Publish → Generate Android APK → install.
+- **After that**, every future feature/bug-fix/tweak I ship is delivered
+  as a **~1–3 MB OTA** in seconds, not a 40 MB APK.
+- **There is no "patch APK"** for sideloaded Android — that's a Play
+  Store feature you don't get with direct APK installs.
