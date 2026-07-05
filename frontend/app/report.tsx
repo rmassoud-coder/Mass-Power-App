@@ -271,6 +271,34 @@ export default function ReportScreen() {
                 </View>
               )}
 
+              {(() => {
+                const pending = report.items.filter(
+                  (i) => !i.is_paid && Number((i as any).partial_paid) > 0
+                );
+                if (pending.length === 0) return null;
+                const totalRemaining = pending.reduce(
+                  (s, i) => s + Math.max(0, i.cost - (Number((i as any).partial_paid) || 0)),
+                  0
+                );
+                const totalPartial = pending.reduce(
+                  (s, i) => s + (Number((i as any).partial_paid) || 0),
+                  0
+                );
+                return (
+                  <View style={styles.pendingSummaryCard} testID="pending-summary">
+                    <View style={styles.unpaidSummaryRow}>
+                      <Ionicons name="time" size={20} color="#a16207" />
+                      <Text style={[styles.unpaidSummaryText, { color: '#a16207' }]}>
+                        {pending.length} pending payment{pending.length !== 1 ? 's' : ''}
+                      </Text>
+                    </View>
+                    <Text style={[styles.unpaidSummaryAmount, { color: '#a16207' }]}>
+                      Paid so far: ${totalPartial.toFixed(2)} • Remaining: ${totalRemaining.toFixed(2)}
+                    </Text>
+                  </View>
+                );
+              })()}
+
               {report.items.length === 0 ? (
                 <View style={styles.emptyContainer}>
                   <Ionicons name="document-outline" size={48} color="#cbd5e1" />
@@ -279,8 +307,19 @@ export default function ReportScreen() {
               ) : (
                 <View style={styles.itemsList}>
                   <Text style={styles.itemsTitle}>Service Records</Text>
-                  {report.items.map((item) => (
-                    <View key={item.service_id} style={[styles.reportItem, !item.is_paid && styles.reportItemUnpaid]}>
+                  {report.items.map((item) => {
+                    const partial = Number((item as any).partial_paid) || 0;
+                    const isPending = !item.is_paid && partial > 0;
+                    const isUnpaid = !item.is_paid && partial === 0;
+                    return (
+                    <View
+                      key={item.service_id}
+                      style={[
+                        styles.reportItem,
+                        isUnpaid && styles.reportItemUnpaid,
+                        isPending && styles.reportItemPending,
+                      ]}
+                    >
                       <View style={styles.itemHeader}>
                         <View style={styles.itemIconContainer}>
                           <Ionicons name="construct" size={20} color="#10b981" />
@@ -288,9 +327,16 @@ export default function ReportScreen() {
                         <View style={styles.itemInfo}>
                           <View style={styles.itemTitleRow}>
                             <Text style={styles.itemDescription}>{item.service_description}</Text>
-                            {!item.is_paid && (
+                            {isUnpaid && (
                               <View style={styles.unpaidBadge}>
                                 <Text style={styles.unpaidBadgeText}>UNPAID</Text>
+                              </View>
+                            )}
+                            {isPending && (
+                              <View style={styles.pendingBadge} testID="pending-badge">
+                                <Text style={styles.pendingBadgeText}>
+                                  PENDING · ${partial.toFixed(0)}/${item.cost.toFixed(0)}
+                                </Text>
                               </View>
                             )}
                           </View>
@@ -324,7 +370,8 @@ export default function ReportScreen() {
                         </View>
                       </View>
                     </View>
-                  ))}
+                    );
+                  })}
                 </View>
               )}
             </View>
@@ -466,6 +513,32 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: '#ef4444',
     backgroundColor: '#fef9f9',
+  },
+  reportItemPending: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#eab308',
+    backgroundColor: '#fffbeb',
+  },
+  pendingSummaryCard: {
+    backgroundColor: '#fefce8',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+  },
+  pendingBadge: {
+    backgroundColor: '#eab308',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 6,
+  },
+  pendingBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   itemTitleRow: {
     flexDirection: 'row',

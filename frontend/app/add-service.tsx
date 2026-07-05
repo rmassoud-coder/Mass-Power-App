@@ -45,6 +45,8 @@ export default function AddServiceScreen() {
   const [additionalInfo, setAdditionalInfo] = useState('');
   const [cost, setCost] = useState('');
   const [isPaid, setIsPaid] = useState(false);
+  const [isPending, setIsPending] = useState(false);
+  const [partialAmount, setPartialAmount] = useState('');
   const [dashLights, setDashLights] = useState<DashLights>(EMPTY_DASH_LIGHTS);
   const [oilReminder, setOilReminder] = useState<OilReminder>(EMPTY_OIL_REMINDER);
   const [pickedItems, setPickedItems] = useState<PickedItem[]>([]);
@@ -79,6 +81,23 @@ export default function AddServiceScreen() {
       return;
     }
 
+    // Pending payment validation
+    let partialPaidNumber = 0;
+    if (isPending) {
+      partialPaidNumber = parseFloat(partialAmount) || 0;
+      if (partialPaidNumber < 0) {
+        Alert.alert('Error', 'Partial payment cannot be negative');
+        return;
+      }
+      if (partialPaidNumber >= costNumber) {
+        Alert.alert(
+          'Error',
+          'Partial payment must be less than total cost. Use "Paid" instead if fully paid.'
+        );
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       await createService(
@@ -89,7 +108,8 @@ export default function AddServiceScreen() {
         isPaid,
         dashLights,
         isOilService ? oilReminder : EMPTY_OIL_REMINDER,
-        pickedItems.map((p) => ({ inventory_id: p.inventory_id, quantity: p.quantity }))
+        pickedItems.map((p) => ({ inventory_id: p.inventory_id, quantity: p.quantity })),
+        partialPaidNumber
       );
 
       router.back();
@@ -220,7 +240,14 @@ export default function AddServiceScreen() {
             {/* Paid Checkbox */}
             <TouchableOpacity
               style={styles.paidCheckbox}
-              onPress={() => setIsPaid(!isPaid)}
+              onPress={() => {
+                const next = !isPaid;
+                setIsPaid(next);
+                if (next) {
+                  setIsPending(false);
+                  setPartialAmount('');
+                }
+              }}
               testID="paid-checkbox"
             >
               <View style={[styles.checkbox, isPaid && styles.checkboxChecked]}>
@@ -233,6 +260,48 @@ export default function AddServiceScreen() {
                 </Text>
               </View>
             </TouchableOpacity>
+
+            {/* Pending Payment Checkbox + partial amount */}
+            <View style={styles.pendingRow}>
+              <TouchableOpacity
+                style={[styles.paidCheckbox, { flex: 1, marginTop: 0 }]}
+                onPress={() => {
+                  const next = !isPending;
+                  setIsPending(next);
+                  if (next) setIsPaid(false);
+                  else setPartialAmount('');
+                }}
+                testID="pending-checkbox"
+              >
+                <View
+                  style={[
+                    styles.checkbox,
+                    isPending && { backgroundColor: '#eab308', borderColor: '#eab308' },
+                  ]}
+                >
+                  {isPending && <Ionicons name="time" size={16} color="#fff" />}
+                </View>
+                <View style={styles.paidCheckboxLabel}>
+                  <Text style={styles.paidCheckboxText}>Pending Payment</Text>
+                  <Text style={styles.paidCheckboxSubtext}>
+                    {isPending ? 'Will show as pending in yellow' : 'Partial or awaiting payment'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              {isPending && (
+                <View style={styles.partialInputWrap} testID="partial-input-wrap">
+                  <Text style={styles.currencySymbol}>$</Text>
+                  <TextInput
+                    style={styles.partialInput}
+                    placeholder="0.00"
+                    value={partialAmount}
+                    onChangeText={setPartialAmount}
+                    keyboardType="decimal-pad"
+                    testID="partial-input"
+                  />
+                </View>
+              )}
+            </View>
 
             <TouchableOpacity
               style={[styles.submitButton, loading && styles.submitButtonDisabled]}
@@ -360,6 +429,30 @@ const styles = StyleSheet.create({
   paidCheckboxLabel: { marginLeft: 12, flex: 1 },
   paidCheckboxText: { fontSize: 16, fontWeight: '600', color: '#1e293b' },
   paidCheckboxSubtext: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  pendingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 12,
+  },
+  partialInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef3c7',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#eab308',
+    paddingHorizontal: 10,
+    height: 46,
+    minWidth: 110,
+  },
+  partialInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#0f172a',
+    fontWeight: '700',
+    minWidth: 60,
+  },
   submitButtonDisabled: { opacity: 0.6 },
   submitButtonText: { color: '#fff', fontSize: 18, fontWeight: '600', marginLeft: 8 },
   totalBreakdown: {

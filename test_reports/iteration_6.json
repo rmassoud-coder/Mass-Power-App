@@ -1,0 +1,67 @@
+{
+  "summary": "Frontend-only review of the new 'Pending Payment' feature. Static DB, add-service, and report code were checked and runtime UI was exercised on mobile viewport (390x844). Add-Service UI works correctly: paid-checkbox and pending-checkbox are mutually exclusive, yellow partial-input appears/hides on Pending toggle, testIDs `paid-checkbox`, `pending-checkbox`, `partial-input` all render. Report page loads and generates without runtime errors. However, ONE CRITICAL BUG was found that makes the entire Report side of the feature dead-code: `getReport()` in `/app/frontend/src/db/database.ts` neither SELECTs `partial_paid` in its SQL nor maps it into the returned `ReportItem` objects, so the pending-summary card and pending-badge in `report.tsx` (which read `(item as any).partial_paid`) can never render even after users create pending services. The `ReportItem` interface also lacks a `partial_paid` field. A minor secondary UI issue: on the 390-wide mobile viewport, when the partial-input is visible the 'Pending Payment' label gets squeezed to one character per line because the row's checkbox column has no min-width guard.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "report.tsx pending-summary / pending-badge",
+        "issue": "Pending category will NEVER render even when pending services exist. Root cause: getReport() in database.ts (lines ~990-1079) does NOT select `s.partial_paid` in its SQL SELECT and does NOT map it into ReportItem. As a result `(item as any).partial_paid` is always undefined in report.tsx → `isPending` (`!item.is_paid && partial > 0`) is always false. The Report screen's yellow pending category, pending summary card (testID `pending-summary`), and pending badge (testID `pending-badge`) can therefore never appear. Feature is effectively broken from the Report side.",
+        "testID": "pending-summary, pending-badge",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "add-service.tsx Pending Payment row",
+        "issue": "On a 390px-wide viewport when the yellow partial-input is visible, the 'Pending Payment' TouchableOpacity label gets vertically squeezed to one character per line (see screenshot). The row uses flexDirection:'row' with the checkbox pill sharing space with a 110px partial-input; there is no minWidth/flex-shrink guard on the label column, so the text collapses. Reference: /app/frontend/app/add-service.tsx:432-448 (styles `pendingRow`, `paidCheckbox`, `partialInputWrap`).",
+        "testID": "pending-checkbox",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Add Service → Report page",
+        "issue": "Data DOES persist correctly to SQLite (createService writes partial_paid), and mappers in getCustomerDetails / exportAllData / getAllVehiclesWithDetails / exportFullDatabase all include partial_paid. But the READ path used by the Report screen (getReport) drops the column entirely, so the whole Pending category on the Report page is unreachable.",
+        "affected_testIDs": ["pending-summary", "pending-badge"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "add-service",
+        "issues": [
+          "Vertically-squished 'Pending Payment' label when partial input is displayed (mobile 390w). Consider stacking the checkbox above the input, or setting flex:1 with a fixed 110-140px width for the input only when isPending, plus minWidth on the label."
+        ]
+      }
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/tmp/add_service.png",
+    "/tmp/pending_on.png",
+    "/tmp/paid_on.png",
+    "/tmp/after_submit.png",
+    "/tmp/report_generated.png"
+  ],
+  "action_items": [
+    "FIX (critical): In /app/frontend/src/db/database.ts `getReport()` — add `s.partial_paid` to the SELECT list of the SQL query and add `partial_paid: Number(r.partial_paid) || 0` to the ReportItem mapping. Also add `partial_paid?: number` to the `ReportItem` interface (both the one in database.ts and the local one in report.tsx). Without this, the whole Pending category on the Report screen is dead code.",
+    "FIX (medium): In /app/frontend/app/add-service.tsx style `pendingRow` — prevent the 'Pending Payment' label from being crushed when the partial-input is visible on narrow mobile widths. E.g. put the partial-input on its own row when isPending, OR add `flex: 1, minWidth: 0` to the label column and cap the partial-input width.",
+    "OPTIONAL: consider also honouring the request's original `unpaidOnly` semantics — currently the SQL filter `s.is_paid = 0` returns BOTH pending and truly-unpaid services under the 'Unpaid' toggle. If PMs want the toggle to exclude pending, add `AND COALESCE(s.partial_paid, 0) = 0` to that branch."
+  ],
+  "critical_code_review_comments": [
+    "getReport() is the only DB read path that does not surface `partial_paid`; every other mapper does. This is almost certainly an oversight from the migration PR.",
+    "report.tsx uses `(item as any).partial_paid` (line ~276) — casting to `any` here hides the missing field from the type checker. Better to extend ReportItem with `partial_paid?: number` so TS would have caught this.",
+    "add-service.tsx handleSubmit uses `partialPaidNumber >= costNumber` which correctly matches the spec's 'partial must be less than cost'. Validation logic is fine.",
+    "Migration ALTER TABLE calls are properly wrapped in try/catch and idempotent — safe on second launch."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "n/a (frontend-only)",
+    "frontend": "70% (Add-Service works end-to-end; Report page loads but the entire Pending category is unreachable due to missing SELECT/mapping in getReport)"
+  },
+  "seed_data_creation": "None — used existing seeded customers (John Doe, Rabih) to reach the Add Service and Report screens.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "After the getReport() fix (SELECT + mapping + interface update), create a pending service via Add Service (cost=100, tick Pending, partial=40), then open Backend Management → View Services Report → Generate Report. Verify the yellow `pending-summary` card renders with 'Paid so far: $40.00 • Remaining: $60.00' and the service card has the yellow left border + `pending-badge` reading 'PENDING · $40/$100'. Also retest the mutual-exclusion of paid/pending checkboxes and confirm partial>=cost still triggers the validation Alert.",
+  "rca_of_issue": "The `partial_paid` column was added to the SQLite schema (via idempotent ALTER TABLE) and correctly wired into createService/updateService and 4 of the 5 read paths (getCustomerDetails, exportAllData, getAllVehiclesWithDetails, exportFullDatabase). The 5th read path — getReport() — was missed: its SELECT list omits `s.partial_paid` and its `items.map(...)` does not add a `partial_paid` field. Consequently the ReportItem objects delivered to report.tsx never carry the partial amount, `isPending` in report.tsx resolves to false for every row, and the yellow pending UI never mounts. Fix: two 1-line additions in getReport() and one interface extension."
+}

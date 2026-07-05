@@ -45,6 +45,8 @@ export interface Service {
   additional_info?: string;
   cost: number;
   is_paid: boolean;
+  /** Amount already paid when the invoice is only partially settled. Zero for fully paid or fully unpaid. */
+  partial_paid?: number;
   service_date: string;
   created_at: string;
   // Dashboard warning lights (booleans stored as 0/1 in SQLite)
@@ -250,6 +252,13 @@ export async function initDatabase() {
     // Column already exists - ignore
   }
 
+  // Migration: partial_paid column for the Pending Payment feature
+  try {
+    await db.execAsync(`ALTER TABLE services ADD COLUMN partial_paid REAL NOT NULL DEFAULT 0`);
+  } catch {
+    // Column already exists - ignore
+  }
+
   // Migration: dashboard warning light columns
   const dashColumns = [
     'dash_abs',
@@ -396,6 +405,7 @@ export async function getCustomerDetails(customerId: string): Promise<CustomerDe
   const services: Service[] = rawServices.map((s) => ({
     ...s,
     is_paid: s.is_paid === 1,
+    partial_paid: Number(s.partial_paid) || 0,
     dash_abs: s.dash_abs === 1,
     dash_check_engine: s.dash_check_engine === 1,
     dash_brake: s.dash_brake === 1,
@@ -546,7 +556,8 @@ export async function createService(
   isPaid: boolean,
   dashLights?: DashLights,
   oilReminder?: OilReminder,
-  items?: ServiceItemInput[]
+  items?: ServiceItemInput[],
+  partialPaid: number = 0
 ): Promise<Service> {
   const db = await getDb();
   const vehicle = await db.getFirstAsync<Vehicle>(
@@ -560,8 +571,9 @@ export async function createService(
   const now = new Date().toISOString();
   const d = dashLights || EMPTY_DASH_LIGHTS;
   const o = oilReminder || EMPTY_OIL_REMINDER;
+  const pp = Math.max(0, Number(partialPaid) || 0);
   await db.runAsync(
-    `INSERT INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, service_date, created_at, dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, dash_tpms, dash_oil_leak, current_mileage, next_service_date, next_service_mileage, oil_grade, oil_filter_changed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, partial_paid, service_date, created_at, dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, dash_tpms, dash_oil_leak, current_mileage, next_service_date, next_service_mileage, oil_grade, oil_filter_changed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       vehicleId,
@@ -570,6 +582,7 @@ export async function createService(
       additionalInfo || null,
       cost,
       isPaid ? 1 : 0,
+      pp,
       now,
       now,
       d.abs ? 1 : 0,
@@ -624,18 +637,21 @@ export async function updateService(
   isPaid: boolean,
   dashLights?: DashLights,
   oilReminder?: OilReminder,
-  items?: ServiceItemInput[]
+  items?: ServiceItemInput[],
+  partialPaid: number = 0
 ): Promise<void> {
   const db = await getDb();
   const d = dashLights || EMPTY_DASH_LIGHTS;
   const o = oilReminder || EMPTY_OIL_REMINDER;
+  const pp = Math.max(0, Number(partialPaid) || 0);
   await db.runAsync(
-    `UPDATE services SET service_description = ?, additional_info = ?, cost = ?, is_paid = ?, dash_abs = ?, dash_check_engine = ?, dash_brake = ?, dash_airbag = ?, dash_immobilizer = ?, dash_tpms = ?, dash_oil_leak = ?, current_mileage = ?, next_service_date = ?, next_service_mileage = ?, oil_grade = ?, oil_filter_changed = ? WHERE id = ?`,
+    `UPDATE services SET service_description = ?, additional_info = ?, cost = ?, is_paid = ?, partial_paid = ?, dash_abs = ?, dash_check_engine = ?, dash_brake = ?, dash_airbag = ?, dash_immobilizer = ?, dash_tpms = ?, dash_oil_leak = ?, current_mileage = ?, next_service_date = ?, next_service_mileage = ?, oil_grade = ?, oil_filter_changed = ? WHERE id = ?`,
     [
       serviceDescription,
       additionalInfo || null,
       cost,
       isPaid ? 1 : 0,
+      pp,
       d.abs ? 1 : 0,
       d.check_engine ? 1 : 0,
       d.brake ? 1 : 0,
@@ -1071,6 +1087,7 @@ export async function exportAllData(): Promise<string> {
   const services: Service[] = rawServices.map((s) => ({
     ...s,
     is_paid: s.is_paid === 1,
+    partial_paid: Number(s.partial_paid) || 0,
     dash_abs: s.dash_abs === 1,
     dash_check_engine: s.dash_check_engine === 1,
     dash_brake: s.dash_brake === 1,
@@ -1101,6 +1118,7 @@ export async function getAllVehiclesWithDetails(): Promise<
   const services: Service[] = rawServices.map((s) => ({
     ...s,
     is_paid: s.is_paid === 1,
+    partial_paid: Number(s.partial_paid) || 0,
     dash_abs: s.dash_abs === 1,
     dash_check_engine: s.dash_check_engine === 1,
     dash_brake: s.dash_brake === 1,
@@ -1210,6 +1228,7 @@ export async function exportFullDatabase(): Promise<FullDbSnapshot> {
   const services: Service[] = rawServices.map((s) => ({
     ...s,
     is_paid: s.is_paid === 1,
+    partial_paid: Number(s.partial_paid) || 0,
     dash_abs: s.dash_abs === 1,
     dash_check_engine: s.dash_check_engine === 1,
     dash_brake: s.dash_brake === 1,
