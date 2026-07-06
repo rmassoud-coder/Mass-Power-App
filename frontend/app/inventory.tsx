@@ -15,30 +15,38 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Picker } from '@react-native-picker/picker';
 import {
   InventoryItem,
   listInventory,
   addInventoryItem,
   updateInventoryItem,
   deleteInventoryItem,
+  Supplier,
+  listSuppliers,
 } from '../src/db/database';
 
 export default function InventoryScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<InventoryItem[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<InventoryItem | null>(null);
   const [formType, setFormType] = useState('');
   const [formQty, setFormQty] = useState('');
   const [formPrice, setFormPrice] = useState('');
+  const [formRetail, setFormRetail] = useState('');
+  const [formSupplier, setFormSupplier] = useState<string>('');
+  const [formCode, setFormCode] = useState('');
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await listInventory();
+      const [data, sups] = await Promise.all([listInventory(), listSuppliers()]);
       setItems(data);
+      setSuppliers(sups);
     } finally {
       setLoading(false);
     }
@@ -53,6 +61,9 @@ export default function InventoryScreen() {
     setFormType('');
     setFormQty('');
     setFormPrice('');
+    setFormRetail('');
+    setFormSupplier('');
+    setFormCode('');
     setModalOpen(true);
   };
 
@@ -61,12 +72,16 @@ export default function InventoryScreen() {
     setFormType(it.item_type);
     setFormQty(String(it.item_quantity));
     setFormPrice(String(it.item_price));
+    setFormRetail(String(it.item_retail_price ?? 0));
+    setFormSupplier(it.item_supplier || '');
+    setFormCode(it.item_code || '');
     setModalOpen(true);
   };
 
   const handleSave = async () => {
     const qty = parseInt(formQty || '0', 10);
     const price = parseFloat(formPrice || '0');
+    const retail = parseFloat(formRetail || '0');
     if (!formType.trim()) {
       Alert.alert('Error', 'Item Type is required');
       return;
@@ -79,12 +94,21 @@ export default function InventoryScreen() {
       Alert.alert('Error', 'Price must be 0 or greater');
       return;
     }
+    if (isNaN(retail) || retail < 0) {
+      Alert.alert('Error', 'Retail price must be 0 or greater');
+      return;
+    }
     setSaving(true);
     try {
+      const extras = {
+        item_retail_price: retail,
+        item_supplier: formSupplier.trim() || null,
+        item_code: formCode.trim() || null,
+      };
       if (editing) {
-        await updateInventoryItem(editing.id, formType, qty, price);
+        await updateInventoryItem(editing.id, formType, qty, price, extras);
       } else {
-        await addInventoryItem(formType, qty, price);
+        await addInventoryItem(formType, qty, price, extras);
       }
       setModalOpen(false);
       await load();
@@ -105,7 +129,6 @@ export default function InventoryScreen() {
       }
     };
     if (Platform.OS === 'web') {
-      // window.confirm avoids the Alert button-tap web bug
       // eslint-disable-next-line no-alert
       if (window.confirm(`Delete ${it.item_type} (${it.item_number})?`)) {
         doDelete();
@@ -179,51 +202,60 @@ export default function InventoryScreen() {
             );
           })()}
           <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: 80 }}>
-          {items.map((it) => {
-            const low = it.item_quantity < 2;
-            return (
-              <View
-                key={it.id}
-                style={[styles.row, low && styles.rowLow]}
-                testID={`inventory-row-${it.item_number}`}
-              >
-                <View style={styles.rowMain}>
-                  <View style={styles.rowTitleLine}>
-                    <Text
-                      style={[styles.rowType, low && { color: '#991b1b' }]}
-                      numberOfLines={1}
-                    >
-                      {it.item_type}
+            {items.map((it) => {
+              const low = it.item_quantity < 2;
+              const retail = it.item_retail_price && it.item_retail_price > 0 ? it.item_retail_price : it.item_price;
+              return (
+                <View
+                  key={it.id}
+                  style={[styles.row, low && styles.rowLow]}
+                  testID={`inventory-row-${it.item_number}`}
+                >
+                  <View style={styles.rowMain}>
+                    <View style={styles.rowTitleLine}>
+                      <Text
+                        style={[styles.rowType, low && { color: '#991b1b' }]}
+                        numberOfLines={1}
+                      >
+                        {it.item_type}
+                      </Text>
+                      {low && (
+                        <View style={styles.lowChip}>
+                          <Ionicons name="warning" size={11} color="#fff" />
+                          <Text style={styles.lowChipText}>LOW</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.rowMeta}>
+                      {it.item_number}
+                      {it.item_code ? ` • Code: ${it.item_code}` : ''} • Cost: ${it.item_price.toFixed(2)} • Retail: ${retail.toFixed(2)}
                     </Text>
-                    {low && (
-                      <View style={styles.lowChip}>
-                        <Ionicons name="warning" size={11} color="#fff" />
-                        <Text style={styles.lowChipText}>LOW</Text>
-                      </View>
-                    )}
+                    {it.item_supplier ? (
+                      <Text style={styles.rowSupplier} numberOfLines={1}>
+                        <MaterialCommunityIcons name="truck-outline" size={11} color="#475569" />
+                        {' '}
+                        {it.item_supplier}
+                      </Text>
+                    ) : null}
                   </View>
-                  <Text style={styles.rowMeta}>
-                    {it.item_number} • ${it.item_price.toFixed(2)}
-                  </Text>
+                  <View style={styles.qtyBlock}>
+                    <Text style={[styles.qtyValue, low && styles.qtyValueLow]}>
+                      {it.item_quantity}
+                    </Text>
+                    <Text style={styles.qtyLabel}>in stock</Text>
+                  </View>
+                  <View style={styles.actions}>
+                    <TouchableOpacity onPress={() => openEdit(it)} style={styles.iconBtn}>
+                      <Ionicons name="pencil" size={16} color="#2563eb" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleDelete(it)} style={styles.iconBtn}>
+                      <Ionicons name="trash" size={16} color="#dc2626" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                <View style={styles.qtyBlock}>
-                  <Text style={[styles.qtyValue, low && styles.qtyValueLow]}>
-                    {it.item_quantity}
-                  </Text>
-                  <Text style={styles.qtyLabel}>in stock</Text>
-                </View>
-                <View style={styles.actions}>
-                  <TouchableOpacity onPress={() => openEdit(it)} style={styles.iconBtn}>
-                    <Ionicons name="pencil" size={16} color="#2563eb" />
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => handleDelete(it)} style={styles.iconBtn}>
-                    <Ionicons name="trash" size={16} color="#dc2626" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          })}
-        </ScrollView>
+              );
+            })}
+          </ScrollView>
         </>
       )}
 
@@ -248,57 +280,107 @@ export default function InventoryScreen() {
               </TouchableOpacity>
             </View>
 
-            {editing && (
-              <View style={styles.itemNumberBadge}>
-                <Text style={styles.itemNumberBadgeText}>Item No: {editing.item_number}</Text>
-              </View>
-            )}
-
-            <Text style={styles.label}>Item Type *</Text>
-            <TextInput
-              style={styles.input}
-              value={formType}
-              onChangeText={setFormType}
-              placeholder="e.g. Oil Filter, Brake Pad, 5W-30 Oil"
-              autoCapitalize="words"
-              testID="inventory-type-input"
-            />
-
-            <Text style={styles.label}>Quantity *</Text>
-            <TextInput
-              style={styles.input}
-              value={formQty}
-              onChangeText={setFormQty}
-              placeholder="0"
-              keyboardType="number-pad"
-              testID="inventory-qty-input"
-            />
-
-            <Text style={styles.label}>Price (per unit) *</Text>
-            <TextInput
-              style={styles.input}
-              value={formPrice}
-              onChangeText={setFormPrice}
-              placeholder="0.00"
-              keyboardType="decimal-pad"
-              testID="inventory-price-input"
-            />
-
-            <TouchableOpacity
-              style={[styles.saveBtn, saving && { opacity: 0.6 }]}
-              onPress={handleSave}
-              disabled={saving}
-              testID="inventory-save-button"
-            >
-              {saving ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="checkmark" size={18} color="#fff" />
-                  <Text style={styles.saveBtnText}>{editing ? 'Update' : 'Add Item'}</Text>
-                </>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              {editing && (
+                <View style={styles.itemNumberBadge}>
+                  <Text style={styles.itemNumberBadgeText}>Item No: {editing.item_number}</Text>
+                </View>
               )}
-            </TouchableOpacity>
+
+              <Text style={styles.label}>Item Type *</Text>
+              <TextInput
+                style={styles.input}
+                value={formType}
+                onChangeText={setFormType}
+                placeholder="e.g. Oil Filter, Brake Pad, 5W-30 Oil"
+                autoCapitalize="words"
+                testID="inventory-type-input"
+              />
+
+              <Text style={styles.label}>Item Code (manufacturer/dealer)</Text>
+              <TextInput
+                style={styles.input}
+                value={formCode}
+                onChangeText={setFormCode}
+                placeholder="e.g. BOSCH-1234-A"
+                autoCapitalize="characters"
+                testID="inventory-code-input"
+              />
+
+              <Text style={styles.label}>Supplier</Text>
+              <View style={styles.pickerWrap}>
+                <Picker
+                  selectedValue={formSupplier}
+                  onValueChange={(v) => setFormSupplier(String(v || ''))}
+                  style={styles.picker}
+                  testID="inventory-supplier-picker"
+                >
+                  <Picker.Item label="— No supplier —" value="" />
+                  {suppliers.map((s) => (
+                    <Picker.Item key={s.id} label={s.name} value={s.name} />
+                  ))}
+                </Picker>
+              </View>
+              {suppliers.length === 0 && (
+                <Text style={styles.helper}>
+                  Add suppliers from the Reports screen → Suppliers.
+                </Text>
+              )}
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>Quantity *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formQty}
+                    onChangeText={setFormQty}
+                    placeholder="0"
+                    keyboardType="number-pad"
+                    testID="inventory-qty-input"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>Cost Price *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formPrice}
+                    onChangeText={setFormPrice}
+                    placeholder="0.00"
+                    keyboardType="decimal-pad"
+                    testID="inventory-price-input"
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.label}>Retail Price (charged to customer) *</Text>
+              <TextInput
+                style={styles.input}
+                value={formRetail}
+                onChangeText={setFormRetail}
+                placeholder="0.00"
+                keyboardType="decimal-pad"
+                testID="inventory-retail-input"
+              />
+              <Text style={styles.helper}>
+                This is added to the service total when the part is used.
+              </Text>
+
+              <TouchableOpacity
+                style={[styles.saveBtn, saving && { opacity: 0.6 }]}
+                onPress={handleSave}
+                disabled={saving}
+                testID="inventory-save-button"
+              >
+                {saving ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark" size={18} color="#fff" />
+                    <Text style={styles.saveBtnText}>{editing ? 'Update' : 'Add Item'}</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -359,6 +441,7 @@ const styles = StyleSheet.create({
   rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   rowType: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
   rowMeta: { fontSize: 11, color: '#64748b', marginTop: 2 },
+  rowSupplier: { fontSize: 11, color: '#475569', marginTop: 2, fontStyle: 'italic' },
   lowChip: {
     flexDirection: 'row',
     backgroundColor: '#dc2626',
@@ -392,6 +475,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 18,
     padding: 16,
     paddingBottom: 24,
+    maxHeight: '90%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -409,7 +493,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   itemNumberBadgeText: { color: '#075985', fontSize: 11, fontWeight: '700' },
-  label: { fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 4, marginTop: 4 },
+  label: { fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 4, marginTop: 6 },
+  helper: { fontSize: 11, color: '#94a3b8', marginTop: -2, marginBottom: 6, fontStyle: 'italic' },
   input: {
     borderWidth: 1,
     borderColor: '#e2e8f0',
@@ -418,9 +503,17 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
     color: '#0f172a',
-    marginBottom: 10,
+    marginBottom: 6,
     backgroundColor: '#f8fafc',
   },
+  pickerWrap: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
+    marginBottom: 6,
+  },
+  picker: { height: 48 },
   saveBtn: {
     flexDirection: 'row',
     backgroundColor: '#10b981',
@@ -428,7 +521,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+    marginTop: 14,
     gap: 6,
   },
   saveBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },

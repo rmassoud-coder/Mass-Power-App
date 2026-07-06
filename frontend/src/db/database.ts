@@ -74,9 +74,24 @@ export interface InventoryItem {
   item_number: string; // e.g. INV-001
   item_type: string;
   item_quantity: number;
-  item_price: number;
+  item_price: number;             // wholesale / cost price
+  item_retail_price?: number;     // customer-facing price (charged on service)
+  item_supplier?: string | null;  // supplier / dealer name
+  item_code?: string | null;      // manufacturer / dealer part code
   created_at: string;
   updated_at: string;
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  contact_info?: string | null;
+  created_at: string;
+}
+
+export interface LowStockItemBySupplier {
+  supplier_name: string;
+  items: InventoryItem[];
 }
 
 export interface ServiceItem {
@@ -234,6 +249,13 @@ export async function initDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_inventory_type ON inventory(item_type);
 
+    CREATE TABLE IF NOT EXISTS suppliers (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      contact_info TEXT,
+      created_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS service_items (
       id TEXT PRIMARY KEY,
       service_id TEXT NOT NULL,
@@ -259,6 +281,27 @@ export async function initDatabase() {
     await db.execAsync(`ALTER TABLE services ADD COLUMN partial_paid REAL NOT NULL DEFAULT 0`);
   } catch {
     // Column already exists - ignore
+  }
+
+  // Migration: inventory extension columns (supplier, code, retail price)
+  const inventoryCols: Array<[string, string]> = [
+    ['item_retail_price', 'REAL NOT NULL DEFAULT 0'],
+    ['item_supplier', 'TEXT'],
+    ['item_code', 'TEXT'],
+  ];
+  for (const [col, def] of inventoryCols) {
+    try {
+      await db.execAsync(`ALTER TABLE inventory ADD COLUMN ${col} ${def}`);
+    } catch {
+      // already exists
+    }
+  }
+
+  // Migration: suppliers.contact_info column (added later)
+  try {
+    await db.execAsync(`ALTER TABLE suppliers ADD COLUMN contact_info TEXT`);
+  } catch {
+    // already exists
   }
 
   // Migration: dashboard warning light columns
@@ -861,7 +904,12 @@ export async function getInventoryItem(id: string): Promise<InventoryItem | null
 export async function addInventoryItem(
   itemType: string,
   itemQuantity: number,
-  itemPrice: number
+  itemPrice: number,
+  extras?: {
+    item_retail_price?: number;
+    item_supplier?: string | null;
+    item_code?: string | null;
+  }
 ): Promise<InventoryItem> {
   const db = await getDb();
   if (!itemType.trim()) {
@@ -873,13 +921,28 @@ export async function addInventoryItem(
   if (!isFinite(itemPrice) || itemPrice < 0) {
     throw new Error('Price must be 0 or greater');
   }
+  const retail = extras?.item_retail_price;
+  if (retail !== undefined && (!isFinite(retail) || retail < 0)) {
+    throw new Error('Retail price must be 0 or greater');
+  }
   const id = generateId();
   const itemNumber = await generateInventoryItemNumber();
   const now = new Date().toISOString();
   await db.runAsync(
-    `INSERT INTO inventory (id, item_number, item_type, item_quantity, item_price, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [id, itemNumber, itemType.trim(), Math.floor(itemQuantity), itemPrice, now, now]
+    `INSERT INTO inventory (id, item_number, item_type, item_quantity, item_price, item_retail_price, item_supplier, item_code, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      itemNumber,
+      itemType.trim(),
+      Math.floor(itemQuantity),
+      itemPrice,
+      retail ?? 0,
+      (extras?.item_supplier || '').trim() || null,
+      (extras?.item_code || '').trim() || null,
+      now,
+      now,
+    ]
   );
   return {
     id,
@@ -887,6 +950,9 @@ export async function addInventoryItem(
     item_type: itemType.trim(),
     item_quantity: Math.floor(itemQuantity),
     item_price: itemPrice,
+    item_retail_price: retail ?? 0,
+    item_supplier: (extras?.item_supplier || '').trim() || null,
+    item_code: (extras?.item_code || '').trim() || null,
     created_at: now,
     updated_at: now,
   };
@@ -896,7 +962,12 @@ export async function updateInventoryItem(
   id: string,
   itemType: string,
   itemQuantity: number,
-  itemPrice: number
+  itemPrice: number,
+  extras?: {
+    item_retail_price?: number;
+    item_supplier?: string | null;
+    item_code?: string | null;
+  }
 ): Promise<void> {
   const db = await getDb();
   if (!itemType.trim()) {
@@ -908,10 +979,31 @@ export async function updateInventoryItem(
   if (!isFinite(itemPrice) || itemPrice < 0) {
     throw new Error('Price must be 0 or greater');
   }
+  const retail = extras?.item_retail_price;
+  if (retail !== undefined && (!isFinite(retail) || retail < 0)) {
+    throw new Error('Retail price must be 0 or greater');
+  }
   const now = new Date().toISOString();
   await db.runAsync(
-    `UPDATE inventory SET item_type = ?, item_quantity = ?, item_price = ?, updated_at = ? WHERE id = ?`,
-    [itemType.trim(), Math.floor(itemQuantity), itemPrice, now, id]
+    `UPDATE inventory
+       SET item_type = ?,
+           item_quantity = ?,
+           item_price = ?,
+           item_retail_price = ?,
+           item_supplier = ?,
+           item_code = ?,
+           updated_at = ?
+     WHERE id = ?`,
+    [
+      itemType.trim(),
+      Math.floor(itemQuantity),
+      itemPrice,
+      retail ?? 0,
+      (extras?.item_supplier || '').trim() || null,
+      (extras?.item_code || '').trim() || null,
+      now,
+      id,
+    ]
   );
 }
 
@@ -947,10 +1039,16 @@ async function attachItemsToService(
     const qty = Math.floor(it.quantity);
     const rowId = generateId();
     const now = new Date().toISOString();
+    // Snapshot the retail price (customer-facing). Fall back to wholesale price
+    // if retail hasn't been set on this SKU yet, so we never store 0 unintentionally.
+    const snapshotPrice =
+      inv.item_retail_price && inv.item_retail_price > 0
+        ? inv.item_retail_price
+        : inv.item_price;
     await db.runAsync(
       `INSERT INTO service_items (id, service_id, inventory_id, item_type, quantity, unit_price, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [rowId, serviceId, inv.id, inv.item_type, qty, inv.item_price, now]
+      [rowId, serviceId, inv.id, inv.item_type, qty, snapshotPrice, now]
     );
     // Deduct from stock (don't go below 0)
     const newQty = Math.max(0, inv.item_quantity - qty);
@@ -964,7 +1062,7 @@ async function attachItemsToService(
       inventory_id: inv.id,
       item_type: inv.item_type,
       quantity: qty,
-      unit_price: inv.item_price,
+      unit_price: snapshotPrice,
       created_at: now,
     });
   }
@@ -1222,6 +1320,7 @@ export interface FullDbSnapshot {
   services: Service[];
   service_items: ServiceItem[];
   inventory: InventoryItem[];
+  suppliers?: Supplier[];
 }
 
 export async function exportFullDatabase(): Promise<FullDbSnapshot> {
@@ -1245,14 +1344,16 @@ export async function exportFullDatabase(): Promise<FullDbSnapshot> {
   }));
   const service_items = await db.getAllAsync<ServiceItem>(`SELECT * FROM service_items`);
   const inventory = await db.getAllAsync<InventoryItem>(`SELECT * FROM inventory`);
+  const suppliers = await db.getAllAsync<Supplier>(`SELECT * FROM suppliers`);
   return {
-    version: 2,
+    version: 3,
     exported_at: new Date().toISOString(),
     customers,
     vehicles,
     services,
     service_items,
     inventory,
+    suppliers,
   };
 }
 
@@ -1263,7 +1364,7 @@ export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
   }
   const db = await getDb();
   await db.execAsync(
-    `DELETE FROM service_items; DELETE FROM services; DELETE FROM vehicles; DELETE FROM customers; DELETE FROM inventory;`
+    `DELETE FROM service_items; DELETE FROM services; DELETE FROM vehicles; DELETE FROM customers; DELETE FROM inventory; DELETE FROM suppliers;`
   );
   for (const c of snap.customers) {
     await db.runAsync(
@@ -1300,8 +1401,19 @@ export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
   if (Array.isArray(snap.inventory)) {
     for (const it of snap.inventory) {
       await db.runAsync(
-        `INSERT INTO inventory (id, item_number, item_type, item_quantity, item_price, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [it.id, it.item_number, it.item_type, it.item_quantity, it.item_price, it.created_at, it.updated_at]
+        `INSERT INTO inventory (id, item_number, item_type, item_quantity, item_price, item_retail_price, item_supplier, item_code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          it.id,
+          it.item_number,
+          it.item_type,
+          it.item_quantity,
+          it.item_price,
+          it.item_retail_price ?? 0,
+          it.item_supplier ?? null,
+          it.item_code ?? null,
+          it.created_at,
+          it.updated_at,
+        ]
       );
     }
   }
@@ -1313,4 +1425,109 @@ export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
       );
     }
   }
+  if (Array.isArray((snap as any).suppliers)) {
+    for (const sup of (snap as any).suppliers as Supplier[]) {
+      await db.runAsync(
+        `INSERT INTO suppliers (id, name, contact_info, created_at) VALUES (?, ?, ?, ?)`,
+        [sup.id, sup.name, sup.contact_info ?? null, sup.created_at]
+      );
+    }
+  }
+}
+
+// ============ Supplier Operations ============
+
+export async function listSuppliers(): Promise<Supplier[]> {
+  const db = await getDb();
+  return await db.getAllAsync<Supplier>(
+    `SELECT * FROM suppliers ORDER BY name ASC`
+  );
+}
+
+export async function addSupplier(
+  name: string,
+  contactInfo?: string
+): Promise<Supplier> {
+  const db = await getDb();
+  const clean = (name || '').trim();
+  if (!clean) throw new Error('Supplier name is required');
+  const existing = await db.getFirstAsync<Supplier>(
+    `SELECT * FROM suppliers WHERE LOWER(name) = LOWER(?) LIMIT 1`,
+    [clean]
+  );
+  if (existing) throw new Error(`Supplier "${clean}" already exists.`);
+  const id = generateId();
+  const now = new Date().toISOString();
+  await db.runAsync(
+    `INSERT INTO suppliers (id, name, contact_info, created_at) VALUES (?, ?, ?, ?)`,
+    [id, clean, (contactInfo || '').trim() || null, now]
+  );
+  return { id, name: clean, contact_info: (contactInfo || '').trim() || null, created_at: now };
+}
+
+export async function updateSupplier(
+  id: string,
+  name: string,
+  contactInfo?: string
+): Promise<void> {
+  const db = await getDb();
+  const clean = (name || '').trim();
+  if (!clean) throw new Error('Supplier name is required');
+  const existing = await db.getFirstAsync<{ id: string }>(
+    `SELECT id FROM suppliers WHERE LOWER(name) = LOWER(?) AND id != ? LIMIT 1`,
+    [clean, id]
+  );
+  if (existing) throw new Error(`Another supplier already uses "${clean}".`);
+  // Fetch old name to cascade-rename inventory rows keyed by supplier name
+  const prev = await db.getFirstAsync<Supplier>(`SELECT * FROM suppliers WHERE id = ?`, [id]);
+  await db.runAsync(
+    `UPDATE suppliers SET name = ?, contact_info = ? WHERE id = ?`,
+    [clean, (contactInfo || '').trim() || null, id]
+  );
+  if (prev && prev.name !== clean) {
+    await db.runAsync(
+      `UPDATE inventory SET item_supplier = ? WHERE item_supplier = ?`,
+      [clean, prev.name]
+    );
+  }
+}
+
+export async function deleteSupplier(id: string): Promise<void> {
+  const db = await getDb();
+  const prev = await db.getFirstAsync<Supplier>(`SELECT * FROM suppliers WHERE id = ?`, [id]);
+  await db.runAsync(`DELETE FROM suppliers WHERE id = ?`, [id]);
+  if (prev) {
+    // Clear supplier from inventory rows that were tagged with this supplier
+    await db.runAsync(
+      `UPDATE inventory SET item_supplier = NULL WHERE item_supplier = ?`,
+      [prev.name]
+    );
+  }
+}
+
+// ============ Reorder / Low-Stock Report ============
+
+/**
+ * Returns inventory items whose quantity is strictly below the threshold
+ * (default 5), grouped by supplier. Items with no supplier fall under the
+ * synthetic "Unassigned Supplier" bucket so they still show up on the
+ * printable purchase-order sheet.
+ */
+export async function getLowStockBySupplier(
+  threshold: number = 5
+): Promise<LowStockItemBySupplier[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<InventoryItem>(
+    `SELECT * FROM inventory WHERE item_quantity < ? ORDER BY item_supplier ASC, item_type ASC`,
+    [threshold]
+  );
+  const grouped = new Map<string, InventoryItem[]>();
+  for (const r of rows) {
+    const key = (r.item_supplier || '').trim() || 'Unassigned Supplier';
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(r);
+  }
+  return Array.from(grouped.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([supplier_name, items]) => ({ supplier_name, items }));
 }

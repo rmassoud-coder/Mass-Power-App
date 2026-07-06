@@ -109,8 +109,8 @@ export default function EditServiceScreen() {
     (sum, it) => sum + it.quantity * it.unit_price,
     0
   );
-  // Inventory prices are tracked separately (for stock valuation) — they are
-  // NOT added to the service cost. The mechanic types the final price manually.
+  const laborCost = parseFloat(cost) || 0;
+  const grandTotal = laborCost + productsSubtotal;
 
   const handleSubmit = async () => {
     if (!serviceCategory || !cost.trim()) {
@@ -123,11 +123,12 @@ export default function EditServiceScreen() {
       return;
     }
 
-    const costNumber = parseFloat(cost);
-    if (isNaN(costNumber) || costNumber < 0) {
-      Alert.alert('Error', 'Please enter a valid cost');
+    const laborNumber = parseFloat(cost);
+    if (isNaN(laborNumber) || laborNumber < 0) {
+      Alert.alert('Error', 'Please enter a valid labor cost');
       return;
     }
+    const costNumber = laborNumber + productsSubtotal;
 
     setLoading(true);
     try {
@@ -224,7 +225,7 @@ export default function EditServiceScreen() {
             />
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Service Cost *</Text>
+              <Text style={styles.label}>Labor / Service Fee *</Text>
               <View style={styles.inputContainer}>
                 <Ionicons name="cash-outline" size={20} color="#666" style={styles.inputIcon} />
                 <Text style={styles.currencySymbol}>$</Text>
@@ -237,10 +238,11 @@ export default function EditServiceScreen() {
                 />
               </View>
               {productsSubtotal > 0 && (
-                <Text style={styles.hint}>
-                  Note: inventory items are tracked for stock only. Set the customer&apos;s
-                  price above — parts pricing is not added automatically.
-                </Text>
+                <View style={styles.totalBreakdown}>
+                  <Text style={styles.totalLine}>Labor: ${laborCost.toFixed(2)}</Text>
+                  <Text style={styles.totalLine}>Parts (retail): ${productsSubtotal.toFixed(2)}</Text>
+                  <Text style={styles.totalGrand}>Grand Total: ${grandTotal.toFixed(2)}</Text>
+                </View>
               )}
             </View>
 

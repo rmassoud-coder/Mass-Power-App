@@ -238,6 +238,66 @@ frontend:
           agent: "main"
           comment: "Added Settings entry on home. Stores garage name, garage phone, and GitHub Pages base URL in AsyncStorage. Used in printed receipts and exported HTML pages."
 
+  - task: "Inventory: Item Code, Supplier dropdown, Retail Price"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/inventory.tsx, /app/frontend/src/components/InventoryPicker.tsx, /app/frontend/src/db/database.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Added Item Code (manual), Supplier (Picker dropdown driven by suppliers table), and Retail Price fields. InventoryPicker snapshots retail price so service_items.unit_price is customer-facing. Inventory list row now shows code, cost, retail and supplier."
+
+  - task: "Service totals include parts retail price"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/add-service.tsx, /app/frontend/app/edit-service.tsx, /app/frontend/src/db/database.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Cost input relabeled to 'Labor / Service Fee'. Grand Total = labor + parts subtotal (based on retail price snapshot). Breakdown is shown when at least one product is picked. Partial payment validation uses grand total. attachItemsToService snapshots retail_price (fallback wholesale)."
+
+  - task: "Supplier management (Add/Edit/Delete) inside Reports"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/report.tsx, /app/frontend/src/db/database.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Added collapsible Suppliers section in Reports with add/edit/delete supplier form (name + optional contact info). Renaming a supplier cascades to inventory.item_supplier. Deleting clears the supplier tag on linked inventory rows."
+
+  - task: "Reorder Report (low stock <5 grouped by supplier) with Print/Export"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/report.tsx, /app/frontend/src/db/database.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "New Reorder Report section in Reports. Generate button lists inventory rows with stock < 5 grouped by supplier (unassigned parts appear under 'Unassigned Supplier'). Print / Export button emits an A4 HTML doc with per-supplier tables and an 'Order Qty' column so the shop owner can mark quantities before sending to each dealer."
+
+  - task: "Loading screen version badge v7.0"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/components/RpmLoader.tsx"
+    stuck_count: 0
+    priority: "low"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Added a small dark pill-shaped 'v7.0' badge beneath the STARTING ENGINE label on the RPM tachometer loader."
+
 metadata:
   created_by: "testing_agent"
   version: "1.0"
@@ -246,15 +306,17 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Service Type dropdown (HVAC, Locksmith, Oil, Electrical, Mechanical, Other)"
-    - "Dashboard warning light checkboxes (ABS / Check Engine / Brake / Airbag / Immobilizer)"
-    - "QR code generation + HTML export per vehicle"
-    - "55mm Thermal Bluetooth printing per service"
-    - "Settings screen (garage info + GitHub Pages base URL)"
+    - "Inventory: Item Code, Supplier dropdown, Retail Price"
+    - "Service totals include parts retail price"
+    - "Supplier management (Add/Edit/Delete) inside Reports"
+    - "Reorder Report (low stock <5 grouped by supplier) with Print/Export"
+    - "Loading screen version badge v7.0"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
     - agent: "testing"
-      message: "Backend API testing complete. All 16 tests passed successfully (100% pass rate). Authentication, customer management, vehicle management, service management, and search integration all working correctly. VIN decoder successfully integrates with NHTSA API. All search endpoints support partial matching. Services correctly associated with both vehicle_id and customer_id. No critical issues found."
+      message: "Backend API testing complete. All 16 tests passed successfully (100% pass rate)."
+    - agent: "main"
+      message: "Inventory expansion (item code + supplier + retail price), Supplier CRUD in Reports, Reorder Report (stock<5, grouped by supplier, printable A4), retail price now included in service grand totals, and loader badge bumped to v7.0. Please validate the FIVE new frontend tasks under test_plan.current_focus. IMPORTANT: This is a 100% offline Expo app using expo-sqlite — there is no backend API to test for these features. Test flow: (1) /report → open Suppliers → add 'Bosch' + '+961...' → verify appears in list, edit + delete works. (2) /inventory → tap + → verify new fields present (Item Code, Supplier dropdown, Cost, Retail) → save with all fields. (3) /report → Reorder Report → Generate → items with qty<5 should appear grouped by supplier (with Print/Export button showing). (4) Add service on existing customer → pick an inventory item → verify a breakdown block shows Labor / Parts / Grand Total = labor+parts_retail. (5) On splash the RPM tachometer should show a 'v7.0' pill badge. Testing type: FRONTEND ONLY."

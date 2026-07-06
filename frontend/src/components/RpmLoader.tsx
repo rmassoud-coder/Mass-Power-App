@@ -233,6 +233,10 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 260 }: 
       </View>
 
       <Text style={styles.label}>{label}</Text>
+
+      <View style={styles.versionBadge}>
+        <Text style={styles.versionText}>v7.0</Text>
+      </View>
     </View>
   );
 }
@@ -288,5 +292,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 2,
     color: '#64748b',
+  },
+  versionBadge: {
+    marginTop: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: '#0f172a',
+    borderWidth: 1,
+    borderColor: '#dc2626',
+  },
+  versionText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 2,
   },
 });

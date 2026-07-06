@@ -55,6 +55,11 @@ export default function InventoryPicker({
   );
 
   const onPick = (inv: InventoryItem) => {
+    // Retail price is what the customer is charged; fall back to wholesale.
+    const priceForCustomer =
+      inv.item_retail_price && inv.item_retail_price > 0
+        ? inv.item_retail_price
+        : inv.item_price;
     // If already in list, increment qty
     const existing = value.find((v) => v.inventory_id === inv.id);
     if (existing) {
@@ -72,7 +77,7 @@ export default function InventoryPicker({
         {
           inventory_id: inv.id,
           item_type: inv.item_type,
-          unit_price: inv.item_price,
+          unit_price: priceForCustomer,
           quantity: 1,
           stock_remaining: inv.item_quantity,
           pre_existing_qty: preExistingByInventoryId?.[inv.id] || 0,
@@ -140,6 +145,9 @@ export default function InventoryPicker({
                 <Text style={styles.rowTitle} numberOfLines={1}>
                   {it.item_type}
                 </Text>
+                <Text style={styles.rowSub}>
+                  ${it.unit_price.toFixed(2)} each
+                </Text>
               </View>
               <View style={styles.qtyWrap}>
                 <TouchableOpacity
@@ -161,11 +169,18 @@ export default function InventoryPicker({
                   <Ionicons name="add" size={16} color="#1e293b" />
                 </TouchableOpacity>
               </View>
+              <Text style={styles.lineTotal}>
+                ${(it.unit_price * it.quantity).toFixed(2)}
+              </Text>
               <TouchableOpacity onPress={() => onRemove(it.inventory_id)} style={styles.deleteBtn}>
                 <Ionicons name="close" size={16} color="#dc2626" />
               </TouchableOpacity>
             </View>
           ))}
+          <View style={styles.subtotalRow}>
+            <Text style={styles.subtotalLabel}>Products subtotal</Text>
+            <Text style={styles.subtotalValue}>${productsSubtotal.toFixed(2)}</Text>
+          </View>
         </View>
       )}
 
@@ -209,6 +224,10 @@ export default function InventoryPicker({
                   const cap =
                     inv.item_quantity + (preExistingByInventoryId?.[inv.id] || 0);
                   const disabled = inListQty >= cap;
+                  const retail =
+                    inv.item_retail_price && inv.item_retail_price > 0
+                      ? inv.item_retail_price
+                      : inv.item_price;
                   return (
                     <TouchableOpacity
                       key={inv.id}
@@ -224,11 +243,13 @@ export default function InventoryPicker({
                           {inv.item_type}
                         </Text>
                         <Text style={[styles.invSub, lowStock && { color: '#b91c1c' }]}>
-                          {inv.item_number} • Stock:{' '}
+                          {inv.item_number}
+                          {inv.item_code ? ` • Code: ${inv.item_code}` : ''} • Stock:{' '}
                           <Text style={lowStock ? styles.lowStockText : undefined}>
                             {inv.item_quantity}
                           </Text>
                         </Text>
+                        <Text style={styles.invPrice}>${retail.toFixed(2)}</Text>
                       </View>
                       {inListQty > 0 ? (
                         <View style={styles.inCartBadge}>
@@ -378,6 +399,7 @@ const styles = StyleSheet.create({
   invRowLow: { backgroundColor: '#fef2f2' },
   invTitle: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
   invSub: { fontSize: 11, color: '#64748b', marginTop: 1 },
+  invPrice: { fontSize: 12, color: '#0f766e', marginTop: 2, fontWeight: '700' },
   lowStockText: { color: '#b91c1c', fontWeight: '900' },
   inCartBadge: {
     backgroundColor: '#10b981',

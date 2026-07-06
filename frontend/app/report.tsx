@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -13,8 +13,20 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { getReport } from '../src/db/database';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import {
+  getReport,
+  listSuppliers,
+  addSupplier,
+  updateSupplier,
+  deleteSupplier,
+  getLowStockBySupplier,
+  Supplier,
+  LowStockItemBySupplier,
+} from '../src/db/database';
+import { loadSettings } from '../src/utils/settings';
+import { printHtml } from '../src/utils/printer';
+import { MASS_POWER_LOGO_PNG_BASE64 } from '../src/utils/logoBase64';
 
 interface ReportItem {
   service_id: string;
@@ -44,6 +56,119 @@ interface ReportResponse {
 
 type FilterType = 'mobile' | 'vin' | 'plate';
 
+function escapeHtml(str: string): string {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function buildReorderHtml(
+  groups: LowStockItemBySupplier[],
+  garageName: string,
+  garagePhone: string,
+): string {
+  const today = new Date().toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+  const totalSkus = groups.reduce((s, g) => s + g.items.length, 0);
+  const sections = groups
+    .map((g) => {
+      const rows = g.items
+        .map((it, idx) => {
+          const retail =
+            it.item_retail_price && it.item_retail_price > 0
+              ? it.item_retail_price
+              : it.item_price;
+          return `
+            <tr>
+              <td class="idx">${idx + 1}</td>
+              <td>
+                <div class="p-name">${escapeHtml(it.item_type)}</div>
+                <div class="p-sub">${escapeHtml(it.item_number)}${it.item_code ? ' &middot; Code: ' + escapeHtml(it.item_code) : ''}</div>
+              </td>
+              <td class="qty">${it.item_quantity}</td>
+              <td class="qty-order">____</td>
+              <td class="price">$${retail.toFixed(2)}</td>
+            </tr>`;
+        })
+        .join('');
+      return `
+        <div class="supplier-block">
+          <div class="supplier-header">
+            <div class="supplier-name">${escapeHtml(g.supplier_name)}</div>
+            <div class="supplier-meta">${g.items.length} SKU${g.items.length === 1 ? '' : 's'} below stock</div>
+          </div>
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th style="width:6%">#</th>
+                <th>Item</th>
+                <th style="width:12%">Stock</th>
+                <th style="width:14%">Order Qty</th>
+                <th style="width:14%">Retail</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+        </div>`;
+    })
+    .join('');
+
+  return `<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8" />
+<style>
+  @page { size: A4; margin: 12mm; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Helvetica', 'Arial', sans-serif; color: #0f172a; margin: 0; padding: 0; }
+  .header { display: flex; align-items: center; gap: 14px; border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 14px; }
+  .logo { width: 60px; height: 60px; border-radius: 50%; }
+  .titles { flex: 1; }
+  .shop { font-size: 20px; font-weight: 900; letter-spacing: 0.5px; }
+  .subtitle { font-size: 12px; color: #64748b; margin-top: 2px; }
+  .doc-title { text-align: center; font-size: 18px; font-weight: 900; letter-spacing: 2px; color: #b91c1c; margin-bottom: 6px; text-transform: uppercase; }
+  .doc-meta { text-align: center; font-size: 11px; color: #475569; margin-bottom: 18px; }
+  .supplier-block { margin-bottom: 22px; page-break-inside: avoid; }
+  .supplier-header { background: #0f172a; color: #fff; padding: 8px 12px; border-radius: 6px 6px 0 0; display: flex; justify-content: space-between; align-items: center; }
+  .supplier-name { font-size: 15px; font-weight: 800; letter-spacing: 0.5px; }
+  .supplier-meta { font-size: 11px; opacity: 0.85; }
+  table.items-table { width: 100%; border-collapse: collapse; border: 1px solid #e2e8f0; border-top: none; }
+  table.items-table th { background: #f1f5f9; text-align: left; padding: 6px 8px; font-size: 11px; color: #475569; font-weight: 700; border-bottom: 1px solid #e2e8f0; }
+  table.items-table td { padding: 8px; font-size: 12px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+  .idx { color: #64748b; font-size: 11px; }
+  .p-name { font-weight: 700; }
+  .p-sub { font-size: 10px; color: #64748b; margin-top: 2px; }
+  .qty { text-align: center; font-weight: 900; color: #b91c1c; }
+  .qty-order { text-align: center; font-weight: 900; color: #0f172a; letter-spacing: 1px; }
+  .price { text-align: right; color: #0f766e; font-weight: 700; }
+  .footer { margin-top: 22px; text-align: center; font-size: 10px; color: #94a3b8; }
+  .empty { text-align: center; padding: 40px; color: #64748b; font-size: 13px; }
+</style>
+</head><body>
+  <div class="header">
+    <img class="logo" src="${MASS_POWER_LOGO_PNG_BASE64}" alt="logo" />
+    <div class="titles">
+      <div class="shop">${escapeHtml(garageName || 'Mass Power Auto Services')}</div>
+      ${garagePhone ? `<div class="subtitle">${escapeHtml(garagePhone)}</div>` : ''}
+    </div>
+  </div>
+
+  <div class="doc-title">Reorder Report</div>
+  <div class="doc-meta">Items with stock below 5 &middot; Generated ${today} &middot; ${totalSkus} SKU${totalSkus === 1 ? '' : 's'} across ${groups.length} supplier${groups.length === 1 ? '' : 's'}</div>
+
+  ${groups.length === 0 ? '<div class="empty">Nothing to reorder &mdash; stock levels look healthy.</div>' : sections}
+
+  <div class="footer">${escapeHtml(garageName || 'Mass Power Auto Services')} &mdash; Reorder Report</div>
+</body></html>`;
+}
+
 export default function ReportScreen() {
   const router = useRouter();
   
@@ -54,6 +179,125 @@ export default function ReportScreen() {
   const [unpaidOnly, setUnpaidOnly] = useState(false);
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<ReportResponse | null>(null);
+
+  // Suppliers list
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [supplierName, setSupplierName] = useState('');
+  const [supplierContact, setSupplierContact] = useState('');
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [savingSupplier, setSavingSupplier] = useState(false);
+  const [suppliersOpen, setSuppliersOpen] = useState(false);
+
+  // Reorder report
+  const [reorderGroups, setReorderGroups] = useState<LowStockItemBySupplier[] | null>(null);
+  const [reorderLoading, setReorderLoading] = useState(false);
+  const [reorderPrinting, setReorderPrinting] = useState(false);
+
+  const loadSuppliers = useCallback(async () => {
+    try {
+      const list = await listSuppliers();
+      setSuppliers(list);
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSuppliers();
+  }, [loadSuppliers]);
+
+  const handleSaveSupplier = async () => {
+    const name = supplierName.trim();
+    if (!name) {
+      Alert.alert('Error', 'Supplier name is required');
+      return;
+    }
+    setSavingSupplier(true);
+    try {
+      if (editingSupplier) {
+        await updateSupplier(editingSupplier.id, name, supplierContact.trim());
+      } else {
+        await addSupplier(name, supplierContact.trim());
+      }
+      setSupplierName('');
+      setSupplierContact('');
+      setEditingSupplier(null);
+      await loadSuppliers();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to save supplier');
+    } finally {
+      setSavingSupplier(false);
+    }
+  };
+
+  const handleEditSupplier = (s: Supplier) => {
+    setEditingSupplier(s);
+    setSupplierName(s.name);
+    setSupplierContact(s.contact_info || '');
+  };
+
+  const handleCancelEditSupplier = () => {
+    setEditingSupplier(null);
+    setSupplierName('');
+    setSupplierContact('');
+  };
+
+  const handleDeleteSupplier = (s: Supplier) => {
+    const doDelete = async () => {
+      try {
+        await deleteSupplier(s.id);
+        if (editingSupplier?.id === s.id) handleCancelEditSupplier();
+        await loadSuppliers();
+      } catch (e: any) {
+        Alert.alert('Error', e.message || 'Failed to delete');
+      }
+    };
+    if (Platform.OS === 'web') {
+      // eslint-disable-next-line no-alert
+      if (window.confirm(`Delete supplier "${s.name}"?\nInventory items linked to it will keep the parts but lose the supplier tag.`)) {
+        doDelete();
+      }
+    } else {
+      Alert.alert(
+        'Delete supplier?',
+        `${s.name}\nParts tagged with this supplier will lose the tag.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete', style: 'destructive', onPress: doDelete },
+        ]
+      );
+    }
+  };
+
+  const handleGenerateReorder = async () => {
+    setReorderLoading(true);
+    try {
+      const groups = await getLowStockBySupplier(5);
+      setReorderGroups(groups);
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to build reorder report');
+    } finally {
+      setReorderLoading(false);
+    }
+  };
+
+  const handlePrintReorder = async () => {
+    if (!reorderGroups) return;
+    setReorderPrinting(true);
+    try {
+      const settings = await loadSettings();
+      const html = buildReorderHtml(reorderGroups, settings.garageName, settings.garagePhone);
+      await printHtml(html);
+    } catch (e: any) {
+      Alert.alert(
+        'Print failed',
+        e?.message ||
+          'Unable to open printer. Make sure a print service is installed (e.g. PrinterShare / RawBT).'
+      );
+    } finally {
+      setReorderPrinting(false);
+    }
+  };
 
   const isValidDate = (dateStr: string) => {
     if (!dateStr) return true;
@@ -238,6 +482,182 @@ export default function ReportScreen() {
                 </>
               )}
             </TouchableOpacity>
+          </View>
+
+          {/* ========== Reorder Report (low stock < 5) ========== */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeaderRow}>
+              <MaterialCommunityIcons name="package-variant-closed" size={20} color="#b91c1c" />
+              <Text style={[styles.sectionTitle, { marginBottom: 0, marginLeft: 8, flex: 1 }]}>
+                Reorder Report
+              </Text>
+            </View>
+            <Text style={styles.helperText}>
+              Items with stock below 5, grouped by supplier — ready to send to each dealer.
+            </Text>
+
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={[styles.generateButton, reorderLoading && styles.buttonDisabled, { backgroundColor: '#b91c1c' }]}
+                onPress={handleGenerateReorder}
+                disabled={reorderLoading}
+                testID="generate-reorder-button"
+              >
+                {reorderLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <MaterialCommunityIcons name="clipboard-list" size={20} color="#fff" />
+                    <Text style={styles.generateButtonText}>Generate</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              {reorderGroups && reorderGroups.length > 0 && (
+                <TouchableOpacity
+                  style={[styles.generateButton, reorderPrinting && styles.buttonDisabled, { backgroundColor: '#7c3aed', flex: 1 }]}
+                  onPress={handlePrintReorder}
+                  disabled={reorderPrinting}
+                  testID="print-reorder-button"
+                >
+                  {reorderPrinting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="print-outline" size={20} color="#fff" />
+                      <Text style={styles.generateButtonText}>Print / Export</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {reorderGroups && (
+              reorderGroups.length === 0 ? (
+                <View style={styles.reorderEmpty}>
+                  <MaterialCommunityIcons name="check-circle" size={24} color="#059669" />
+                  <Text style={styles.reorderEmptyText}>Stock levels look healthy — nothing to reorder.</Text>
+                </View>
+              ) : (
+                <View style={{ marginTop: 12 }}>
+                  {reorderGroups.map((g) => (
+                    <View key={g.supplier_name} style={styles.supplierBlock}>
+                      <View style={styles.supplierHeader}>
+                        <Text style={styles.supplierName}>{g.supplier_name}</Text>
+                        <Text style={styles.supplierBadge}>{g.items.length}</Text>
+                      </View>
+                      {g.items.map((it) => (
+                        <View key={it.id} style={styles.supplierItem}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.supplierItemName} numberOfLines={1}>
+                              {it.item_type}
+                            </Text>
+                            <Text style={styles.supplierItemMeta}>
+                              {it.item_number}{it.item_code ? ` • ${it.item_code}` : ''}
+                            </Text>
+                          </View>
+                          <View style={styles.stockPill}>
+                            <Text style={styles.stockPillText}>{it.item_quantity}</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  ))}
+                </View>
+              )
+            )}
+          </View>
+
+          {/* ========== Suppliers Management ========== */}
+          <View style={styles.section}>
+            <TouchableOpacity
+              style={styles.sectionHeaderRow}
+              onPress={() => setSuppliersOpen(!suppliersOpen)}
+              testID="suppliers-toggle"
+            >
+              <MaterialCommunityIcons name="truck-outline" size={20} color="#2563eb" />
+              <Text style={[styles.sectionTitle, { marginBottom: 0, marginLeft: 8, flex: 1 }]}>
+                Suppliers ({suppliers.length})
+              </Text>
+              <Ionicons
+                name={suppliersOpen ? 'chevron-up' : 'chevron-down'}
+                size={20}
+                color="#64748b"
+              />
+            </TouchableOpacity>
+
+            {suppliersOpen && (
+              <>
+                <View style={styles.supplierForm}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Supplier name (e.g. Bosch, NGK)"
+                    value={supplierName}
+                    onChangeText={setSupplierName}
+                    autoCapitalize="words"
+                    testID="supplier-name-input"
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Contact info / phone (optional)"
+                    value={supplierContact}
+                    onChangeText={setSupplierContact}
+                    testID="supplier-contact-input"
+                  />
+                  <View style={styles.supplierBtnRow}>
+                    {editingSupplier && (
+                      <TouchableOpacity
+                        style={styles.supplierCancelBtn}
+                        onPress={handleCancelEditSupplier}
+                      >
+                        <Text style={styles.supplierCancelText}>Cancel</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={[styles.supplierSaveBtn, savingSupplier && styles.buttonDisabled]}
+                      onPress={handleSaveSupplier}
+                      disabled={savingSupplier}
+                      testID="supplier-save-button"
+                    >
+                      {savingSupplier ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <>
+                          <Ionicons name={editingSupplier ? 'checkmark' : 'add'} size={16} color="#fff" />
+                          <Text style={styles.supplierSaveText}>
+                            {editingSupplier ? 'Update Supplier' : 'Add Supplier'}
+                          </Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {suppliers.length === 0 ? (
+                  <Text style={styles.helperText}>No suppliers yet. Add one above.</Text>
+                ) : (
+                  <View style={{ marginTop: 6 }}>
+                    {suppliers.map((s) => (
+                      <View key={s.id} style={styles.supplierRow} testID={`supplier-row-${s.id}`}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.supplierRowName}>{s.name}</Text>
+                          {s.contact_info ? (
+                            <Text style={styles.supplierRowContact} numberOfLines={1}>
+                              {s.contact_info}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <TouchableOpacity onPress={() => handleEditSupplier(s)} style={styles.supplierIconBtn}>
+                          <Ionicons name="pencil" size={16} color="#2563eb" />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleDeleteSupplier(s)} style={styles.supplierIconBtn}>
+                          <Ionicons name="trash" size={16} color="#dc2626" />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </>
+            )}
           </View>
 
           {/* Report Results */}
@@ -625,4 +1045,128 @@ const styles = StyleSheet.create({
   itemDetails: { paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
   detailRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
   detailText: { fontSize: 13, color: '#475569', marginLeft: 8 },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#64748b',
+    marginBottom: 10,
+    fontStyle: 'italic',
+  },
+  reorderEmpty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ecfdf5',
+    borderColor: '#a7f3d0',
+    borderWidth: 1,
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 8,
+    gap: 8,
+  },
+  reorderEmptyText: {
+    color: '#065f46',
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  supplierBlock: {
+    backgroundColor: '#fefce8',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    borderRadius: 10,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  supplierHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#0f172a',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  supplierName: { color: '#fff', fontSize: 14, fontWeight: '800', letterSpacing: 0.3 },
+  supplierBadge: {
+    color: '#fff',
+    backgroundColor: '#b91c1c',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    fontSize: 11,
+    fontWeight: '800',
+    overflow: 'hidden',
+  },
+  supplierItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#fde68a',
+    backgroundColor: '#fffbeb',
+  },
+  supplierItemName: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
+  supplierItemMeta: { fontSize: 11, color: '#78716c', marginTop: 2 },
+  stockPill: {
+    backgroundColor: '#dc2626',
+    minWidth: 34,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 20,
+    alignItems: 'center',
+  },
+  stockPillText: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  supplierForm: {
+    marginTop: 4,
+    gap: 8,
+  },
+  supplierBtnRow: {
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'flex-end',
+  },
+  supplierSaveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+  },
+  supplierSaveText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  supplierCancelBtn: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  supplierCancelText: { color: '#334155', fontWeight: '700', fontSize: 13 },
+  supplierRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginTop: 6,
+  },
+  supplierRowName: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
+  supplierRowContact: { fontSize: 11, color: '#64748b', marginTop: 2 },
+  supplierIconBtn: {
+    padding: 8,
+    marginLeft: 4,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
 });
