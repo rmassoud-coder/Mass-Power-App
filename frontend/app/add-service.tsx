@@ -432,6 +432,7 @@ const styles = StyleSheet.create({
   pendingRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 10,
     marginTop: 12,
   },
@@ -444,7 +445,9 @@ const styles = StyleSheet.create({
     borderColor: '#eab308',
     paddingHorizontal: 10,
     height: 46,
-    minWidth: 110,
+    minWidth: 120,
+    flexGrow: 1,
+    flexBasis: 120,
   },
   partialInput: {
     flex: 1,

@@ -171,6 +171,8 @@ export interface ReportItem {
   additional_info?: string;
   cost: number;
   is_paid: boolean;
+  /** Amount paid so far when the invoice is only partially settled. 0 for paid/unpaid. */
+  partial_paid?: number;
   service_date: string;
 }
 
@@ -1040,6 +1042,7 @@ export async function getReport(
       s.additional_info,
       s.cost,
       s.is_paid as is_paid_int,
+      s.partial_paid,
       s.service_date
     FROM services s
     JOIN customers c ON s.customer_id = c.id
@@ -1064,6 +1067,7 @@ export async function getReport(
     additional_info: r.additional_info,
     cost: r.cost,
     is_paid: r.is_paid_int === 1,
+    partial_paid: Number(r.partial_paid) || 0,
     service_date: r.service_date,
   }));
   const total_cost = items.reduce((sum, i) => sum + i.cost, 0);
