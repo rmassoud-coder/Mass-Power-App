@@ -18,11 +18,7 @@ import {
   pullFromCloud,
   getLastSyncAt,
   formatSyncedAt,
-  isDailyDue,
 } from '../src/utils/dbSync';
-
-// Fire the once-per-24h auto-sync only once per app session
-let autoSyncAttempted = false;
 
 type Tile = {
   label: string;
@@ -155,16 +151,8 @@ export default function ManagementScreen() {
     [refreshLast, syncing]
   );
 
-  // Daily auto-sync — fires once per app session if >24h since the last one
-  useEffect(() => {
-    if (autoSyncAttempted) return;
-    autoSyncAttempted = true;
-    (async () => {
-      if (await isDailyDue()) {
-        setTimeout(() => performSync('auto', true), 800);
-      }
-    })();
-  }, [performSync]);
+  // Auto-sync on launch has been intentionally REMOVED.
+  // Cloud sync now runs ONLY when the user taps Push or Pull explicitly.
 
   const confirmPull = () => {
     Alert.alert(
