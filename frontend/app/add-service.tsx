@@ -20,11 +20,14 @@ import {
   SERVICE_CATEGORIES,
   EMPTY_DASH_LIGHTS,
   EMPTY_OIL_REMINDER,
+  EMPTY_BATTERY_REPLACEMENT,
   DashLights,
   OilReminder,
+  BatteryReplacement,
 } from '../src/db/database';
 import DashLightsPicker from '../src/components/DashLightsPicker';
 import OilReminderForm from '../src/components/OilReminderForm';
+import BatteryReplacementForm from '../src/components/BatteryReplacementForm';
 import InventoryPicker, { PickedItem } from '../src/components/InventoryPicker';
 
 interface Vehicle {
@@ -49,11 +52,15 @@ export default function AddServiceScreen() {
   const [partialAmount, setPartialAmount] = useState('');
   const [dashLights, setDashLights] = useState<DashLights>(EMPTY_DASH_LIGHTS);
   const [oilReminder, setOilReminder] = useState<OilReminder>(EMPTY_OIL_REMINDER);
+  const [batteryReplacement, setBatteryReplacement] = useState<BatteryReplacement>(
+    EMPTY_BATTERY_REPLACEMENT
+  );
   const [pickedItems, setPickedItems] = useState<PickedItem[]>([]);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const isOilService = serviceCategory === 'Oil Services';
+  const isBatteryService = serviceCategory === 'Battery Replacement';
   const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId);
 
   const productsSubtotal = pickedItems.reduce(
@@ -71,6 +78,14 @@ export default function AddServiceScreen() {
 
     if (isOilService && !oilReminder.oilGrade.trim()) {
       Alert.alert('Error', 'Oil grade is required for Oil Services (e.g. 5W-30)');
+      return;
+    }
+
+    if (isBatteryService && !batteryReplacement.ampRate.trim()) {
+      Alert.alert(
+        'Error',
+        'Amp Rate is required for Battery Replacement (e.g. 700 CCA or 80 Ah)'
+      );
       return;
     }
 
@@ -110,7 +125,8 @@ export default function AddServiceScreen() {
         dashLights,
         isOilService ? oilReminder : EMPTY_OIL_REMINDER,
         pickedItems.map((p) => ({ inventory_id: p.inventory_id, quantity: p.quantity })),
-        partialPaidNumber
+        partialPaidNumber,
+        isBatteryService ? batteryReplacement : undefined
       );
 
       router.back();
@@ -188,6 +204,16 @@ export default function AddServiceScreen() {
                   onChange={setOilReminder}
                   make={selectedVehicle?.make}
                   model={selectedVehicle?.model}
+                />
+              </View>
+            )}
+
+            {/* Battery Replacement (conditional) */}
+            {isBatteryService && (
+              <View style={styles.batteryCard}>
+                <BatteryReplacementForm
+                  value={batteryReplacement}
+                  onChange={setBatteryReplacement}
                 />
               </View>
             )}
@@ -395,6 +421,14 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#fcd34d',
     backgroundColor: '#fffbeb',
+    marginBottom: 20,
+  },
+  batteryCard: {
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#6ee7b7',
+    backgroundColor: '#ecfdf5',
     marginBottom: 20,
   },
   submitButton: {

@@ -63,6 +63,11 @@ export interface Service {
   next_service_mileage?: number | null;
   oil_grade?: string | null;
   oil_filter_changed?: boolean;
+  // Battery replacement fields (only relevant when service_description === 'Battery Replacement')
+  battery_amp_rate?: string | null;              // free-text, e.g. "700 CCA" or "80 Ah"
+  battery_install_date?: string | null;          // ISO YYYY-MM-DD
+  battery_warranty_months?: number | null;       // 6 or 12
+  battery_parasitic_tested?: boolean;
   // Reminder system: when 1 the oil-change reminder for this service is hidden permanently
   reminder_dismissed?: boolean;
   // Inventory items used on this service (loaded on demand)
@@ -115,6 +120,7 @@ export const SERVICE_CATEGORIES = [
   'HVAC Services',
   'Locksmith Services',
   'Oil Services',
+  'Battery Replacement',
   'Electrical Services',
   'Mechanical Services',
   'Other Services',
@@ -157,6 +163,20 @@ export const EMPTY_OIL_REMINDER: OilReminder = {
   nextServiceDate: null,
   nextServiceMileage: null,
   oilFilterChanged: false,
+};
+
+export interface BatteryReplacement {
+  ampRate: string;                 // free-text, e.g. "700 CCA" or "80 Ah"
+  installDate: string | null;      // ISO YYYY-MM-DD
+  warrantyMonths: number | null;   // 6 or 12
+  parasiticTested: boolean;
+}
+
+export const EMPTY_BATTERY_REPLACEMENT: BatteryReplacement = {
+  ampRate: '',
+  installDate: null,
+  warrantyMonths: 12,
+  parasiticTested: false,
 };
 
 export interface SearchResult {
@@ -339,6 +359,21 @@ export async function initDatabase() {
     }
   }
 
+  // Migration: battery replacement columns
+  const batteryColumns: Array<[string, string]> = [
+    ['battery_amp_rate', 'TEXT'],
+    ['battery_install_date', 'TEXT'],
+    ['battery_warranty_months', 'INTEGER'],
+    ['battery_parasitic_tested', 'INTEGER NOT NULL DEFAULT 0'],
+  ];
+  for (const [col, type] of batteryColumns) {
+    try {
+      await db.execAsync(`ALTER TABLE services ADD COLUMN ${col} ${type}`);
+    } catch {
+      // Column already exists - ignore
+    }
+  }
+
   // Seed data only once
   const seeded = await db.getFirstAsync<{ value: string }>(
     `SELECT value FROM app_meta WHERE key = 'seeded'`
@@ -459,6 +494,7 @@ export async function getCustomerDetails(customerId: string): Promise<CustomerDe
     dash_tpms: s.dash_tpms === 1,
     dash_oil_leak: s.dash_oil_leak === 1,
     oil_filter_changed: s.oil_filter_changed === 1,
+    battery_parasitic_tested: s.battery_parasitic_tested === 1,
   }));
   // Attach inventory items used per service (so customer-detail can show them)
   for (const svc of services) {
@@ -602,7 +638,8 @@ export async function createService(
   dashLights?: DashLights,
   oilReminder?: OilReminder,
   items?: ServiceItemInput[],
-  partialPaid: number = 0
+  partialPaid: number = 0,
+  battery?: BatteryReplacement
 ): Promise<Service> {
   const db = await getDb();
   const vehicle = await db.getFirstAsync<Vehicle>(
@@ -616,9 +653,10 @@ export async function createService(
   const now = new Date().toISOString();
   const d = dashLights || EMPTY_DASH_LIGHTS;
   const o = oilReminder || EMPTY_OIL_REMINDER;
+  const b = battery || EMPTY_BATTERY_REPLACEMENT;
   const pp = Math.max(0, Number(partialPaid) || 0);
   await db.runAsync(
-    `INSERT INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, partial_paid, service_date, created_at, dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, dash_tpms, dash_oil_leak, current_mileage, next_service_date, next_service_mileage, oil_grade, oil_filter_changed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, partial_paid, service_date, created_at, dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, dash_tpms, dash_oil_leak, current_mileage, next_service_date, next_service_mileage, oil_grade, oil_filter_changed, battery_amp_rate, battery_install_date, battery_warranty_months, battery_parasitic_tested) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       vehicleId,
@@ -642,6 +680,10 @@ export async function createService(
       o.nextServiceMileage,
       o.oilGrade || null,
       o.oilFilterChanged ? 1 : 0,
+      b.ampRate?.trim() || null,
+      b.installDate || null,
+      b.warrantyMonths ?? null,
+      b.parasiticTested ? 1 : 0,
     ]
   );
 
@@ -670,6 +712,10 @@ export async function createService(
     next_service_mileage: o.nextServiceMileage,
     oil_grade: o.oilGrade || null,
     oil_filter_changed: o.oilFilterChanged,
+    battery_amp_rate: b.ampRate?.trim() || null,
+    battery_install_date: b.installDate || null,
+    battery_warranty_months: b.warrantyMonths ?? null,
+    battery_parasitic_tested: b.parasiticTested,
     items: savedItems,
   };
 }
@@ -683,14 +729,16 @@ export async function updateService(
   dashLights?: DashLights,
   oilReminder?: OilReminder,
   items?: ServiceItemInput[],
-  partialPaid: number = 0
+  partialPaid: number = 0,
+  battery?: BatteryReplacement
 ): Promise<void> {
   const db = await getDb();
   const d = dashLights || EMPTY_DASH_LIGHTS;
   const o = oilReminder || EMPTY_OIL_REMINDER;
+  const b = battery || EMPTY_BATTERY_REPLACEMENT;
   const pp = Math.max(0, Number(partialPaid) || 0);
   await db.runAsync(
-    `UPDATE services SET service_description = ?, additional_info = ?, cost = ?, is_paid = ?, partial_paid = ?, dash_abs = ?, dash_check_engine = ?, dash_brake = ?, dash_airbag = ?, dash_immobilizer = ?, dash_tpms = ?, dash_oil_leak = ?, current_mileage = ?, next_service_date = ?, next_service_mileage = ?, oil_grade = ?, oil_filter_changed = ? WHERE id = ?`,
+    `UPDATE services SET service_description = ?, additional_info = ?, cost = ?, is_paid = ?, partial_paid = ?, dash_abs = ?, dash_check_engine = ?, dash_brake = ?, dash_airbag = ?, dash_immobilizer = ?, dash_tpms = ?, dash_oil_leak = ?, current_mileage = ?, next_service_date = ?, next_service_mileage = ?, oil_grade = ?, oil_filter_changed = ?, battery_amp_rate = ?, battery_install_date = ?, battery_warranty_months = ?, battery_parasitic_tested = ? WHERE id = ?`,
     [
       serviceDescription,
       additionalInfo || null,
@@ -709,6 +757,10 @@ export async function updateService(
       o.nextServiceMileage,
       o.oilGrade || null,
       o.oilFilterChanged ? 1 : 0,
+      b.ampRate?.trim() || null,
+      b.installDate || null,
+      b.warrantyMonths ?? null,
+      b.parasiticTested ? 1 : 0,
       id,
     ]
   );
@@ -1204,6 +1256,7 @@ export async function exportAllData(): Promise<string> {
     dash_tpms: s.dash_tpms === 1,
     dash_oil_leak: s.dash_oil_leak === 1,
     oil_filter_changed: s.oil_filter_changed === 1,
+    battery_parasitic_tested: s.battery_parasitic_tested === 1,
   }));
   const exportData = {
     version: 1,
@@ -1235,6 +1288,7 @@ export async function getAllVehiclesWithDetails(): Promise<
     dash_tpms: s.dash_tpms === 1,
     dash_oil_leak: s.dash_oil_leak === 1,
     oil_filter_changed: s.oil_filter_changed === 1,
+    battery_parasitic_tested: s.battery_parasitic_tested === 1,
   }));
 
   const customerById = new Map(customers.map((c) => [c.id, c]));
@@ -1346,6 +1400,7 @@ export async function exportFullDatabase(): Promise<FullDbSnapshot> {
     dash_tpms: s.dash_tpms === 1,
     dash_oil_leak: s.dash_oil_leak === 1,
     oil_filter_changed: s.oil_filter_changed === 1,
+    battery_parasitic_tested: s.battery_parasitic_tested === 1,
     reminder_dismissed: s.reminder_dismissed === 1,
   }));
   const service_items = await db.getAllAsync<ServiceItem>(`SELECT * FROM service_items`);

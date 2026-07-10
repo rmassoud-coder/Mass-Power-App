@@ -20,10 +20,13 @@ import {
   SERVICE_CATEGORIES,
   DashLights,
   OilReminder,
+  BatteryReplacement,
   EMPTY_OIL_REMINDER,
+  EMPTY_BATTERY_REPLACEMENT,
 } from '../src/db/database';
 import DashLightsPicker from '../src/components/DashLightsPicker';
 import OilReminderForm from '../src/components/OilReminderForm';
+import BatteryReplacementForm from '../src/components/BatteryReplacementForm';
 import InventoryPicker, { PickedItem } from '../src/components/InventoryPicker';
 
 interface ServiceItemParam {
@@ -84,6 +87,14 @@ export default function EditServiceScreen() {
       : null,
     oilFilterChanged: params.oilFilterChanged === 'true',
   });
+  const [batteryReplacement, setBatteryReplacement] = useState<BatteryReplacement>({
+    ampRate: (params.batteryAmpRate as string) || '',
+    installDate: (params.batteryInstallDate as string) || null,
+    warrantyMonths: params.batteryWarrantyMonths
+      ? parseInt(params.batteryWarrantyMonths as string, 10)
+      : 12,
+    parasiticTested: params.batteryParasiticTested === 'true',
+  });
   const [pickedItems, setPickedItems] = useState<PickedItem[]>(
     initialItems.map((it) => ({
       inventory_id: it.inventory_id,
@@ -104,6 +115,7 @@ export default function EditServiceScreen() {
   const router = useRouter();
 
   const isOilService = serviceCategory === 'Oil Services';
+  const isBatteryService = serviceCategory === 'Battery Replacement';
 
   const productsSubtotal = pickedItems.reduce(
     (sum, it) => sum + it.quantity * it.unit_price,
@@ -120,6 +132,14 @@ export default function EditServiceScreen() {
 
     if (isOilService && !oilReminder.oilGrade.trim()) {
       Alert.alert('Error', 'Oil grade is required for Oil Services (e.g. 5W-30)');
+      return;
+    }
+
+    if (isBatteryService && !batteryReplacement.ampRate.trim()) {
+      Alert.alert(
+        'Error',
+        'Amp Rate is required for Battery Replacement (e.g. 700 CCA or 80 Ah)'
+      );
       return;
     }
 
@@ -140,7 +160,9 @@ export default function EditServiceScreen() {
         isPaid,
         dashLights,
         isOilService ? oilReminder : EMPTY_OIL_REMINDER,
-        pickedItems.map((p) => ({ inventory_id: p.inventory_id, quantity: p.quantity }))
+        pickedItems.map((p) => ({ inventory_id: p.inventory_id, quantity: p.quantity })),
+        0,
+        isBatteryService ? batteryReplacement : EMPTY_BATTERY_REPLACEMENT
       );
 
       router.back();
@@ -195,6 +217,15 @@ export default function EditServiceScreen() {
                   onChange={setOilReminder}
                   make={params.vehicleMake as string | undefined}
                   model={params.vehicleModel as string | undefined}
+                />
+              </View>
+            )}
+
+            {isBatteryService && (
+              <View style={styles.batteryCard}>
+                <BatteryReplacementForm
+                  value={batteryReplacement}
+                  onChange={setBatteryReplacement}
                 />
               </View>
             )}
