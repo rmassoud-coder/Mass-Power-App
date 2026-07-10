@@ -21,7 +21,7 @@ const LIGHTS: LightDef[] = [
   { key: 'check_engine', label: 'Check Engine', iconLib: 'mc', icon: 'engine', color: '#dc2626' },
   { key: 'brake', label: 'Brake', iconLib: 'mc', icon: 'car-brake-alert', color: '#ef4444' },
   { key: 'airbag', label: 'Airbag', iconLib: 'mc', icon: 'airbag', color: '#f97316' },
-  { key: 'tpms', label: 'TPMS', iconLib: 'mc', icon: 'car-tire-alert', color: '#eab308' },
+  { key: 'tpms', label: 'HVAC Leaks', iconLib: 'mc', icon: 'snowflake-alert', color: '#eab308' },
   { key: 'oil_leak', label: 'Oil Leak', iconLib: 'mc', icon: 'oil', color: '#7c2d12' },
 ];
 

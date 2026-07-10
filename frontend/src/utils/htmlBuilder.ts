@@ -19,7 +19,7 @@ function formatDashLights(s: Service): string {
   if (s.dash_brake) lights.push('Brake');
   if (s.dash_airbag) lights.push('Airbag');
   if (s.dash_immobilizer) lights.push('Immobilizer');
-  if (s.dash_tpms) lights.push('TPMS');
+  if (s.dash_tpms) lights.push('HVAC Leaks');
   if (s.dash_oil_leak) lights.push('Oil Leak');
   return lights.length ? lights.join(', ') : '';
 }
