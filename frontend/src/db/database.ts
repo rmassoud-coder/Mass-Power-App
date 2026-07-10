@@ -743,8 +743,14 @@ async function generateInventoryItemNumber(): Promise<string> {
 
 export async function listInventory(): Promise<InventoryItem[]> {
   const db = await getDb();
+  // Low-stock items (quantity < 2) pinned to top and shown lowest-stock first
+  // so out-of-stock lines top the list. Everything else is sorted purely
+  // alphabetically (case-insensitive) by item type.
   const rows = await db.getAllAsync<InventoryItem>(
-    `SELECT * FROM inventory ORDER BY item_quantity ASC, item_type ASC`
+    `SELECT * FROM inventory
+     ORDER BY CASE WHEN item_quantity < 2 THEN 0 ELSE 1 END ASC,
+              CASE WHEN item_quantity < 2 THEN item_quantity END ASC,
+              LOWER(item_type) ASC`
   );
   return rows;
 }

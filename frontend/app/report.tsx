@@ -69,6 +69,7 @@ function buildReorderHtml(
   groups: LowStockItemBySupplier[],
   garageName: string,
   garagePhone: string,
+  threshold: number,
 ): string {
   const today = new Date().toLocaleDateString('en-GB', {
     day: '2-digit',
@@ -161,7 +162,7 @@ function buildReorderHtml(
   </div>
 
   <div class="doc-title">Reorder Report</div>
-  <div class="doc-meta">Items with stock below 5 &middot; Generated ${today} &middot; ${totalSkus} SKU${totalSkus === 1 ? '' : 's'} across ${groups.length} supplier${groups.length === 1 ? '' : 's'}</div>
+  <div class="doc-meta">Items with stock below ${threshold} &middot; Generated ${today} &middot; ${totalSkus} SKU${totalSkus === 1 ? '' : 's'} across ${groups.length} supplier${groups.length === 1 ? '' : 's'}</div>
 
   ${groups.length === 0 ? '<div class="empty">Nothing to reorder &mdash; stock levels look healthy.</div>' : sections}
 
@@ -192,6 +193,8 @@ export default function ReportScreen() {
   const [reorderGroups, setReorderGroups] = useState<LowStockItemBySupplier[] | null>(null);
   const [reorderLoading, setReorderLoading] = useState(false);
   const [reorderPrinting, setReorderPrinting] = useState(false);
+  const [reorderThreshold, setReorderThreshold] = useState('5');
+  const [lastThresholdUsed, setLastThresholdUsed] = useState<number>(5);
 
   const loadSuppliers = useCallback(async () => {
     try {
@@ -270,10 +273,13 @@ export default function ReportScreen() {
   };
 
   const handleGenerateReorder = async () => {
+    const raw = parseInt(reorderThreshold, 10);
+    const threshold = Number.isFinite(raw) && raw >= 1 ? raw : 5;
     setReorderLoading(true);
     try {
-      const groups = await getLowStockBySupplier(5);
+      const groups = await getLowStockBySupplier(threshold);
       setReorderGroups(groups);
+      setLastThresholdUsed(threshold);
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to build reorder report');
     } finally {
@@ -286,7 +292,12 @@ export default function ReportScreen() {
     setReorderPrinting(true);
     try {
       const settings = await loadSettings();
-      const html = buildReorderHtml(reorderGroups, settings.garageName, settings.garagePhone);
+      const html = buildReorderHtml(
+        reorderGroups,
+        settings.garageName,
+        settings.garagePhone,
+        lastThresholdUsed,
+      );
       await printHtml(html);
     } catch (e: any) {
       Alert.alert(
@@ -484,7 +495,7 @@ export default function ReportScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* ========== Reorder Report (low stock < 5) ========== */}
+          {/* ========== Reorder Report (low stock < threshold) ========== */}
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
               <MaterialCommunityIcons name="package-variant-closed" size={20} color="#b91c1c" />
@@ -493,8 +504,49 @@ export default function ReportScreen() {
               </Text>
             </View>
             <Text style={styles.helperText}>
-              Items with stock below 5, grouped by supplier — ready to send to each dealer.
+              Items with stock below the threshold, grouped by supplier — ready to send to each dealer.
             </Text>
+
+            <View style={styles.thresholdRow}>
+              <Text style={styles.thresholdLabel}>Stock threshold</Text>
+              <View style={styles.thresholdInputWrap}>
+                <TouchableOpacity
+                  onPress={() => {
+                    const cur = parseInt(reorderThreshold, 10) || 5;
+                    setReorderThreshold(String(Math.max(1, cur - 1)));
+                  }}
+                  style={styles.thresholdStep}
+                  testID="reorder-threshold-minus"
+                >
+                  <Ionicons name="remove" size={18} color="#0f172a" />
+                </TouchableOpacity>
+                <TextInput
+                  style={styles.thresholdInput}
+                  value={reorderThreshold}
+                  onChangeText={(t) => {
+                    // digits-only, allow empty while typing
+                    const digits = t.replace(/[^\d]/g, '');
+                    setReorderThreshold(digits);
+                  }}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                  testID="reorder-threshold-input"
+                />
+                <TouchableOpacity
+                  onPress={() => {
+                    const cur = parseInt(reorderThreshold, 10) || 0;
+                    setReorderThreshold(String(cur + 1));
+                  }}
+                  style={styles.thresholdStep}
+                  testID="reorder-threshold-plus"
+                >
+                  <Ionicons name="add" size={18} color="#0f172a" />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.thresholdSuffix}>
+                items
+              </Text>
+            </View>
 
             <View style={styles.buttonRow}>
               <TouchableOpacity
@@ -535,10 +587,15 @@ export default function ReportScreen() {
               reorderGroups.length === 0 ? (
                 <View style={styles.reorderEmpty}>
                   <MaterialCommunityIcons name="check-circle" size={24} color="#059669" />
-                  <Text style={styles.reorderEmptyText}>Stock levels look healthy — nothing to reorder.</Text>
+                  <Text style={styles.reorderEmptyText}>
+                    All items have stock ≥ {lastThresholdUsed} — nothing to reorder.
+                  </Text>
                 </View>
               ) : (
                 <View style={{ marginTop: 12 }}>
+                  <Text style={styles.reorderMetaLine}>
+                    Showing items with stock &lt; {lastThresholdUsed}
+                  </Text>
                   {reorderGroups.map((g) => (
                     <View key={g.supplier_name} style={styles.supplierBlock}>
                       <View style={styles.supplierHeader}>
@@ -1072,6 +1129,57 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     flex: 1,
+  },
+  reorderMetaLine: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#78716c',
+    marginBottom: 8,
+    fontStyle: 'italic',
+  },
+  thresholdRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+    gap: 10,
+  },
+  thresholdLabel: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  thresholdInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  thresholdStep: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  thresholdInput: {
+    width: 46,
+    textAlign: 'center',
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a',
+    paddingVertical: 6,
+  },
+  thresholdSuffix: {
+    fontSize: 12,
+    color: '#64748b',
+    fontStyle: 'italic',
   },
   supplierBlock: {
     backgroundColor: '#fefce8',
