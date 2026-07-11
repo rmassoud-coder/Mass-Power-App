@@ -393,3 +393,208 @@ export function buildOilStickerHtml(
   <div style="height: 18px;"></div>
 </body></html>`;
 }
+
+/** Standalone 55mm thermal HTML that prints ONLY the battery replacement sticker.
+ *  Uses the same expo-print + system-print pipeline as the receipt.
+ *
+ *  Layout (per user spec):
+ *    - Shop name
+ *    - Car brand (make + model)
+ *    - Amp rate (free-text, e.g. "700 CCA" or "80 Ah")
+ *    - Installation date
+ *    - Warranty length (6 months or 1 year)
+ *    - Parasitic-draw tested checkbox
+ */
+export function buildBatteryStickerHtml(
+  customer: Customer,
+  vehicle: Vehicle,
+  service: Service,
+  settings: AppSettings
+): string {
+  const installFormatted = service.battery_install_date
+    ? new Date(service.battery_install_date).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
+    : '';
+  const warrantyMonths = service.battery_warranty_months || 0;
+  let warrantyExpiryFormatted = '';
+  let warrantyLabel = '';
+  if (warrantyMonths > 0 && service.battery_install_date) {
+    const expiry = new Date(service.battery_install_date);
+    expiry.setMonth(expiry.getMonth() + warrantyMonths);
+    warrantyExpiryFormatted = expiry.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  }
+  if (warrantyMonths === 6) warrantyLabel = '6 MONTHS';
+  else if (warrantyMonths === 12) warrantyLabel = '1 YEAR';
+  else if (warrantyMonths > 0) warrantyLabel = `${warrantyMonths} MONTHS`;
+
+  return `<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8" />
+<style>
+  @page { size: 55mm auto; margin: 2mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Arial Black', 'Arial', sans-serif;
+    font-size: 12px;
+    color: #000;
+    margin: 0;
+    padding: 0;
+    width: 55mm;
+    text-align: center;
+  }
+  .sticker {
+    border: 3px solid #000;
+    padding: 8px 6px;
+    margin: 4px 2px;
+  }
+  .shop {
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #000;
+    margin-bottom: 6px;
+  }
+  .brand {
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 4px 0 8px 0;
+    border-bottom: 1px dashed #000;
+    margin-bottom: 8px;
+  }
+  .heading {
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .amp-row {
+    font-size: 20px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    padding: 4px 0;
+    background: #000;
+    color: #fff;
+    margin: 6px -6px 8px -6px;
+  }
+  .field-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin: 6px 4px;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 1px;
+  }
+  .field-label { text-align: left; }
+  .field-value {
+    text-align: right;
+    font-size: 14px;
+  }
+  .warranty-badge {
+    display: inline-block;
+    padding: 5px 10px;
+    border: 2px solid #000;
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin: 4px 0;
+  }
+  .divider {
+    border-top: 1px dashed #000;
+    margin: 8px 4px;
+  }
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 8px 4px 4px 4px;
+  }
+  .checkbox {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border: 2px solid #000;
+    margin-right: 8px;
+    vertical-align: middle;
+    font-size: 16px;
+    font-weight: 900;
+    line-height: 1;
+  }
+  .checkbox-label {
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    vertical-align: middle;
+  }
+  .plate {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px dashed #000;
+  }
+</style>
+</head><body>
+  <div class="sticker">
+    <img src="${MASS_POWER_LOGO_PNG_BASE64}" alt="logo" style="width:60px; height:60px; border-radius:50%; display:block; margin:0 auto 4px auto;" />
+    <div class="shop">${esc(settings.garageName)}</div>
+    <div class="brand">${esc([vehicle.make, vehicle.model].filter(Boolean).join(' ').trim())}</div>
+    <div class="heading">Battery Replacement</div>
+    ${
+      service.battery_amp_rate
+        ? `<div class="amp-row">${esc(service.battery_amp_rate)}</div>`
+        : ''
+    }
+    ${
+      installFormatted
+        ? `<div class="field-row">
+             <span class="field-label">INSTALLED:</span>
+             <span class="field-value">${esc(installFormatted)}</span>
+           </div>`
+        : ''
+    }
+    ${
+      warrantyLabel
+        ? `<div style="text-align:center;"><span class="warranty-badge">WARRANTY ${warrantyLabel}</span></div>`
+        : ''
+    }
+    ${
+      warrantyExpiryFormatted
+        ? `<div class="field-row">
+             <span class="field-label">EXPIRES:</span>
+             <span class="field-value">${esc(warrantyExpiryFormatted)}</span>
+           </div>`
+        : ''
+    }
+    <div class="divider"></div>
+    <div class="checkbox-row">
+      <span class="checkbox">${service.battery_parasitic_tested ? '&#10003;' : ''}</span>
+      <span class="checkbox-label">Parasitic Draw Tested</span>
+    </div>
+    ${
+      vehicle.plate_number
+        ? `<div class="plate">${esc(vehicle.plate_number)}</div>`
+        : ''
+    }
+  </div>
+  <div style="height: 18px;"></div>
+</body></html>`;
+}
+

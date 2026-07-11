@@ -385,6 +385,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#fffbeb',
     marginBottom: 20,
   },
+  batteryCard: {
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#6ee7b7',
+    backgroundColor: '#ecfdf5',
+    marginBottom: 20,
+  },
   submitButton: {
     backgroundColor: '#10b981',
     borderRadius: 12,

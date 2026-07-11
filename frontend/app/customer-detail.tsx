@@ -25,7 +25,7 @@ import {
   Service as DBService,
 } from '../src/db/database';
 import { loadSettings } from '../src/utils/settings';
-import { buildThermalReceiptHtml, buildOilStickerHtml } from '../src/utils/htmlBuilder';
+import { buildThermalReceiptHtml, buildOilStickerHtml, buildBatteryStickerHtml } from '../src/utils/htmlBuilder';
 import { printHtml } from '../src/utils/printer';
 
 interface Vehicle extends DBVehicle {}
@@ -50,6 +50,7 @@ export default function CustomerDetailScreen() {
   const [qrVehicle, setQrVehicle] = useState<Vehicle | null>(null);
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [printingStickerId, setPrintingStickerId] = useState<string | null>(null);
+  const [printingBatteryStickerId, setPrintingBatteryStickerId] = useState<string | null>(null);
 
   // Auto-refresh whenever screen comes into focus (after edits/adds)
   useFocusEffect(
@@ -166,6 +167,24 @@ export default function CustomerDetailScreen() {
       );
     } finally {
       setPrintingStickerId(null);
+    }
+  };
+
+  const handlePrintBatterySticker = async (service: Service, vehicle: Vehicle) => {
+    if (!details) return;
+    setPrintingBatteryStickerId(service.id);
+    try {
+      const settings = await loadSettings();
+      const html = buildBatteryStickerHtml(details.customer, vehicle, service, settings);
+      await printHtml(html);
+    } catch (e: any) {
+      Alert.alert(
+        'Print failed',
+        e?.message ||
+          'Unable to open printer. Make sure your Bluetooth thermal printer is paired and a print service is installed (e.g. PrinterShare / RawBT).'
+      );
+    } finally {
+      setPrintingBatteryStickerId(null);
     }
   };
 
@@ -437,6 +456,20 @@ export default function CustomerDetailScreen() {
                                   )}
                                 </TouchableOpacity>
                               )}
+                              {service.service_description === 'Battery Replacement' && (
+                                <TouchableOpacity
+                                  onPress={() => handlePrintBatterySticker(service, vehicle)}
+                                  style={styles.serviceItemActionButton}
+                                  disabled={printingBatteryStickerId === service.id}
+                                  testID={`print-battery-sticker-${service.id}`}
+                                >
+                                  {printingBatteryStickerId === service.id ? (
+                                    <ActivityIndicator size="small" color="#059669" />
+                                  ) : (
+                                    <MaterialCommunityIcons name="car-battery" size={18} color="#059669" />
+                                  )}
+                                </TouchableOpacity>
+                              )}
                               <TouchableOpacity
                                 onPress={() => handlePrintService(service, vehicle)}
                                 style={styles.serviceItemActionButton}
@@ -471,6 +504,13 @@ export default function CustomerDetailScreen() {
                                       nextServiceMileage: service.next_service_mileage != null ? String(service.next_service_mileage) : '',
                                       oilGrade: service.oil_grade || '',
                                       oilFilterChanged: service.oil_filter_changed ? 'true' : 'false',
+                                      batteryAmpRate: service.battery_amp_rate || '',
+                                      batteryInstallDate: service.battery_install_date || '',
+                                      batteryWarrantyMonths:
+                                        service.battery_warranty_months != null
+                                          ? String(service.battery_warranty_months)
+                                          : '',
+                                      batteryParasiticTested: service.battery_parasitic_tested ? 'true' : 'false',
                                       vehicleMake: vehicle.make || '',
                                       vehicleModel: vehicle.model || '',
                                       items: JSON.stringify(service.items || []),
