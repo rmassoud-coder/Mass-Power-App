@@ -600,28 +600,28 @@ export function buildBatteryStickerHtml(
 
 
 
-/** 55mm thermal HTML that prints one price-sticker per selected inventory item.
- *  A dashed cut-line separates each sticker so they can be scissor-cut apart
- *  and stuck on shelves / parts.
+/** 55mm thermal HTML that prints price-stickers for selected inventory items.
+ *  Layout: TWO stickers per row (each ~26mm wide) so we save paper. A dashed
+ *  cut-line separates each row so a full row can be scissored off, then each
+ *  pair can be split down the middle (dashed vertical border between them).
  *
  *  Per item shown:
- *    - Shop name (small header)
- *    - Item name (large, bold)
- *    - Item code (small, if present)
- *    - Retail price ($XX.XX, extra large)
+ *    - Shop name (tiny header)
+ *    - Item name (bold, up to 2 lines)
+ *    - Item code (tiny, if present)
+ *    - Retail price ($XX.XX, large)
  *  Quantity and cost price are intentionally NOT shown.
  */
 export function buildPriceStickersHtml(
   items: InventoryItem[],
   garageName: string
 ): string {
-  const stickers = items
-    .map((it, idx) => {
+  const cells = items
+    .map((it) => {
       const retail =
         it.item_retail_price && it.item_retail_price > 0
           ? it.item_retail_price
           : it.item_price;
-      const isLast = idx === items.length - 1;
       return `
         <div class="sticker">
           <div class="shop">${esc(garageName)}</div>
@@ -632,80 +632,145 @@ export function buildPriceStickersHtml(
               : ''
           }
           <div class="price">$${retail.toFixed(2)}</div>
-        </div>
-        ${isLast ? '' : '<div class="cut-line">&#9986; &nbsp; &nbsp; C U T &nbsp; &nbsp; H E R E &nbsp; &nbsp; &#9986;</div>'}`;
+        </div>`;
     })
     .join('');
+
+  // Pair the stickers into rows of two. Odd item gets a filler cell so the
+  // last pair still lays out cleanly.
+  const rows: string[] = [];
+  for (let i = 0; i < items.length; i += 2) {
+    const first = cells.split('</div>\n        <div class="sticker">');
+    // Simpler: rebuild with slice
+    const pair = items.slice(i, i + 2);
+    const pairHtml = pair
+      .map((it, idx) => {
+        const retail =
+          it.item_retail_price && it.item_retail_price > 0
+            ? it.item_retail_price
+            : it.item_price;
+        const isLeft = idx === 0;
+        return `
+          <div class="sticker ${isLeft ? 'sticker-left' : 'sticker-right'}">
+            <div class="shop">${esc(garageName)}</div>
+            <div class="item-name">${esc(it.item_type)}</div>
+            ${
+              it.item_code
+                ? `<div class="item-code">${esc(it.item_code)}</div>`
+                : ''
+            }
+            <div class="price">$${retail.toFixed(2)}</div>
+          </div>`;
+      })
+      .join('');
+    // If only one sticker in the pair, add a blank right-side cell so the
+    // left sticker doesn't stretch to full width.
+    const filler = pair.length === 1
+      ? '<div class="sticker sticker-right sticker-filler"></div>'
+      : '';
+    const isLastRow = i + 2 >= items.length;
+    rows.push(
+      `<div class="row">${pairHtml}${filler}</div>` +
+        (isLastRow ? '' : '<div class="cut-line">&#9986; CUT &#9986;</div>')
+    );
+  }
+
+  // Reference `cells` to keep the linter quiet — we only kept the earlier
+  // build for symmetry, but the paired layout is what actually renders.
+  void cells;
 
   return `<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8" />
 <style>
-  @page { size: 55mm auto; margin: 2mm; }
+  @page { size: 55mm auto; margin: 1mm; }
   * { box-sizing: border-box; }
   body {
     font-family: 'Arial Black', 'Arial', sans-serif;
-    font-size: 12px;
     color: #000;
     margin: 0;
     padding: 0;
     width: 55mm;
     text-align: center;
   }
-  .sticker {
-    padding: 8px 4px;
-    border: 2px solid #000;
-    margin: 2px 0;
+  .row {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: stretch;
+    gap: 0;
+    margin: 1mm 0;
   }
+  .sticker {
+    flex: 1 1 0;
+    width: 50%;
+    min-height: 22mm;
+    padding: 4px 2px;
+    border: 1.5px solid #000;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .sticker-left { border-right-style: dashed; }
+  .sticker-right { border-left: none; }
+  .sticker-filler { border: 1.5px dashed #cbd5e1; background: #fff; }
   .shop {
-    font-size: 10px;
+    font-size: 8px;
     font-weight: 900;
-    letter-spacing: 1px;
+    letter-spacing: 0.5px;
     text-transform: uppercase;
     color: #000;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
+    line-height: 1;
   }
   .item-name {
-    font-size: 18px;
+    font-size: 11px;
     font-weight: 900;
-    letter-spacing: 1px;
+    letter-spacing: 0.5px;
     text-transform: uppercase;
     color: #000;
-    padding: 6px 2px;
+    padding: 3px 1px;
     border-top: 1px dashed #000;
     border-bottom: 1px dashed #000;
-    margin: 2px 0 6px 0;
-    line-height: 1.15;
+    margin: 2px 0 3px 0;
+    line-height: 1.1;
     word-break: break-word;
+    overflow-wrap: anywhere;
+    min-height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .item-code {
-    font-size: 11px;
+    font-size: 8px;
     font-weight: 700;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
     color: #000;
-    margin-bottom: 6px;
+    margin-bottom: 2px;
+    line-height: 1;
   }
   .price {
-    font-size: 32px;
+    font-size: 18px;
     font-weight: 900;
-    letter-spacing: 1.5px;
+    letter-spacing: 0.5px;
     color: #000;
-    padding: 4px 0 2px 0;
+    padding: 2px 0;
+    line-height: 1;
   }
   .cut-line {
-    font-size: 10px;
+    font-size: 8px;
     font-weight: 900;
     letter-spacing: 2px;
     color: #000;
-    padding: 6px 0;
-    border-top: 2px dashed #000;
-    border-bottom: 2px dashed #000;
-    margin: 6px 0;
+    padding: 3px 0;
+    border-top: 1.5px dashed #000;
+    border-bottom: 1.5px dashed #000;
+    margin: 3px 0;
     background: #fff;
   }
 </style>
 </head><body>
-  ${stickers || '<div class="sticker">No items selected</div>'}
-  <div style="height: 18px;"></div>
+  ${rows.join('') || '<div class="sticker">No items selected</div>'}
+  <div style="height: 12px;"></div>
 </body></html>`;
 }

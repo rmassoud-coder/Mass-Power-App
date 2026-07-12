@@ -449,7 +449,7 @@ export default function ReportScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#1e293b" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Service Report</Text>
+          <Text style={styles.headerTitle}>Services and Reports</Text>
           <View style={{ width: 40 }} />
         </View>
 

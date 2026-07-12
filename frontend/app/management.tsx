@@ -50,7 +50,7 @@ const TILES: Tile[] = [
     description: 'WhatsApp customers when service is due',
   },
   {
-    label: 'Services Report',
+    label: 'Services and Reports',
     icon: 'document-text-outline',
     color: '#fff',
     bg: '#2563eb',
