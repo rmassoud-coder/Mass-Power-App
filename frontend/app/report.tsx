@@ -21,12 +21,15 @@ import {
   updateSupplier,
   deleteSupplier,
   getLowStockBySupplier,
+  listInventory,
   Supplier,
   LowStockItemBySupplier,
+  InventoryItem,
 } from '../src/db/database';
 import { loadSettings } from '../src/utils/settings';
 import { printHtml } from '../src/utils/printer';
 import { MASS_POWER_LOGO_PNG_BASE64 } from '../src/utils/logoBase64';
+import { buildPriceStickersHtml } from '../src/utils/htmlBuilder';
 
 interface ReportItem {
   service_id: string;
@@ -196,6 +199,14 @@ export default function ReportScreen() {
   const [reorderThreshold, setReorderThreshold] = useState('5');
   const [lastThresholdUsed, setLastThresholdUsed] = useState<number>(5);
 
+  // Price stickers
+  const [stickersOpen, setStickersOpen] = useState(false);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [selectedStickerIds, setSelectedStickerIds] = useState<Set<string>>(new Set());
+  const [stickerSearch, setStickerSearch] = useState('');
+  const [stickersPrinting, setStickersPrinting] = useState(false);
+  const [stickersLoading, setStickersLoading] = useState(false);
+
   const loadSuppliers = useCallback(async () => {
     try {
       const list = await listSuppliers();
@@ -307,6 +318,81 @@ export default function ReportScreen() {
       );
     } finally {
       setReorderPrinting(false);
+    }
+  };
+
+  // ==== Price Stickers helpers ====
+  const loadInventoryForStickers = useCallback(async () => {
+    setStickersLoading(true);
+    try {
+      const list = await listInventory();
+      setInventoryItems(list);
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to load inventory');
+    } finally {
+      setStickersLoading(false);
+    }
+  }, []);
+
+  const toggleStickersSection = () => {
+    const next = !stickersOpen;
+    setStickersOpen(next);
+    if (next && inventoryItems.length === 0) {
+      loadInventoryForStickers();
+    }
+  };
+
+  const toggleStickerId = (id: string) => {
+    setSelectedStickerIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const filteredStickerItems = React.useMemo(() => {
+    const q = stickerSearch.trim().toLowerCase();
+    if (!q) return inventoryItems;
+    return inventoryItems.filter(
+      (it) =>
+        it.item_type.toLowerCase().includes(q) ||
+        (it.item_code || '').toLowerCase().includes(q) ||
+        (it.item_supplier || '').toLowerCase().includes(q) ||
+        it.item_number.toLowerCase().includes(q),
+    );
+  }, [inventoryItems, stickerSearch]);
+
+  const selectAllVisibleStickers = () => {
+    setSelectedStickerIds((prev) => {
+      const next = new Set(prev);
+      for (const it of filteredStickerItems) next.add(it.id);
+      return next;
+    });
+  };
+
+  const clearAllStickers = () => setSelectedStickerIds(new Set());
+
+  const handlePrintStickers = async () => {
+    if (selectedStickerIds.size === 0) {
+      Alert.alert('No items selected', 'Tick at least one item to print a price sticker.');
+      return;
+    }
+    setStickersPrinting(true);
+    try {
+      const settings = await loadSettings();
+      // Preserve the on-screen (sorted) order for the printout
+      const selected = inventoryItems.filter((it) => selectedStickerIds.has(it.id));
+      const html = buildPriceStickersHtml(selected, settings.garageName);
+      await printHtml(html);
+    } catch (e: any) {
+      Alert.alert(
+        'Print failed',
+        e?.message ||
+          'Unable to open printer. Make sure your thermal printer is paired and a print service (PrinterShare / RawBT) is installed.'
+      );
+    } finally {
+      setStickersPrinting(false);
     }
   };
 
@@ -621,6 +707,149 @@ export default function ReportScreen() {
                   ))}
                 </View>
               )
+            )}
+          </View>
+
+          {/* ========== Price Stickers ========== */}
+          <View style={styles.section}>
+            <TouchableOpacity
+              style={styles.sectionHeaderRow}
+              onPress={toggleStickersSection}
+              testID="stickers-toggle"
+            >
+              <MaterialCommunityIcons name="tag-multiple" size={20} color="#7c3aed" />
+              <Text style={[styles.sectionTitle, { marginBottom: 0, marginLeft: 8, flex: 1 }]}>
+                Price Stickers ({selectedStickerIds.size} selected)
+              </Text>
+              <Ionicons
+                name={stickersOpen ? 'chevron-up' : 'chevron-down'}
+                size={20}
+                color="#64748b"
+              />
+            </TouchableOpacity>
+
+            {stickersOpen && (
+              <>
+                <Text style={styles.helperText}>
+                  Tick each item you want to print a price sticker for. Prints on 55mm thermal — item name + retail price only, with a cut line between each.
+                </Text>
+
+                <View style={styles.stickerSearchRow}>
+                  <Ionicons name="search" size={16} color="#94a3b8" />
+                  <TextInput
+                    style={styles.stickerSearchInput}
+                    placeholder="Search item, code, supplier…"
+                    placeholderTextColor="#94a3b8"
+                    value={stickerSearch}
+                    onChangeText={setStickerSearch}
+                    testID="sticker-search-input"
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                  />
+                  {stickerSearch.length > 0 && (
+                    <TouchableOpacity onPress={() => setStickerSearch('')}>
+                      <Ionicons name="close-circle" size={18} color="#94a3b8" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <View style={styles.stickerBulkRow}>
+                  <TouchableOpacity
+                    style={styles.stickerBulkBtn}
+                    onPress={selectAllVisibleStickers}
+                    testID="sticker-select-all"
+                  >
+                    <Ionicons name="checkmark-done" size={14} color="#7c3aed" />
+                    <Text style={styles.stickerBulkText}>
+                      Select all{stickerSearch ? ' (filtered)' : ''}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.stickerBulkBtn}
+                    onPress={clearAllStickers}
+                    testID="sticker-clear-all"
+                  >
+                    <Ionicons name="close-circle-outline" size={14} color="#dc2626" />
+                    <Text style={[styles.stickerBulkText, { color: '#dc2626' }]}>Clear</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={loadInventoryForStickers} style={styles.stickerBulkBtn}>
+                    <Ionicons name="refresh" size={14} color="#64748b" />
+                    <Text style={[styles.stickerBulkText, { color: '#64748b' }]}>Refresh</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {stickersLoading ? (
+                  <ActivityIndicator style={{ marginVertical: 20 }} color="#7c3aed" />
+                ) : filteredStickerItems.length === 0 ? (
+                  <Text style={styles.helperText}>
+                    {inventoryItems.length === 0
+                      ? 'No inventory items yet — add some from the Inventory screen first.'
+                      : 'No items match your search.'}
+                  </Text>
+                ) : (
+                  <View style={styles.stickerList}>
+                    {filteredStickerItems.map((it) => {
+                      const retail =
+                        it.item_retail_price && it.item_retail_price > 0
+                          ? it.item_retail_price
+                          : it.item_price;
+                      const checked = selectedStickerIds.has(it.id);
+                      return (
+                        <TouchableOpacity
+                          key={it.id}
+                          style={[styles.stickerRow, checked && styles.stickerRowChecked]}
+                          onPress={() => toggleStickerId(it.id)}
+                          activeOpacity={0.7}
+                          testID={`sticker-row-${it.id}`}
+                        >
+                          <View
+                            style={[
+                              styles.stickerCheckbox,
+                              checked && styles.stickerCheckboxChecked,
+                            ]}
+                          >
+                            {checked && <Ionicons name="checkmark" size={14} color="#fff" />}
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.stickerItemName} numberOfLines={1}>
+                              {it.item_type}
+                            </Text>
+                            <Text style={styles.stickerItemMeta} numberOfLines={1}>
+                              {it.item_number}
+                              {it.item_code ? ` • ${it.item_code}` : ''}
+                              {it.item_supplier ? ` • ${it.item_supplier}` : ''}
+                            </Text>
+                          </View>
+                          <Text style={styles.stickerItemPrice}>${retail.toFixed(2)}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={[
+                    styles.generateButton,
+                    { backgroundColor: '#7c3aed', marginTop: 12 },
+                    (stickersPrinting || selectedStickerIds.size === 0) && styles.buttonDisabled,
+                  ]}
+                  onPress={handlePrintStickers}
+                  disabled={stickersPrinting || selectedStickerIds.size === 0}
+                  testID="print-stickers-button"
+                >
+                  {stickersPrinting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="print-outline" size={20} color="#fff" />
+                      <Text style={styles.generateButtonText}>
+                        Print {selectedStickerIds.size > 0 ? `${selectedStickerIds.size} ` : ''}
+                        Sticker{selectedStickerIds.size === 1 ? '' : 's'}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </>
             )}
           </View>
 
@@ -1276,5 +1505,97 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+  },
+  // ==== Price Stickers styles ====
+  stickerSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  stickerSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0f172a',
+    padding: 0,
+  },
+  stickerBulkRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 10,
+  },
+  stickerBulkBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  stickerBulkText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#7c3aed',
+    letterSpacing: 0.3,
+  },
+  stickerList: {
+    maxHeight: 380,
+  },
+  stickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 6,
+    gap: 10,
+  },
+  stickerRowChecked: {
+    backgroundColor: '#faf5ff',
+    borderColor: '#c4b5fd',
+  },
+  stickerCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stickerCheckboxChecked: {
+    backgroundColor: '#7c3aed',
+    borderColor: '#7c3aed',
+  },
+  stickerItemName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  stickerItemMeta: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  stickerItemPrice: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0f766e',
+    marginLeft: 8,
   },
 });
