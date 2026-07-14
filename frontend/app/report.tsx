@@ -453,7 +453,11 @@ export default function ReportScreen() {
           <View style={{ width: 40 }} />
         </View>
 
-        <ScrollView style={styles.content}>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={{ paddingBottom: 40 }}
+          nestedScrollEnabled
+        >
           {/* Date Range */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Date Range</Text>
@@ -682,29 +686,35 @@ export default function ReportScreen() {
                   <Text style={styles.reorderMetaLine}>
                     Showing items with stock &lt; {lastThresholdUsed}
                   </Text>
-                  {reorderGroups.map((g) => (
-                    <View key={g.supplier_name} style={styles.supplierBlock}>
-                      <View style={styles.supplierHeader}>
-                        <Text style={styles.supplierName}>{g.supplier_name}</Text>
-                        <Text style={styles.supplierBadge}>{g.items.length}</Text>
-                      </View>
-                      {g.items.map((it) => (
-                        <View key={it.id} style={styles.supplierItem}>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.supplierItemName} numberOfLines={1}>
-                              {it.item_type}
-                            </Text>
-                            <Text style={styles.supplierItemMeta}>
-                              {it.item_number}{it.item_code ? ` • ${it.item_code}` : ''}
-                            </Text>
-                          </View>
-                          <View style={styles.stockPill}>
-                            <Text style={styles.stockPillText}>{it.item_quantity}</Text>
-                          </View>
+                  <ScrollView
+                    style={styles.reorderScroll}
+                    nestedScrollEnabled
+                    showsVerticalScrollIndicator
+                  >
+                    {reorderGroups.map((g) => (
+                      <View key={g.supplier_name} style={styles.supplierBlock}>
+                        <View style={styles.supplierHeader}>
+                          <Text style={styles.supplierName}>{g.supplier_name}</Text>
+                          <Text style={styles.supplierBadge}>{g.items.length}</Text>
                         </View>
-                      ))}
-                    </View>
-                  ))}
+                        {g.items.map((it) => (
+                          <View key={it.id} style={styles.supplierItem}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.supplierItemName} numberOfLines={1}>
+                                {it.item_type}
+                              </Text>
+                              <Text style={styles.supplierItemMeta}>
+                                {it.item_number}{it.item_code ? ` • ${it.item_code}` : ''}
+                              </Text>
+                            </View>
+                            <View style={styles.stockPill}>
+                              <Text style={styles.stockPillText}>{it.item_quantity}</Text>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    ))}
+                  </ScrollView>
                 </View>
               )
             )}
@@ -1365,6 +1375,9 @@ const styles = StyleSheet.create({
     color: '#78716c',
     marginBottom: 8,
     fontStyle: 'italic',
+  },
+  reorderScroll: {
+    maxHeight: 420,
   },
   thresholdRow: {
     flexDirection: 'row',

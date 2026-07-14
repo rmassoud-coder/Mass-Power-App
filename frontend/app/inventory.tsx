@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -31,6 +31,7 @@ export default function InventoryScreen() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<InventoryItem | null>(null);
   const [formType, setFormType] = useState('');
@@ -55,6 +56,18 @@ export default function InventoryScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const filteredItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter(
+      (it) =>
+        it.item_type.toLowerCase().includes(q) ||
+        (it.item_code || '').toLowerCase().includes(q) ||
+        (it.item_supplier || '').toLowerCase().includes(q) ||
+        it.item_number.toLowerCase().includes(q),
+    );
+  }, [items, search]);
 
   const openAdd = () => {
     setEditing(null);
@@ -202,9 +215,46 @@ export default function InventoryScreen() {
             );
           })()}
           <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: 80 }}>
-            {items.map((it) => {
-              const low = it.item_quantity < 2;
-              const retail = it.item_retail_price && it.item_retail_price > 0 ? it.item_retail_price : it.item_price;
+            {/* Search bar */}
+            <View style={styles.searchRow}>
+              <Ionicons name="search" size={16} color="#94a3b8" />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search by name, code, supplier, or INV#…"
+                placeholderTextColor="#94a3b8"
+                value={search}
+                onChangeText={setSearch}
+                autoCapitalize="none"
+                autoCorrect={false}
+                testID="inventory-search-input"
+              />
+              {search.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setSearch('')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="close-circle" size={18} color="#94a3b8" />
+                </TouchableOpacity>
+              )}
+            </View>
+            {search.trim().length > 0 && (
+              <Text style={styles.searchMeta}>
+                {filteredItems.length} of {items.length} item
+                {items.length === 1 ? '' : 's'} match
+              </Text>
+            )}
+
+            {filteredItems.length === 0 ? (
+              <View style={styles.searchEmpty}>
+                <Ionicons name="search" size={28} color="#cbd5e1" />
+                <Text style={styles.searchEmptyText}>
+                  No items match "{search.trim()}"
+                </Text>
+              </View>
+            ) : (
+              filteredItems.map((it) => {
+                const low = it.item_quantity < 2;
+                const retail = it.item_retail_price && it.item_retail_price > 0 ? it.item_retail_price : it.item_price;
               return (
                 <View
                   key={it.id}
@@ -254,7 +304,8 @@ export default function InventoryScreen() {
                   </View>
                 </View>
               );
-            })}
+            })
+            )}
           </ScrollView>
         </>
       )}
@@ -426,6 +477,42 @@ const styles = StyleSheet.create({
   emptyAddText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 
   list: { flex: 1, paddingHorizontal: 12, paddingTop: 10 },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 6,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0f172a',
+    padding: 0,
+  },
+  searchMeta: {
+    fontSize: 11,
+    color: '#64748b',
+    fontStyle: 'italic',
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  searchEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 8,
+  },
+  searchEmptyText: {
+    fontSize: 13,
+    color: '#94a3b8',
+    fontWeight: '600',
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
