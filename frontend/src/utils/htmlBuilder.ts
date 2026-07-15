@@ -599,6 +599,162 @@ export function buildBatteryStickerHtml(
 }
 
 
+/** Standalone 55mm thermal HTML that prints the HVAC service sticker.
+ *  Layout:
+ *    - Shop name
+ *    - Car brand
+ *    - Freon added on: DD/MM/YYYY
+ *    - Leak-tested checkbox (ticked or empty)
+ */
+export function buildHvacStickerHtml(
+  customer: Customer,
+  vehicle: Vehicle,
+  service: Service,
+  settings: AppSettings
+): string {
+  const freonFormatted = service.hvac_freon_date
+    ? new Date(service.hvac_freon_date).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
+    : '';
+
+  return `<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8" />
+<style>
+  @page { size: 55mm auto; margin: 2mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Arial Black', 'Arial', sans-serif;
+    font-size: 12px;
+    color: #000;
+    margin: 0;
+    padding: 0;
+    width: 55mm;
+    text-align: center;
+  }
+  .sticker {
+    border: 3px solid #000;
+    padding: 8px 6px;
+    margin: 4px 2px;
+  }
+  .shop {
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #000;
+    margin-bottom: 6px;
+  }
+  .brand {
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 4px 0 8px 0;
+    border-bottom: 1px dashed #000;
+    margin-bottom: 8px;
+  }
+  .heading {
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .freon-row {
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    padding: 6px 0;
+    background: #000;
+    color: #fff;
+    margin: 6px -6px 8px -6px;
+  }
+  .field-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin: 6px 4px;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 1px;
+  }
+  .field-label { text-align: left; }
+  .field-value { text-align: right; font-size: 14px; }
+  .divider {
+    border-top: 1px dashed #000;
+    margin: 8px 4px;
+  }
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 8px 4px 4px 4px;
+  }
+  .checkbox {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border: 2px solid #000;
+    margin-right: 8px;
+    vertical-align: middle;
+    font-size: 16px;
+    font-weight: 900;
+    line-height: 1;
+  }
+  .checkbox-label {
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    vertical-align: middle;
+  }
+  .plate {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px dashed #000;
+  }
+</style>
+</head><body>
+  <div class="sticker">
+    <img src="${MASS_POWER_LOGO_PNG_BASE64}" alt="logo" style="width:60px; height:60px; border-radius:50%; display:block; margin:0 auto 4px auto;" />
+    <div class="shop">${esc(settings.garageName)}</div>
+    <div class="brand">${esc([vehicle.make, vehicle.model].filter(Boolean).join(' ').trim())}</div>
+    <div class="heading">HVAC / AC Service</div>
+    <div class="freon-row">FREON ADDED</div>
+    ${
+      freonFormatted
+        ? `<div class="field-row">
+             <span class="field-label">DATE:</span>
+             <span class="field-value">${esc(freonFormatted)}</span>
+           </div>`
+        : ''
+    }
+    <div class="divider"></div>
+    <div class="checkbox-row">
+      <span class="checkbox">${service.hvac_leak_tested ? '&#10003;' : ''}</span>
+      <span class="checkbox-label">Tested for Freon Leaks</span>
+    </div>
+    ${
+      vehicle.plate_number
+        ? `<div class="plate">${esc(vehicle.plate_number)}</div>`
+        : ''
+    }
+  </div>
+  <div style="height: 18px;"></div>
+</body></html>`;
+}
+
+
 
 /** 55mm thermal HTML that prints price-stickers for selected inventory items.
  *  Layout: TWO stickers per row (each ~26mm wide) so we save paper. A dashed

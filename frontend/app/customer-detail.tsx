@@ -25,7 +25,7 @@ import {
   Service as DBService,
 } from '../src/db/database';
 import { loadSettings } from '../src/utils/settings';
-import { buildThermalReceiptHtml, buildOilStickerHtml, buildBatteryStickerHtml } from '../src/utils/htmlBuilder';
+import { buildThermalReceiptHtml, buildOilStickerHtml, buildBatteryStickerHtml, buildHvacStickerHtml } from '../src/utils/htmlBuilder';
 import { printHtml } from '../src/utils/printer';
 
 interface Vehicle extends DBVehicle {}
@@ -51,6 +51,7 @@ export default function CustomerDetailScreen() {
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [printingStickerId, setPrintingStickerId] = useState<string | null>(null);
   const [printingBatteryStickerId, setPrintingBatteryStickerId] = useState<string | null>(null);
+  const [printingHvacStickerId, setPrintingHvacStickerId] = useState<string | null>(null);
 
   // Auto-refresh whenever screen comes into focus (after edits/adds)
   useFocusEffect(
@@ -185,6 +186,24 @@ export default function CustomerDetailScreen() {
       );
     } finally {
       setPrintingBatteryStickerId(null);
+    }
+  };
+
+  const handlePrintHvacSticker = async (service: Service, vehicle: Vehicle) => {
+    if (!details) return;
+    setPrintingHvacStickerId(service.id);
+    try {
+      const settings = await loadSettings();
+      const html = buildHvacStickerHtml(details.customer, vehicle, service, settings);
+      await printHtml(html);
+    } catch (e: any) {
+      Alert.alert(
+        'Print failed',
+        e?.message ||
+          'Unable to open printer. Make sure your Bluetooth thermal printer is paired and a print service is installed (e.g. PrinterShare / RawBT).'
+      );
+    } finally {
+      setPrintingHvacStickerId(null);
     }
   };
 
@@ -470,6 +489,20 @@ export default function CustomerDetailScreen() {
                                   )}
                                 </TouchableOpacity>
                               )}
+                              {service.service_description === 'HVAC Services' && (
+                                <TouchableOpacity
+                                  onPress={() => handlePrintHvacSticker(service, vehicle)}
+                                  style={styles.serviceItemActionButton}
+                                  disabled={printingHvacStickerId === service.id}
+                                  testID={`print-hvac-sticker-${service.id}`}
+                                >
+                                  {printingHvacStickerId === service.id ? (
+                                    <ActivityIndicator size="small" color="#0284c7" />
+                                  ) : (
+                                    <MaterialCommunityIcons name="snowflake" size={18} color="#0284c7" />
+                                  )}
+                                </TouchableOpacity>
+                              )}
                               <TouchableOpacity
                                 onPress={() => handlePrintService(service, vehicle)}
                                 style={styles.serviceItemActionButton}
@@ -511,6 +544,8 @@ export default function CustomerDetailScreen() {
                                           ? String(service.battery_warranty_months)
                                           : '',
                                       batteryParasiticTested: service.battery_parasitic_tested ? 'true' : 'false',
+                                      hvacFreonDate: service.hvac_freon_date || '',
+                                      hvacLeakTested: service.hvac_leak_tested ? 'true' : 'false',
                                       vehicleMake: vehicle.make || '',
                                       vehicleModel: vehicle.model || '',
                                       items: JSON.stringify(service.items || []),

@@ -21,12 +21,15 @@ import {
   DashLights,
   OilReminder,
   BatteryReplacement,
+  HvacService,
   EMPTY_OIL_REMINDER,
   EMPTY_BATTERY_REPLACEMENT,
+  EMPTY_HVAC_SERVICE,
 } from '../src/db/database';
 import DashLightsPicker from '../src/components/DashLightsPicker';
 import OilReminderForm from '../src/components/OilReminderForm';
 import BatteryReplacementForm from '../src/components/BatteryReplacementForm';
+import HvacServiceForm from '../src/components/HvacServiceForm';
 import InventoryPicker, { PickedItem } from '../src/components/InventoryPicker';
 
 interface ServiceItemParam {
@@ -95,6 +98,10 @@ export default function EditServiceScreen() {
       : 12,
     parasiticTested: params.batteryParasiticTested === 'true',
   });
+  const [hvacService, setHvacService] = useState<HvacService>({
+    freonDate: (params.hvacFreonDate as string) || null,
+    leakTested: params.hvacLeakTested === 'true',
+  });
   const [pickedItems, setPickedItems] = useState<PickedItem[]>(
     initialItems.map((it) => ({
       inventory_id: it.inventory_id,
@@ -116,6 +123,7 @@ export default function EditServiceScreen() {
 
   const isOilService = serviceCategory === 'Oil Services';
   const isBatteryService = serviceCategory === 'Battery Replacement';
+  const isHvacService = serviceCategory === 'HVAC Services';
 
   const productsSubtotal = pickedItems.reduce(
     (sum, it) => sum + it.quantity * it.unit_price,
@@ -162,7 +170,8 @@ export default function EditServiceScreen() {
         isOilService ? oilReminder : EMPTY_OIL_REMINDER,
         pickedItems.map((p) => ({ inventory_id: p.inventory_id, quantity: p.quantity })),
         0,
-        isBatteryService ? batteryReplacement : EMPTY_BATTERY_REPLACEMENT
+        isBatteryService ? batteryReplacement : EMPTY_BATTERY_REPLACEMENT,
+        isHvacService ? hvacService : EMPTY_HVAC_SERVICE
       );
 
       router.back();
@@ -227,6 +236,12 @@ export default function EditServiceScreen() {
                   value={batteryReplacement}
                   onChange={setBatteryReplacement}
                 />
+              </View>
+            )}
+
+            {isHvacService && (
+              <View style={styles.hvacCard}>
+                <HvacServiceForm value={hvacService} onChange={setHvacService} />
               </View>
             )}
 
@@ -391,6 +406,14 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#6ee7b7',
     backgroundColor: '#ecfdf5',
+    marginBottom: 20,
+  },
+  hvacCard: {
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#7dd3fc',
+    backgroundColor: '#f0f9ff',
     marginBottom: 20,
   },
   submitButton: {
