@@ -36,14 +36,14 @@ export default function DashLightsPicker({ value, onChange }: Props) {
     <View>
       <View style={styles.headerRow}>
         <Ionicons name="warning" size={18} color="#f59e0b" />
-        <Text style={styles.headerText}>Dashboard Warning Lights</Text>
+        <Text style={styles.headerText}>Customer Complaints and Observations</Text>
         {activeCount > 0 && (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{activeCount}</Text>
           </View>
         )}
       </View>
-      <Text style={styles.subtitle}>Tap any light that was ON when this service was performed</Text>
+      <Text style={styles.subtitle}>Tap any warning light the customer reported or that was ON during the visit</Text>
       <View style={styles.grid}>
         {LIGHTS.map((l) => {
           const active = !!value[l.key];
