@@ -619,6 +619,9 @@ export function buildHvacStickerHtml(
         year: 'numeric',
       })
     : '';
+  // Whatever the mechanic wrote in the "Additional info" (description) field
+  // is what gets stamped on the sticker so it fits AC top-ups, heater core work, etc.
+  const descLine = (service.additional_info || '').trim();
 
   return `<!DOCTYPE html>
 <html><head>
@@ -666,13 +669,15 @@ export function buildHvacStickerHtml(
     margin-bottom: 8px;
   }
   .freon-row {
-    font-size: 18px;
+    font-size: 15px;
     font-weight: 900;
-    letter-spacing: 1px;
-    padding: 6px 0;
+    letter-spacing: 0.5px;
+    padding: 6px 8px;
     background: #000;
     color: #fff;
     margin: 6px -6px 8px -6px;
+    line-height: 1.2;
+    word-break: break-word;
   }
   .field-row {
     display: flex;
@@ -730,7 +735,9 @@ export function buildHvacStickerHtml(
     <div class="shop">${esc(settings.garageName)}</div>
     <div class="brand">${esc([vehicle.make, vehicle.model].filter(Boolean).join(' ').trim())}</div>
     <div class="heading">HVAC / AC Service</div>
-    <div class="freon-row">FREON ADDED</div>
+    <div class="freon-row">${
+      descLine ? esc(descLine.toUpperCase()) : 'HVAC SERVICE PERFORMED'
+    }</div>
     ${
       freonFormatted
         ? `<div class="field-row">
@@ -742,7 +749,7 @@ export function buildHvacStickerHtml(
     <div class="divider"></div>
     <div class="checkbox-row">
       <span class="checkbox">${service.hvac_leak_tested ? '&#10003;' : ''}</span>
-      <span class="checkbox-label">Tested for Freon Leaks</span>
+      <span class="checkbox-label">Tested for Leaks</span>
     </div>
     ${
       vehicle.plate_number

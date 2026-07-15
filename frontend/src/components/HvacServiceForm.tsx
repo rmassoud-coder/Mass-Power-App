@@ -84,7 +84,7 @@ export default function HvacServiceForm({ value, onChange }: Props) {
         <Text style={styles.headerText}>HVAC Service Details</Text>
       </View>
       <Text style={styles.subtitle}>
-        Printed on the 55mm sticker so the customer & garage always know when freon was added.
+        Whatever you type in "Additional Info" appears on the sticker (fits AC top-ups, heater core work, etc.).
       </Text>
 
       {/* Freon Added Date */}
