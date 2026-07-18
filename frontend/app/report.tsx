@@ -175,9 +175,12 @@ function buildReorderHtml(
 
 export default function ReportScreen() {
   const router = useRouter();
-  
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+
+  // Default the date range to TODAY so the mechanic sees "today's sales" the
+  // moment they open the screen. They can widen the range afterwards.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const [startDate, setStartDate] = useState(todayIso);
+  const [endDate, setEndDate] = useState(todayIso);
   const [filterType, setFilterType] = useState<FilterType>('mobile');
   const [filterValue, setFilterValue] = useState('');
   const [unpaidOnly, setUnpaidOnly] = useState(false);
@@ -219,6 +222,19 @@ export default function ReportScreen() {
   useEffect(() => {
     loadSuppliers();
   }, [loadSuppliers]);
+
+  // Auto-run today's sales report on first mount so the mechanic sees the
+  // daily total straight away without having to tap "Generate".
+  const didAutoRun = React.useRef(false);
+  useEffect(() => {
+    if (didAutoRun.current) return;
+    didAutoRun.current = true;
+    // Fire in the next tick so all state is initialised
+    setTimeout(() => {
+      handleGenerate();
+    }, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSaveSupplier = async () => {
     const name = supplierName.trim();
@@ -426,8 +442,11 @@ export default function ReportScreen() {
   };
 
   const handleClear = () => {
-    setStartDate('');
-    setEndDate('');
+    // Reset to today's range (matches the initial "daily sales" default) so
+    // the daily view stays sticky rather than blanking out.
+    const today = new Date().toISOString().slice(0, 10);
+    setStartDate(today);
+    setEndDate(today);
     setFilterValue('');
     setUnpaidOnly(false);
     setReport(null);
@@ -558,7 +577,7 @@ export default function ReportScreen() {
               <View style={styles.unpaidToggleLabel}>
                 <Text style={styles.unpaidToggleText}>Show Unpaid Services Only</Text>
                 <Text style={styles.unpaidToggleSubtext}>
-                  Filter to show only services that haven't been paid yet
+                  Filter to show only services that haven&apos;t been paid yet
                 </Text>
               </View>
             </TouchableOpacity>
