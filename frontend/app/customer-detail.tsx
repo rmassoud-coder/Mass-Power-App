@@ -543,9 +543,25 @@ export default function CustomerDetailScreen() {
                             </Text>
                           </View>
                           <View style={styles.serviceItemRight}>
-                            <Text style={[styles.serviceItemCost, !service.is_paid && styles.serviceItemCostUnpaid]}>
-                              ${service.cost.toFixed(2)}
-                            </Text>
+                            {(() => {
+                              const partial = Number(service.partial_paid) || 0;
+                              const isPending = !service.is_paid && partial > 0;
+                              const displayAmount = isPending
+                                ? Math.max(0, service.cost - partial)
+                                : service.cost;
+                              return (
+                                <>
+                                  <Text style={[styles.serviceItemCost, !service.is_paid && styles.serviceItemCostUnpaid]}>
+                                    ${displayAmount.toFixed(2)}
+                                  </Text>
+                                  {isPending && (
+                                    <Text style={styles.serviceItemPartialHint}>
+                                      remaining · paid ${partial.toFixed(0)}/${service.cost.toFixed(0)}
+                                    </Text>
+                                  )}
+                                </>
+                              );
+                            })()}
                             <View style={styles.serviceItemActions}>
                               {(service.next_service_date || service.next_service_mileage) && (
                                 <TouchableOpacity
@@ -1053,6 +1069,13 @@ const styles = StyleSheet.create({
   },
   serviceItemCostUnpaid: {
     color: '#ef4444',
+  },
+  serviceItemPartialHint: {
+    fontSize: 9,
+    color: '#b45309',
+    fontStyle: 'italic',
+    marginTop: 2,
+    textAlign: 'right',
   },
   serviceItemContent: {
     flexDirection: 'row',

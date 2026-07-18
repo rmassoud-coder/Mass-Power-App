@@ -1111,9 +1111,20 @@ export default function ReportScreen() {
                             <Text style={styles.itemAdditional}>{item.additional_info}</Text>
                           )}
                         </View>
-                        <Text style={[styles.itemCost, !item.is_paid && styles.itemCostUnpaid]}>
-                          ${item.cost.toFixed(2)}
-                        </Text>
+                        {isPending ? (
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={[styles.itemCost, styles.itemCostUnpaid]}>
+                              ${Math.max(0, item.cost - partial).toFixed(2)}
+                            </Text>
+                            <Text style={styles.itemCostHint}>
+                              remaining
+                            </Text>
+                          </View>
+                        ) : (
+                          <Text style={[styles.itemCost, !item.is_paid && styles.itemCostUnpaid]}>
+                            ${item.cost.toFixed(2)}
+                          </Text>
+                        )}
                       </View>
                       <View style={styles.itemDetails}>
                         <View style={styles.detailRow}>
@@ -1389,6 +1400,12 @@ const styles = StyleSheet.create({
   itemDescription: { fontSize: 15, fontWeight: '600', color: '#1e293b' },
   itemAdditional: { fontSize: 13, color: '#64748b', marginTop: 2 },
   itemCost: { fontSize: 16, fontWeight: 'bold', color: '#10b981' },
+  itemCostHint: {
+    fontSize: 10,
+    color: '#b45309',
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
   itemDetails: { paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
   detailRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
   detailText: { fontSize: 13, color: '#475569', marginLeft: 8 },

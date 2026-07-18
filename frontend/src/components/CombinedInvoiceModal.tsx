@@ -81,7 +81,19 @@ export default function CombinedInvoiceModal({
     [services, selected],
   );
 
-  const subtotal = selectedServices.reduce((sum, s) => sum + (s.cost || 0), 0);
+  /** For each service, the amount still owing. If it's PENDING (partial), that's
+   *  cost − partial_paid. If it's UNPAID, it's the full cost. If it's already
+   *  PAID we still include the full cost because the user explicitly ticked it
+   *  (e.g. reprinting an old receipt). */
+  const remaining = (s: Service): number => {
+    const partial = Number(s.partial_paid) || 0;
+    if (!s.is_paid && partial > 0) {
+      return Math.max(0, (s.cost || 0) - partial);
+    }
+    return s.cost || 0;
+  };
+
+  const subtotal = selectedServices.reduce((sum, s) => sum + remaining(s), 0);
   const discountValue = Math.max(0, parseFloat(discountText || '0') || 0);
   const cleanDiscount = Math.min(discountValue, subtotal);
   const grandTotal = Math.max(0, subtotal - cleanDiscount);
@@ -182,7 +194,14 @@ export default function CombinedInvoiceModal({
                         {v?.plate_number ? ` • ${v.plate_number}` : ''}
                       </Text>
                     </View>
-                    <Text style={styles.rowCost}>${(s.cost || 0).toFixed(2)}</Text>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.rowCost}>${remaining(s).toFixed(2)}</Text>
+                      {(s.partial_paid || 0) > 0 && !s.is_paid && (
+                        <Text style={styles.rowCostHint}>
+                          remaining · paid ${(s.partial_paid || 0).toFixed(0)}
+                        </Text>
+                      )}
+                    </View>
                   </TouchableOpacity>
                 );
               })
@@ -352,6 +371,13 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#0f766e',
     marginLeft: 8,
+  },
+  rowCostHint: {
+    fontSize: 9,
+    color: '#b45309',
+    fontStyle: 'italic',
+    marginTop: 2,
+    textAlign: 'right',
   },
   statusChip: {
     paddingHorizontal: 6,

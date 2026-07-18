@@ -258,7 +258,14 @@ export function buildCombinedInvoiceHtml(
     grouped.set(s.vehicle_id, arr);
   }
 
-  const subtotal = services.reduce((sum, s) => sum + (s.cost || 0), 0);
+  // Remaining balance for a service (cost minus any partial payment)
+  const remaining = (s: Service): number => {
+    const partial = Number(s.partial_paid) || 0;
+    if (!s.is_paid && partial > 0) return Math.max(0, (s.cost || 0) - partial);
+    return s.cost || 0;
+  };
+
+  const subtotal = services.reduce((sum, s) => sum + remaining(s), 0);
   const cleanDiscount = Math.max(0, Math.min(discountAmount || 0, subtotal));
   const grandTotal = Math.max(0, subtotal - cleanDiscount);
 
@@ -290,6 +297,12 @@ export function buildCombinedInvoiceHtml(
           : (s.partial_paid || 0) > 0
             ? '<span class="partial-tag">PENDING</span>'
             : '<span class="unpaid-tag">UNPAID</span>';
+        const partial = Number(s.partial_paid) || 0;
+        const isPending = !s.is_paid && partial > 0;
+        const lineAmount = isPending ? Math.max(0, (s.cost || 0) - partial) : (s.cost || 0);
+        const partialHint = isPending
+          ? `<div class="sm partial-hint">Total $${(s.cost || 0).toFixed(2)} &minus; Paid $${partial.toFixed(2)}</div>`
+          : '';
         return `
           <div class="service-block">
             <div class="row">
@@ -298,8 +311,9 @@ export function buildCombinedInvoiceHtml(
             </div>
             <div class="row bold">
               <span class="service-name">${esc(s.service_description)}</span>
-              <span class="service-cost">$${(s.cost || 0).toFixed(2)}</span>
+              <span class="service-cost">$${lineAmount.toFixed(2)}</span>
             </div>
+            ${partialHint}
             ${s.additional_info ? `<div class="sm add-info">${esc(s.additional_info)}</div>` : ''}
             ${items}
           </div>`;
@@ -366,6 +380,12 @@ export function buildCombinedInvoiceHtml(
   .service-name { flex: 1; padding-right: 4px; }
   .service-cost { font-weight: bold; }
   .add-info { font-style: italic; color: #333; margin-top: 2px; }
+  .partial-hint {
+    color: #444;
+    font-style: italic;
+    margin-top: 2px;
+    text-align: right;
+  }
   .items { margin-top: 4px; padding-left: 8px; }
   .item-line {
     display: flex;
