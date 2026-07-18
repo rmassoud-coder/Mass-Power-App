@@ -71,6 +71,10 @@ export interface Service {
   // HVAC service fields (only relevant when service_description === 'HVAC Services')
   hvac_freon_date?: string | null;               // ISO YYYY-MM-DD (date freon was topped up)
   hvac_leak_tested?: boolean;
+  // Outsource cost — money paid to a 3rd party for this job. Used ONLY in
+  // the Reports screen to compute net cash-flow. NEVER printed on receipts,
+  // invoices, stickers or QR HTML.
+  outsource_cost?: number;
   // Reminder system: when 1 the oil-change reminder for this service is hidden permanently
   reminder_dismissed?: boolean;
   // Inventory items used on this service (loaded on demand)
@@ -221,6 +225,8 @@ export interface ReportItem {
   is_paid: boolean;
   /** Amount paid so far when the invoice is only partially settled. 0 for paid/unpaid. */
   partial_paid?: number;
+  /** Private outsource cost — 3rd-party expense. Only visible in Reports. */
+  outsource_cost?: number;
   service_date: string;
 }
 
@@ -398,6 +404,15 @@ export async function initDatabase() {
     } catch {
       // Column already exists - ignore
     }
+  }
+
+  // Migration: private outsource cost (Reports-only, never printed)
+  try {
+    await db.execAsync(
+      `ALTER TABLE services ADD COLUMN outsource_cost REAL NOT NULL DEFAULT 0`
+    );
+  } catch {
+    // already exists
   }
 
   // Seed data only once
@@ -667,7 +682,8 @@ export async function createService(
   items?: ServiceItemInput[],
   partialPaid: number = 0,
   battery?: BatteryReplacement,
-  hvac?: HvacService
+  hvac?: HvacService,
+  outsourceCost: number = 0
 ): Promise<Service> {
   const db = await getDb();
   const vehicle = await db.getFirstAsync<Vehicle>(
@@ -684,8 +700,9 @@ export async function createService(
   const b = battery || EMPTY_BATTERY_REPLACEMENT;
   const h = hvac || EMPTY_HVAC_SERVICE;
   const pp = Math.max(0, Number(partialPaid) || 0);
+  const oc = Math.max(0, Number(outsourceCost) || 0);
   await db.runAsync(
-    `INSERT INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, partial_paid, service_date, created_at, dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, dash_tpms, dash_oil_leak, current_mileage, next_service_date, next_service_mileage, oil_grade, oil_filter_changed, battery_amp_rate, battery_install_date, battery_warranty_months, battery_parasitic_tested, hvac_freon_date, hvac_leak_tested) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, partial_paid, service_date, created_at, dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, dash_tpms, dash_oil_leak, current_mileage, next_service_date, next_service_mileage, oil_grade, oil_filter_changed, battery_amp_rate, battery_install_date, battery_warranty_months, battery_parasitic_tested, hvac_freon_date, hvac_leak_tested, outsource_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       vehicleId,
@@ -715,6 +732,7 @@ export async function createService(
       b.parasiticTested ? 1 : 0,
       h.freonDate || null,
       h.leakTested ? 1 : 0,
+      oc,
     ]
   );
 
@@ -749,6 +767,7 @@ export async function createService(
     battery_parasitic_tested: b.parasiticTested,
     hvac_freon_date: h.freonDate || null,
     hvac_leak_tested: h.leakTested,
+    outsource_cost: oc,
     items: savedItems,
   };
 }
@@ -764,7 +783,8 @@ export async function updateService(
   items?: ServiceItemInput[],
   partialPaid: number = 0,
   battery?: BatteryReplacement,
-  hvac?: HvacService
+  hvac?: HvacService,
+  outsourceCost: number = 0
 ): Promise<void> {
   const db = await getDb();
   const d = dashLights || EMPTY_DASH_LIGHTS;
@@ -772,8 +792,9 @@ export async function updateService(
   const b = battery || EMPTY_BATTERY_REPLACEMENT;
   const h = hvac || EMPTY_HVAC_SERVICE;
   const pp = Math.max(0, Number(partialPaid) || 0);
+  const oc = Math.max(0, Number(outsourceCost) || 0);
   await db.runAsync(
-    `UPDATE services SET service_description = ?, additional_info = ?, cost = ?, is_paid = ?, partial_paid = ?, dash_abs = ?, dash_check_engine = ?, dash_brake = ?, dash_airbag = ?, dash_immobilizer = ?, dash_tpms = ?, dash_oil_leak = ?, current_mileage = ?, next_service_date = ?, next_service_mileage = ?, oil_grade = ?, oil_filter_changed = ?, battery_amp_rate = ?, battery_install_date = ?, battery_warranty_months = ?, battery_parasitic_tested = ?, hvac_freon_date = ?, hvac_leak_tested = ? WHERE id = ?`,
+    `UPDATE services SET service_description = ?, additional_info = ?, cost = ?, is_paid = ?, partial_paid = ?, dash_abs = ?, dash_check_engine = ?, dash_brake = ?, dash_airbag = ?, dash_immobilizer = ?, dash_tpms = ?, dash_oil_leak = ?, current_mileage = ?, next_service_date = ?, next_service_mileage = ?, oil_grade = ?, oil_filter_changed = ?, battery_amp_rate = ?, battery_install_date = ?, battery_warranty_months = ?, battery_parasitic_tested = ?, hvac_freon_date = ?, hvac_leak_tested = ?, outsource_cost = ? WHERE id = ?`,
     [
       serviceDescription,
       additionalInfo || null,
@@ -798,6 +819,7 @@ export async function updateService(
       b.parasiticTested ? 1 : 0,
       h.freonDate || null,
       h.leakTested ? 1 : 0,
+      oc,
       id,
     ]
   );
@@ -1201,7 +1223,15 @@ export async function getReport(
   vin?: string,
   plate?: string,
   unpaidOnly?: boolean
-): Promise<{ items: ReportItem[]; total_cost: number; total_services: number; unpaid_count: number; unpaid_total: number }> {
+): Promise<{
+  items: ReportItem[];
+  total_cost: number;
+  total_services: number;
+  unpaid_count: number;
+  unpaid_total: number;
+  outsource_total: number;
+  net_cash_flow: number;
+}> {
   const db = await getDb();
   const conditions: string[] = [];
   const params: any[] = [];
@@ -1248,6 +1278,7 @@ export async function getReport(
       s.cost,
       s.is_paid as is_paid_int,
       s.partial_paid,
+      s.outsource_cost,
       s.service_date
     FROM services s
     JOIN customers c ON s.customer_id = c.id
@@ -1273,9 +1304,12 @@ export async function getReport(
     cost: r.cost,
     is_paid: r.is_paid_int === 1,
     partial_paid: Number(r.partial_paid) || 0,
+    outsource_cost: Number(r.outsource_cost) || 0,
     service_date: r.service_date,
   }));
   const total_cost = items.reduce((sum, i) => sum + i.cost, 0);
+  const outsource_total = items.reduce((sum, i) => sum + (i.outsource_cost || 0), 0);
+  const net_cash_flow = total_cost - outsource_total;
   const unpaidItems = items.filter((i) => !i.is_paid);
   const unpaid_total = unpaidItems.reduce((sum, i) => sum + i.cost, 0);
   return {
@@ -1284,6 +1318,8 @@ export async function getReport(
     total_services: items.length,
     unpaid_count: unpaidItems.length,
     unpaid_total,
+    outsource_total,
+    net_cash_flow,
   };
 }
 

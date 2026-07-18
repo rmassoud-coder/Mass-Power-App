@@ -102,6 +102,11 @@ export default function EditServiceScreen() {
     freonDate: (params.hvacFreonDate as string) || null,
     leakTested: params.hvacLeakTested === 'true',
   });
+  const [outsourceCost, setOutsourceCost] = useState(
+    params.outsourceCost && params.outsourceCost !== '0'
+      ? String(params.outsourceCost)
+      : ''
+  );
   const [pickedItems, setPickedItems] = useState<PickedItem[]>(
     initialItems.map((it) => ({
       inventory_id: it.inventory_id,
@@ -171,7 +176,8 @@ export default function EditServiceScreen() {
         pickedItems.map((p) => ({ inventory_id: p.inventory_id, quantity: p.quantity })),
         0,
         isBatteryService ? batteryReplacement : EMPTY_BATTERY_REPLACEMENT,
-        isHvacService ? hvacService : EMPTY_HVAC_SERVICE
+        isHvacService ? hvacService : EMPTY_HVAC_SERVICE,
+        parseFloat(outsourceCost || '0') || 0
       );
 
       router.back();
@@ -290,6 +296,30 @@ export default function EditServiceScreen() {
                   <Text style={styles.totalGrand}>Grand Total: ${grandTotal.toFixed(2)}</Text>
                 </View>
               )}
+            </View>
+
+            {/* Outsource Cost (PRIVATE, Reports-only) */}
+            <View style={styles.outsourceCard}>
+              <View style={styles.outsourceHeaderRow}>
+                <Ionicons name="lock-closed" size={14} color="#6b21a8" />
+                <Text style={styles.outsourceHeader}>Outsource Cost (Private)</Text>
+              </View>
+              <Text style={styles.outsourceHint}>
+                Money paid to a 3rd party for this job. Subtracted from cash-flow in
+                the Reports screen only — never shown on receipts or invoices.
+              </Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="cash-outline" size={20} color="#6b21a8" style={styles.inputIcon} />
+                <Text style={[styles.currencySymbol, { color: '#6b21a8' }]}>$</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="0.00"
+                  value={outsourceCost}
+                  onChangeText={(t) => setOutsourceCost(t.replace(/[^\d.]/g, ''))}
+                  keyboardType="decimal-pad"
+                  testID="outsource-cost-input-edit"
+                />
+              </View>
             </View>
 
             <TouchableOpacity
@@ -415,6 +445,32 @@ const styles = StyleSheet.create({
     borderColor: '#7dd3fc',
     backgroundColor: '#f0f9ff',
     marginBottom: 20,
+  },
+  outsourceCard: {
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#c4b5fd',
+    backgroundColor: '#faf5ff',
+    marginBottom: 20,
+  },
+  outsourceHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  outsourceHeader: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#6b21a8',
+    letterSpacing: 0.3,
+  },
+  outsourceHint: {
+    fontSize: 11,
+    color: '#7c3aed',
+    marginBottom: 10,
+    lineHeight: 15,
   },
   submitButton: {
     backgroundColor: '#10b981',

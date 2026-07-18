@@ -59,6 +59,7 @@ export default function AddServiceScreen() {
     EMPTY_BATTERY_REPLACEMENT
   );
   const [hvacService, setHvacService] = useState<HvacService>(EMPTY_HVAC_SERVICE);
+  const [outsourceCost, setOutsourceCost] = useState('');
   const [pickedItems, setPickedItems] = useState<PickedItem[]>([]);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -132,7 +133,8 @@ export default function AddServiceScreen() {
         pickedItems.map((p) => ({ inventory_id: p.inventory_id, quantity: p.quantity })),
         partialPaidNumber,
         isBatteryService ? batteryReplacement : undefined,
-        isHvacService ? hvacService : undefined
+        isHvacService ? hvacService : undefined,
+        parseFloat(outsourceCost || '0') || 0
       );
 
       router.back();
@@ -276,6 +278,30 @@ export default function AddServiceScreen() {
                   <Text style={styles.totalGrand}>Grand Total: ${grandTotal.toFixed(2)}</Text>
                 </View>
               )}
+            </View>
+
+            {/* Outsource Cost (PRIVATE, Reports-only) */}
+            <View style={styles.outsourceCard}>
+              <View style={styles.outsourceHeaderRow}>
+                <Ionicons name="lock-closed" size={14} color="#6b21a8" />
+                <Text style={styles.outsourceHeader}>Outsource Cost (Private)</Text>
+              </View>
+              <Text style={styles.outsourceHint}>
+                Money paid to a 3rd party for this job. Subtracted from your cash-flow in
+                the Reports screen only — never shown on receipts, invoices or stickers.
+              </Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="cash-outline" size={20} color="#6b21a8" style={styles.inputIcon} />
+                <Text style={[styles.currencySymbol, { color: '#6b21a8' }]}>$</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="0.00"
+                  value={outsourceCost}
+                  onChangeText={(t) => setOutsourceCost(t.replace(/[^\d.]/g, ''))}
+                  keyboardType="decimal-pad"
+                  testID="outsource-cost-input"
+                />
+              </View>
             </View>
 
             {/* Paid Checkbox */}
@@ -451,6 +477,32 @@ const styles = StyleSheet.create({
     borderColor: '#7dd3fc',
     backgroundColor: '#f0f9ff',
     marginBottom: 20,
+  },
+  outsourceCard: {
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#c4b5fd',
+    backgroundColor: '#faf5ff',
+    marginBottom: 20,
+  },
+  outsourceHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  outsourceHeader: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#6b21a8',
+    letterSpacing: 0.3,
+  },
+  outsourceHint: {
+    fontSize: 11,
+    color: '#7c3aed',
+    marginBottom: 10,
+    lineHeight: 15,
   },
   submitButton: {
     backgroundColor: '#10b981',

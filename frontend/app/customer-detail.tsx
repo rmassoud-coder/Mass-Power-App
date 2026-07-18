@@ -632,6 +632,7 @@ export default function CustomerDetailScreen() {
                                       batteryParasiticTested: service.battery_parasitic_tested ? 'true' : 'false',
                                       hvacFreonDate: service.hvac_freon_date || '',
                                       hvacLeakTested: service.hvac_leak_tested ? 'true' : 'false',
+                                      outsourceCost: String(service.outsource_cost ?? ''),
                                       vehicleMake: vehicle.make || '',
                                       vehicleModel: vehicle.model || '',
                                       items: JSON.stringify(service.items || []),

@@ -55,6 +55,8 @@ interface ReportResponse {
   total_services: number;
   unpaid_count: number;
   unpaid_total: number;
+  outsource_total: number;
+  net_cash_flow: number;
 }
 
 type FilterType = 'mobile' | 'vin' | 'plate';
@@ -992,6 +994,36 @@ export default function ReportScreen() {
                 </View>
               </View>
 
+              {/* PRIVATE cash-flow summary (owner-only, never printed) */}
+              {report.outsource_total > 0 && (
+                <View style={styles.cashflowCard}>
+                  <View style={styles.cashflowHeaderRow}>
+                    <Ionicons name="lock-closed" size={13} color="#6b21a8" />
+                    <Text style={styles.cashflowHeader}>Cash-Flow (Private)</Text>
+                  </View>
+                  <View style={styles.cashflowRow}>
+                    <Text style={styles.cashflowLabel}>Revenue</Text>
+                    <Text style={styles.cashflowValue}>
+                      ${report.total_cost.toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={styles.cashflowRow}>
+                    <Text style={[styles.cashflowLabel, { color: '#dc2626' }]}>
+                      − Outsource
+                    </Text>
+                    <Text style={[styles.cashflowValue, { color: '#dc2626' }]}>
+                      − ${report.outsource_total.toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={styles.cashflowGrandRow}>
+                    <Text style={styles.cashflowGrandLabel}>Net Cash in Hand</Text>
+                    <Text style={styles.cashflowGrandValue}>
+                      ${report.net_cash_flow.toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
               {report.unpaid_count > 0 && (
                 <View style={styles.unpaidSummaryCard}>
                   <View style={styles.unpaidSummaryRow}>
@@ -1397,6 +1429,62 @@ const styles = StyleSheet.create({
   },
   reorderScroll: {
     maxHeight: 420,
+  },
+  cashflowCard: {
+    marginTop: 8,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#c4b5fd',
+    backgroundColor: '#faf5ff',
+  },
+  cashflowHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  cashflowHeader: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#6b21a8',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  cashflowRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 4,
+  },
+  cashflowLabel: {
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '600',
+  },
+  cashflowValue: {
+    fontSize: 14,
+    color: '#0f172a',
+    fontWeight: '700',
+  },
+  cashflowGrandRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1.5,
+    borderTopColor: '#c4b5fd',
+  },
+  cashflowGrandLabel: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#6b21a8',
+  },
+  cashflowGrandValue: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#059669',
   },
   thresholdRow: {
     flexDirection: 'row',
