@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -19,14 +20,22 @@ import {
   deleteCustomer,
   deleteVehicle,
   deleteService,
+  markServicesPaid,
   CustomerDetail as DBCustomerDetail,
   Customer as DBCustomer,
   Vehicle as DBVehicle,
   Service as DBService,
 } from '../src/db/database';
 import { loadSettings } from '../src/utils/settings';
-import { buildThermalReceiptHtml, buildOilStickerHtml, buildBatteryStickerHtml, buildHvacStickerHtml } from '../src/utils/htmlBuilder';
+import {
+  buildThermalReceiptHtml,
+  buildOilStickerHtml,
+  buildBatteryStickerHtml,
+  buildHvacStickerHtml,
+  buildCombinedInvoiceHtml,
+} from '../src/utils/htmlBuilder';
 import { printHtml } from '../src/utils/printer';
+import CombinedInvoiceModal from '../src/components/CombinedInvoiceModal';
 
 interface Vehicle extends DBVehicle {}
 interface Service extends DBService {}
@@ -52,6 +61,8 @@ export default function CustomerDetailScreen() {
   const [printingStickerId, setPrintingStickerId] = useState<string | null>(null);
   const [printingBatteryStickerId, setPrintingBatteryStickerId] = useState<string | null>(null);
   const [printingHvacStickerId, setPrintingHvacStickerId] = useState<string | null>(null);
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [invoicePrinting, setInvoicePrinting] = useState(false);
 
   // Auto-refresh whenever screen comes into focus (after edits/adds)
   useFocusEffect(
@@ -207,6 +218,63 @@ export default function CustomerDetailScreen() {
     }
   };
 
+  const handlePrintCombinedInvoice = async (
+    selectedIds: string[],
+    discountAmount: number
+  ) => {
+    if (!details || selectedIds.length === 0) return;
+    setInvoicePrinting(true);
+    try {
+      const settings = await loadSettings();
+      // Preserve on-screen order (details.services is sorted newest → oldest)
+      const selectedServices = details.services.filter((s) => selectedIds.includes(s.id));
+      const html = buildCombinedInvoiceHtml(
+        details.customer,
+        details.vehicles,
+        selectedServices,
+        discountAmount,
+        settings,
+      );
+      await printHtml(html);
+      // Ask if the user wants to mark these as paid now that the invoice is out.
+      const unpaidInSelection = selectedServices.filter((s) => !s.is_paid);
+      const promptText = `Mark ${unpaidInSelection.length} service${unpaidInSelection.length === 1 ? '' : 's'} as paid?\n\nThey will flip to green ✓ in the customer's history.`;
+      const doMark = async () => {
+        try {
+          await markServicesPaid(unpaidInSelection.map((s) => s.id));
+          await fetchCustomerDetails();
+          setInvoiceModalOpen(false);
+        } catch (e: any) {
+          Alert.alert('Error', e?.message || 'Failed to update statuses');
+        }
+      };
+      const skip = () => setInvoiceModalOpen(false);
+      if (unpaidInSelection.length === 0) {
+        setInvoiceModalOpen(false);
+      } else if (Platform.OS === 'web') {
+        // eslint-disable-next-line no-alert
+        if (window.confirm(promptText)) {
+          await doMark();
+        } else {
+          skip();
+        }
+      } else {
+        Alert.alert('Invoice printed', promptText, [
+          { text: 'Not yet', style: 'cancel', onPress: skip },
+          { text: 'Mark as paid', onPress: doMark },
+        ]);
+      }
+    } catch (e: any) {
+      Alert.alert(
+        'Print failed',
+        e?.message ||
+          'Unable to open printer. Make sure your Bluetooth thermal printer is paired and a print service is installed (e.g. PrinterShare / RawBT).'
+      );
+    } finally {
+      setInvoicePrinting(false);
+    }
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -273,6 +341,24 @@ export default function CustomerDetailScreen() {
             </Text>
             <Text style={styles.summaryTotalCost}>Total: ${totalCost.toFixed(2)}</Text>
           </View>
+        )}
+
+        {/* Combined Invoice */}
+        {details.services.length > 0 && (
+          <TouchableOpacity
+            style={styles.invoiceButton}
+            onPress={() => setInvoiceModalOpen(true)}
+            testID="open-combined-invoice"
+          >
+            <MaterialCommunityIcons name="receipt-text" size={20} color="#fff" />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={styles.invoiceBtnTitle}>Print Combined Invoice</Text>
+              <Text style={styles.invoiceBtnSubtitle}>
+                Bill several jobs in one 55mm invoice with discount
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#fff" />
+          </TouchableOpacity>
         )}
 
         {/* Vehicles with their Services */}
@@ -598,6 +684,15 @@ export default function CustomerDetailScreen() {
         services={qrVehicle ? details.services.filter((s) => s.vehicle_id === qrVehicle.id) : []}
         onClose={() => setQrVehicle(null)}
       />
+
+      <CombinedInvoiceModal
+        visible={invoiceModalOpen}
+        onClose={() => (invoicePrinting ? null : setInvoiceModalOpen(false))}
+        services={details.services}
+        vehicles={details.vehicles}
+        printing={invoicePrinting}
+        onPrint={handlePrintCombinedInvoice}
+      />
     </SafeAreaView>
   );
 }
@@ -824,6 +919,27 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#10b981',
+  },
+  invoiceButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginHorizontal: 16,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  invoiceBtnTitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  invoiceBtnSubtitle: {
+    color: '#cbd5e1',
+    fontSize: 11,
+    marginTop: 2,
   },
   vehicleGroupCard: {
     backgroundColor: '#fff',

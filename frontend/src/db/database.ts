@@ -809,6 +809,18 @@ export async function updateService(
   }
 }
 
+/** Bulk mark a set of services as fully paid (clears partial_paid). */
+export async function markServicesPaid(serviceIds: string[]): Promise<void> {
+  if (!serviceIds.length) return;
+  const db = await getDb();
+  const placeholders = serviceIds.map(() => '?').join(',');
+  await db.runAsync(
+    `UPDATE services SET is_paid = 1, partial_paid = 0 WHERE id IN (${placeholders})`,
+    serviceIds
+  );
+}
+
+
 export async function deleteService(id: string): Promise<void> {
   const db = await getDb();
   // Restore inventory stock before deleting

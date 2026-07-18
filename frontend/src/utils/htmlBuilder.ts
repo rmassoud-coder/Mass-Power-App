@@ -235,6 +235,227 @@ export function buildThermalReceiptHtml(
 </body></html>`;
 }
 
+/** Multi-service 55mm thermal invoice HTML.
+ *  Groups the picked services by vehicle, lists each service on its own line
+ *  with its cost & any inventory items, then totals everything and applies a
+ *  flat money discount at the very bottom. Designed to fit multiple jobs on
+ *  one continuous roll.
+ */
+export function buildCombinedInvoiceHtml(
+  customer: Customer,
+  vehicles: Vehicle[],
+  services: Service[],
+  discountAmount: number,
+  settings: AppSettings,
+  invoiceNumber?: string,
+): string {
+  const vehicleById = new Map(vehicles.map((v) => [v.id, v]));
+  // Group services by vehicle_id, keeping original insertion order
+  const grouped = new Map<string, Service[]>();
+  for (const s of services) {
+    const arr = grouped.get(s.vehicle_id) || [];
+    arr.push(s);
+    grouped.set(s.vehicle_id, arr);
+  }
+
+  const subtotal = services.reduce((sum, s) => sum + (s.cost || 0), 0);
+  const cleanDiscount = Math.max(0, Math.min(discountAmount || 0, subtotal));
+  const grandTotal = Math.max(0, subtotal - cleanDiscount);
+
+  const invoiceMeta = invoiceNumber
+    ? invoiceNumber
+    : `INV-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(Math.random() * 9000 + 1000)}`;
+
+  const vehicleBlocks: string[] = [];
+  for (const [vid, svs] of grouped.entries()) {
+    const v = vehicleById.get(vid);
+    if (!v) continue;
+    const svRows = svs
+      .map((s) => {
+        const dateFmt = new Date(s.service_date).toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        });
+        const items = s.items && s.items.length > 0
+          ? `<div class="items">${s.items
+              .map(
+                (it) =>
+                  `<div class="item-line"><span>&bull; ${esc(it.item_type)} &times; ${it.quantity}</span><span>$${(it.unit_price * it.quantity).toFixed(2)}</span></div>`,
+              )
+              .join('')}</div>`
+          : '';
+        const statusTag = s.is_paid
+          ? '<span class="paid-tag">PAID</span>'
+          : (s.partial_paid || 0) > 0
+            ? '<span class="partial-tag">PENDING</span>'
+            : '<span class="unpaid-tag">UNPAID</span>';
+        return `
+          <div class="service-block">
+            <div class="row">
+              <span class="date">${esc(dateFmt)}</span>
+              ${statusTag}
+            </div>
+            <div class="row bold">
+              <span class="service-name">${esc(s.service_description)}</span>
+              <span class="service-cost">$${(s.cost || 0).toFixed(2)}</span>
+            </div>
+            ${s.additional_info ? `<div class="sm add-info">${esc(s.additional_info)}</div>` : ''}
+            ${items}
+          </div>`;
+      })
+      .join('<div class="service-sep"></div>');
+    vehicleBlocks.push(`
+      <div class="vehicle-header">
+        ${esc([v.year, v.make, v.model].filter(Boolean).join(' '))}
+        <span class="sm plate">${esc(v.plate_number || '')}</span>
+      </div>
+      ${svRows}
+    `);
+  }
+
+  return `<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8" />
+<style>
+  @page { size: 55mm auto; margin: 2mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: #000;
+    margin: 0;
+    padding: 4px;
+    width: 55mm;
+  }
+  .center { text-align: center; }
+  .bold { font-weight: bold; }
+  .lg { font-size: 14px; }
+  .sm { font-size: 9px; }
+  .row {
+    display: flex;
+    justify-content: space-between;
+    gap: 4px;
+    align-items: baseline;
+  }
+  hr { border: none; border-top: 1px dashed #000; margin: 4px 0; }
+  .thick-hr { border: none; border-top: 2px solid #000; margin: 5px 0; }
+  .vehicle-header {
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    background: #000;
+    color: #fff;
+    padding: 4px 4px;
+    margin: 6px -4px 4px -4px;
+    text-align: center;
+  }
+  .plate {
+    display: block;
+    font-weight: 700;
+    color: #fff;
+    margin-top: 2px;
+  }
+  .service-block { padding: 2px 0; }
+  .service-sep {
+    border-top: 1px dashed #000;
+    margin: 4px 6px;
+  }
+  .date { font-size: 9px; color: #000; }
+  .service-name { flex: 1; padding-right: 4px; }
+  .service-cost { font-weight: bold; }
+  .add-info { font-style: italic; color: #333; margin-top: 2px; }
+  .items { margin-top: 4px; padding-left: 8px; }
+  .item-line {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    padding: 1px 0;
+  }
+  .paid-tag {
+    font-size: 8px;
+    font-weight: 900;
+    padding: 1px 5px;
+    border: 1px solid #000;
+    background: #000;
+    color: #fff;
+    letter-spacing: 1px;
+  }
+  .partial-tag {
+    font-size: 8px;
+    font-weight: 900;
+    padding: 1px 5px;
+    border: 1px solid #000;
+    letter-spacing: 1px;
+  }
+  .unpaid-tag {
+    font-size: 8px;
+    font-weight: 900;
+    padding: 1px 5px;
+    border: 1px dashed #000;
+    letter-spacing: 1px;
+  }
+  .totals { margin-top: 4px; }
+  .total-line {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    padding: 2px 0;
+  }
+  .discount-line {
+    color: #000;
+    font-weight: 700;
+  }
+  .grand {
+    font-size: 16px;
+    font-weight: 900;
+    background: #000;
+    color: #fff;
+    padding: 6px 4px;
+    margin: 4px -4px 0 -4px;
+  }
+</style>
+</head><body>
+  <div class="center"><img src="${MASS_POWER_LOGO_PNG_BASE64}" alt="logo" style="width:80px; height:80px; border-radius:50%;" /></div>
+  <div class="center bold lg">${esc(settings.garageName)}</div>
+  ${settings.garagePhone ? `<div class="center sm">${esc(settings.garagePhone)}</div>` : ''}
+  <hr />
+  <div class="center bold">COMBINED INVOICE</div>
+  <div class="center sm">${esc(invoiceMeta)}</div>
+  <div class="center sm">${esc(new Date().toLocaleString())}</div>
+  <hr />
+  <div class="bold">Customer:</div>
+  <div>${esc(customer.name)}</div>
+  <div class="sm">Mobile: ${esc(customer.mobile_number)}</div>
+  <hr />
+
+  ${vehicleBlocks.join('')}
+
+  <div class="thick-hr"></div>
+  <div class="totals">
+    <div class="total-line">
+      <span>Subtotal (${services.length} service${services.length === 1 ? '' : 's'}):</span>
+      <span>$${subtotal.toFixed(2)}</span>
+    </div>
+    ${
+      cleanDiscount > 0
+        ? `<div class="total-line discount-line">
+             <span>Discount:</span><span>- $${cleanDiscount.toFixed(2)}</span>
+           </div>`
+        : ''
+    }
+    <div class="total-line grand">
+      <span>GRAND TOTAL:</span><span>$${grandTotal.toFixed(2)}</span>
+    </div>
+  </div>
+  <div class="center bold" style="margin-top:6px;">*** THANK YOU ***</div>
+  <div class="center sm">${esc(settings.garageName)}</div>
+  <div style="height: 20px;"></div>
+</body></html>`;
+}
+
+
 export { esc, formatDashLights };
 
 /** Standalone 55mm thermal HTML that prints ONLY the oil-change reminder sticker.
