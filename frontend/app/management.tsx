@@ -41,6 +41,15 @@ const TILES: Tile[] = [
     description: 'Manage parts, oil filters, stock & prices',
   },
   {
+    label: 'Price Stickers',
+    icon: 'pricetags-outline',
+    color: '#fff',
+    bg: '#a855f7',
+    route: '/price-stickers',
+    testID: 'tile-price-stickers',
+    description: 'Print 55mm price stickers for shelf / parts',
+  },
+  {
     label: 'Oil Change Reminders',
     icon: 'logo-whatsapp',
     color: '#fff',
