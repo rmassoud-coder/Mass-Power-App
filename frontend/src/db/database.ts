@@ -1136,6 +1136,31 @@ export async function updateInventoryItem(
   );
 }
 
+
+/** Adjust the quantity of a single inventory item by a delta (positive or
+ *  negative). Never goes below 0. Cheap fast-path for the +/- buttons on the
+ *  inventory list — updates only the quantity + updated_at columns.
+ */
+export async function adjustInventoryQuantity(
+  id: string,
+  delta: number
+): Promise<number> {
+  if (!Number.isFinite(delta) || delta === 0) return 0;
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ item_quantity: number }>(
+    `SELECT item_quantity FROM inventory WHERE id = ?`,
+    [id]
+  );
+  if (!row) throw new Error('Inventory item not found');
+  const next = Math.max(0, (row.item_quantity || 0) + Math.round(delta));
+  const now = new Date().toISOString();
+  await db.runAsync(
+    `UPDATE inventory SET item_quantity = ?, updated_at = ? WHERE id = ?`,
+    [next, now, id]
+  );
+  return next;
+}
+
 export async function deleteInventoryItem(id: string): Promise<void> {
   const db = await getDb();
   await db.runAsync(`DELETE FROM inventory WHERE id = ?`, [id]);

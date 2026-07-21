@@ -22,6 +22,7 @@ import {
   addInventoryItem,
   updateInventoryItem,
   deleteInventoryItem,
+  adjustInventoryQuantity,
   Supplier,
   listSuppliers,
 } from '../src/db/database';
@@ -129,6 +130,21 @@ export default function InventoryScreen() {
       Alert.alert('Error', e.message || 'Failed to save');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAdjustQty = async (it: InventoryItem, delta: number) => {
+    try {
+      const nextQty = await adjustInventoryQuantity(it.id, delta);
+      // Optimistic local update so the number changes instantly without a full
+      // reload; the list will re-sort on the next full `load()`.
+      setItems((prev) =>
+        prev.map((row) =>
+          row.id === it.id ? { ...row, item_quantity: nextQty } : row
+        )
+      );
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to update stock');
     }
   };
 
@@ -289,9 +305,30 @@ export default function InventoryScreen() {
                     ) : null}
                   </View>
                   <View style={styles.qtyBlock}>
+                    <TouchableOpacity
+                      onPress={() => handleAdjustQty(it, 1)}
+                      style={styles.qtyStepBtn}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      testID={`qty-plus-${it.item_number}`}
+                    >
+                      <Ionicons name="add" size={18} color="#059669" />
+                    </TouchableOpacity>
                     <Text style={[styles.qtyValue, low && styles.qtyValueLow]}>
                       {it.item_quantity}
                     </Text>
+                    <TouchableOpacity
+                      onPress={() => handleAdjustQty(it, -1)}
+                      style={styles.qtyStepBtn}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      disabled={it.item_quantity <= 0}
+                      testID={`qty-minus-${it.item_number}`}
+                    >
+                      <Ionicons
+                        name="remove"
+                        size={18}
+                        color={it.item_quantity <= 0 ? '#cbd5e1' : '#dc2626'}
+                      />
+                    </TouchableOpacity>
                     <Text style={styles.qtyLabel}>in stock</Text>
                   </View>
                   <View style={styles.actions}>
@@ -540,6 +577,17 @@ const styles = StyleSheet.create({
   },
   lowChipText: { color: '#fff', fontSize: 9, fontWeight: '900' },
   qtyBlock: { alignItems: 'center', marginHorizontal: 12 },
+  qtyStepBtn: {
+    width: 30,
+    height: 26,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginVertical: 2,
+  },
   qtyValue: { fontSize: 20, fontWeight: '900', color: '#0f172a' },
   qtyValueLow: { color: '#dc2626' },
   qtyLabel: { fontSize: 10, color: '#64748b' },
