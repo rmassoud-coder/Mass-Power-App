@@ -16,6 +16,9 @@ const KEY_GH_REPO = 'mp_gh_repo';
 const KEY_GH_BRANCH = 'mp_gh_branch';
 const KEY_GH_FOLDER = 'mp_gh_folder';
 const KEY_DEFAULT_COUNTRY = 'mp_default_country';
+const KEY_PRINTER_MODE = 'mp_printer_mode';           // 'external' | 'cat-ble'
+const KEY_CAT_PRINTER_ID = 'mp_cat_printer_id';       // last-paired PD01 BLE id
+const KEY_CAT_PRINTER_NAME = 'mp_cat_printer_name';   // display name
 
 // One-shot flag so we only run the AsyncStorage -> SecureStore migration once.
 const KEY_TOKEN_MIGRATED = 'mp_gh_token_migrated_v1';
@@ -33,6 +36,10 @@ export interface AppSettings {
   // Country code (digits only, no +) used to prefix customer phone numbers
   // missing an explicit country code when building WhatsApp links.
   defaultCountryCode: string;
+  // Direct-BLE printer settings (Phase 1: pair + test print only)
+  printerMode: 'external' | 'cat-ble';
+  catPrinterId: string;
+  catPrinterName: string;
 }
 
 // Defaults tied to the user's repo
@@ -46,6 +53,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   githubBranch: 'main',
   githubFolder: 'vehicle profiles',
   defaultCountryCode: '961', // Lebanon
+  printerMode: 'external',
+  catPrinterId: '',
+  catPrinterName: '',
 };
 
 // Legacy placeholder; auto-upgrade users who never changed the default URL
@@ -80,7 +90,7 @@ export async function loadSettings(): Promise<AppSettings> {
   // Ensure any pre-existing plaintext token is moved to the secure enclave first.
   await migrateTokenToSecureStore();
 
-  const [url, name, phone, secureToken, owner, repo, branch, folder, country] =
+  const [url, name, phone, secureToken, owner, repo, branch, folder, country, printerMode, catId, catName] =
     await Promise.all([
       AsyncStorage.getItem(KEY_GH_BASE_URL),
       AsyncStorage.getItem(KEY_GARAGE_NAME),
@@ -91,6 +101,9 @@ export async function loadSettings(): Promise<AppSettings> {
       AsyncStorage.getItem(KEY_GH_BRANCH),
       AsyncStorage.getItem(KEY_GH_FOLDER),
       AsyncStorage.getItem(KEY_DEFAULT_COUNTRY),
+      AsyncStorage.getItem(KEY_PRINTER_MODE),
+      AsyncStorage.getItem(KEY_CAT_PRINTER_ID),
+      AsyncStorage.getItem(KEY_CAT_PRINTER_NAME),
     ]);
 
   let effectiveUrl = url || DEFAULT_SETTINGS.githubBaseUrl;
@@ -116,6 +129,9 @@ export async function loadSettings(): Promise<AppSettings> {
       country !== null && country !== undefined
         ? country
         : DEFAULT_SETTINGS.defaultCountryCode,
+    printerMode: (printerMode === 'cat-ble' ? 'cat-ble' : 'external'),
+    catPrinterId: catId || '',
+    catPrinterName: catName || '',
   };
 }
 
@@ -135,6 +151,9 @@ export async function saveSettings(s: AppSettings): Promise<void> {
     AsyncStorage.setItem(KEY_GH_BRANCH, s.githubBranch.trim() || 'main'),
     AsyncStorage.setItem(KEY_GH_FOLDER, s.githubFolder.trim() || 'vehicle profiles'),
     AsyncStorage.setItem(KEY_DEFAULT_COUNTRY, cc),
+    AsyncStorage.setItem(KEY_PRINTER_MODE, s.printerMode === 'cat-ble' ? 'cat-ble' : 'external'),
+    AsyncStorage.setItem(KEY_CAT_PRINTER_ID, s.catPrinterId || ''),
+    AsyncStorage.setItem(KEY_CAT_PRINTER_NAME, s.catPrinterName || ''),
   ]);
 
   // SEC-001: Store the GitHub PAT in the secure enclave. If cleared, wipe it.

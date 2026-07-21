@@ -50,6 +50,15 @@ const TILES: Tile[] = [
     description: 'Print 55mm price stickers for shelf / parts',
   },
   {
+    label: 'Cat Printer (BLE)',
+    icon: 'bluetooth-outline',
+    color: '#fff',
+    bg: '#0ea5e9',
+    route: '/cat-printer',
+    testID: 'tile-cat-printer',
+    description: 'Pair & test-print with your PD01 over Bluetooth',
+  },
+  {
     label: 'Oil Change Reminders',
     icon: 'logo-whatsapp',
     color: '#fff',
