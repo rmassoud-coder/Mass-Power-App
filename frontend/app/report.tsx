@@ -25,7 +25,7 @@ import {
   LowStockItemBySupplier,
 } from '../src/db/database';
 import { loadSettings } from '../src/utils/settings';
-import { printHtml } from '../src/utils/printer';
+import { printJob } from '../src/utils/printService';
 import { MASS_POWER_LOGO_PNG_BASE64 } from '../src/utils/logoBase64';
 
 interface ReportItem {
@@ -316,7 +316,7 @@ export default function ReportScreen() {
         settings.garagePhone,
         lastThresholdUsed,
       );
-      await printHtml(html);
+      await printJob(html, { jobName: 'Reorder Report' });
     } catch (e: any) {
       Alert.alert(
         'Print failed',

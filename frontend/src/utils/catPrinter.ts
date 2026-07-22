@@ -178,7 +178,7 @@ export async function scanForCatPrinters(
 }
 
 /** Connect + discover services + write a fixed "test print" job. */
-export async function testPrint(deviceId: string): Promise<void> {
+export async function testPrint(deviceId: string, darkness: number = 3): Promise<void> {
   if (!isCatPrinterAvailable() || !_bleManager) {
     throw new Error('BLE not available in preview / Expo Go');
   }
@@ -191,11 +191,12 @@ export async function testPrint(deviceId: string): Promise<void> {
     // Build a small test job: header commands + a black-band bitmap
     const bytes: number[] = [];
 
+    const energy = darknessToEnergy(darkness);
     // Housekeeping
     bytes.push(...buildFrame(CMD_LATTICE, START_LATTICE));
     bytes.push(...buildFrame(CMD_SET_QUALITY, [0x03]));           // med quality
     bytes.push(...buildFrame(CMD_DRAWING_MODE, [0x00]));          // image mode
-    bytes.push(...buildFrame(CMD_SET_ENERGY, [0xE0, 0x2E]));      // ~12000
+    bytes.push(...buildFrame(CMD_SET_ENERGY, [energy & 0xff, (energy >> 8) & 0xff]));
 
     // 20 solid-black rows (each row = 48 bytes = 384 pixels wide, all 1's)
     const blackRow = Array(48).fill(0xff);
@@ -211,21 +212,124 @@ export async function testPrint(deviceId: string): Promise<void> {
     bytes.push(...buildFrame(CMD_FEED_PAPER, [0x64, 0x00]));
     bytes.push(...buildFrame(CMD_LATTICE, END_LATTICE));
 
-    // Write in ~180-byte chunks (safe under most Cat printer MTUs)
-    const CHUNK = 180;
-    for (let i = 0; i < bytes.length; i += CHUNK) {
-      const slice = bytes.slice(i, i + CHUNK);
-      const b64 = _numsToBase64(slice);
-      await device.writeCharacteristicWithoutResponseForService(
-        CAT_SERVICE_UUID,
-        CAT_WRITE_CHAR,
-        b64,
-      );
-      // Tiny delay to let the printer breathe
-      await new Promise((r) => setTimeout(r, 20));
-    }
+    await _writeBytes(device, bytes);
   } finally {
     try { await device.cancelConnection(); } catch { /* ignore */ }
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                     Full-bitmap printing (Phase 2)                         */
+/* -------------------------------------------------------------------------- */
+
+/** Map a 1..5 UI darkness value to a printer energy value (~8000..20000). */
+export function darknessToEnergy(d: number): number {
+  const clamped = Math.max(1, Math.min(5, Math.round(d)));
+  // 1 -> 8000, 3 -> 14000, 5 -> 20000 (linear)
+  return 8000 + (clamped - 1) * 3000;
+}
+
+export interface MonoBitmap {
+  /** Width in pixels — MUST equal 384 for PD01 / GT01. */
+  width: number;
+  /** Height in pixels. */
+  height: number;
+  /**
+   * Array of rows, each row is a base64 string of ceil(width/8) bytes.
+   * Bit 1 = burn (black), bit 0 = white. LSB-first within each byte
+   * (matches the Cat Printer protocol).
+   */
+  rowsBase64: string[];
+}
+
+/**
+ * Print a full 384-px-wide monochrome bitmap over BLE.
+ * Each row of `bitmap.rowsBase64` is emitted as a DRAW_BITMAP frame.
+ * Darkness (1..5) tweaks the printer's SET_ENERGY value so the same bitmap
+ * can be printed lighter or darker on demand.
+ */
+export async function printMonoBitmap(
+  deviceId: string,
+  bitmap: MonoBitmap,
+  darkness: number = 3
+): Promise<void> {
+  if (!isCatPrinterAvailable() || !_bleManager) {
+    throw new Error('BLE not available in preview / Expo Go');
+  }
+  if (bitmap.width !== 384) {
+    throw new Error(`Cat Printer expects 384-px-wide bitmaps (got ${bitmap.width})`);
+  }
+  if (!bitmap.rowsBase64.length) {
+    throw new Error('Empty bitmap — nothing to print');
+  }
+
+  const device = await _bleManager.connectToDevice(deviceId, {
+    requestMTU: 200,
+    autoConnect: false,
+  });
+  await device.discoverAllServicesAndCharacteristics();
+  try {
+    const energy = darknessToEnergy(darkness);
+
+    // Header
+    const header: number[] = [];
+    header.push(...buildFrame(CMD_LATTICE, START_LATTICE));
+    header.push(...buildFrame(CMD_SET_QUALITY, [0x03]));            // med quality (0x01..0x05)
+    header.push(...buildFrame(CMD_DRAWING_MODE, [0x00]));           // image mode
+    header.push(...buildFrame(CMD_SET_ENERGY, [energy & 0xff, (energy >> 8) & 0xff]));
+    await _writeBytes(device, header);
+
+    // Bitmap rows — write in row-batches so we can breathe between chunks
+    const ROWS_PER_BATCH = 24;
+    for (let start = 0; start < bitmap.rowsBase64.length; start += ROWS_PER_BATCH) {
+      const batch: number[] = [];
+      const end = Math.min(start + ROWS_PER_BATCH, bitmap.rowsBase64.length);
+      for (let r = start; r < end; r++) {
+        const rowBytes = _base64ToBytes(bitmap.rowsBase64[r]);
+        batch.push(...buildFrame(CMD_DRAW_BITMAP, rowBytes));
+      }
+      await _writeBytes(device, batch);
+    }
+
+    // Trailer: feed 80 rows so the sticker/receipt clears the print head, then end lattice.
+    const trailer: number[] = [];
+    trailer.push(...buildFrame(CMD_FEED_PAPER, [0x50, 0x00])); // 80 rows
+    trailer.push(...buildFrame(CMD_LATTICE, END_LATTICE));
+    await _writeBytes(device, trailer);
+  } finally {
+    try { await device.cancelConnection(); } catch { /* ignore */ }
+  }
+}
+
+async function _writeBytes(device: any, bytes: number[]): Promise<void> {
+  // Write in ~180-byte chunks (safe under most Cat printer MTUs)
+  const CHUNK = 180;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    const slice = bytes.slice(i, i + CHUNK);
+    const b64 = _numsToBase64(slice);
+    await device.writeCharacteristicWithoutResponseForService(
+      CAT_SERVICE_UUID,
+      CAT_WRITE_CHAR,
+      b64,
+    );
+    // Tiny delay to let the printer breathe
+    await new Promise((r) => setTimeout(r, 15));
+  }
+}
+
+function _base64ToBytes(b64: string): number[] {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const B = require('buffer').Buffer;
+    return Array.from(B.from(b64, 'base64')) as number[];
+  } catch {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const atob = (global as any).atob as ((s: string) => string) | undefined;
+    if (!atob) return [];
+    const bin = atob(b64);
+    const out: number[] = [];
+    for (let i = 0; i < bin.length; i++) out.push(bin.charCodeAt(i) & 0xff);
+    return out;
   }
 }
 

@@ -7,6 +7,7 @@ import { Asset } from 'expo-asset';
 import { Image, Platform, View, Text } from 'react-native';
 import { initDatabase } from '../src/db/database';
 import RpmLoader from '../src/components/RpmLoader';
+import HtmlRasterizerHost from '../src/components/HtmlRasterizerHost';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -91,6 +92,9 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
+        {/* Hidden WebView that owns the HTML→bitmap rasterizer for the Cat
+            Printer BLE path. Mounted once for the whole app session. */}
+        <HtmlRasterizerHost />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="home" />

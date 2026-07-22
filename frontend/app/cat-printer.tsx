@@ -67,7 +67,7 @@ export default function CatPrinterScreen() {
     if (!available) return;
     setTestingId(d.id);
     try {
-      await testPrint(d.id);
+      await testPrint(d.id, settings?.catPrinterDarkness ?? 3);
       Alert.alert(
         'Sent!',
         'A black-band test pattern was sent to the printer. If it printed, connection is good.',
@@ -77,6 +77,13 @@ export default function CatPrinterScreen() {
     } finally {
       setTestingId(null);
     }
+  };
+
+  const handleSetDarkness = async (level: number) => {
+    if (!settings) return;
+    const next: AppSettings = { ...settings, catPrinterDarkness: level };
+    await saveSettings(next);
+    setSettings(next);
   };
 
   const handlePair = async (d: CatDevice) => {
@@ -189,6 +196,35 @@ export default function CatPrinterScreen() {
             </Text>
           </View>
         )}
+
+        {/* Print darkness */}
+        <View style={styles.darkCard} testID="cat-darkness-card">
+          <View style={styles.darkHeader}>
+            <MaterialCommunityIcons name="brightness-6" size={20} color="#0f172a" />
+            <Text style={styles.darkTitle}>Print Darkness</Text>
+            <Text style={styles.darkLevel}>{settings?.catPrinterDarkness ?? 3}/5</Text>
+          </View>
+          <Text style={styles.darkSub}>
+            Higher = darker print (uses more battery + heats more paper). 3 is a good default.
+          </Text>
+          <View style={styles.darkStops}>
+            {[1, 2, 3, 4, 5].map((n) => {
+              const active = (settings?.catPrinterDarkness ?? 3) === n;
+              return (
+                <TouchableOpacity
+                  key={n}
+                  style={[styles.darkStop, active && styles.darkStopActive]}
+                  onPress={() => handleSetDarkness(n)}
+                  testID={`cat-darkness-${n}`}
+                >
+                  <Text style={[styles.darkStopText, active && styles.darkStopTextActive]}>
+                    {n}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
 
         {/* Scan button */}
         <TouchableOpacity
@@ -347,4 +383,44 @@ const styles = StyleSheet.create({
     minWidth: 54,
   },
   smallBtnText: { color: '#fff', fontWeight: '800', fontSize: 12 },
+
+  darkCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 12,
+    marginBottom: 14,
+  },
+  darkHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  darkTitle: { flex: 1, fontSize: 13, fontWeight: '800', color: '#0f172a' },
+  darkLevel: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#2563eb',
+    backgroundColor: '#dbeafe',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+  },
+  darkSub: { fontSize: 11, color: '#64748b', marginBottom: 10 },
+  darkStops: { flexDirection: 'row', gap: 6 },
+  darkStop: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8fafc',
+  },
+  darkStopActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
+  darkStopText: { fontSize: 13, fontWeight: '800', color: '#0f172a' },
+  darkStopTextActive: { color: '#fff' },
 });

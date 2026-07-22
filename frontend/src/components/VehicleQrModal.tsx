@@ -17,8 +17,10 @@ import { loadSettings, buildVehicleQrUrl, AppSettings, isGithubConfigured } from
 import { buildVehicleHistoryHtml } from '../utils/htmlBuilder';
 import { MASS_POWER_LOGO_PNG_BASE64 } from '../utils/logoBase64';
 import { shareHtml, sharePdfFromHtml } from '../utils/printer';
+// SEC-006: printJob routes to Cat Printer BLE when configured, else falls
+// back to the OS print flow.
+import { printJob } from '../utils/printService';
 import { uploadVehicleProfile } from '../utils/githubUploader';
-import { printHtml } from '../utils/printer';
 
 interface Props {
   visible: boolean;
@@ -112,7 +114,7 @@ export default function VehicleQrModal({ visible, customer, vehicle, services, o
   </div>
   <div style="height: 18px;"></div>
 </body></html>`;
-      await printHtml(html);
+      await printJob(html, { jobName: 'Vehicle QR Sticker' });
     } catch (e: any) {
       Alert.alert('Print failed', e?.message || 'Unable to open printer.');
     } finally {

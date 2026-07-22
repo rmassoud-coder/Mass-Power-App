@@ -19,6 +19,7 @@ const KEY_DEFAULT_COUNTRY = 'mp_default_country';
 const KEY_PRINTER_MODE = 'mp_printer_mode';           // 'external' | 'cat-ble'
 const KEY_CAT_PRINTER_ID = 'mp_cat_printer_id';       // last-paired PD01 BLE id
 const KEY_CAT_PRINTER_NAME = 'mp_cat_printer_name';   // display name
+const KEY_CAT_PRINTER_DARKNESS = 'mp_cat_printer_darkness'; // 1-5, default 3
 
 // One-shot flag so we only run the AsyncStorage -> SecureStore migration once.
 const KEY_TOKEN_MIGRATED = 'mp_gh_token_migrated_v1';
@@ -40,6 +41,8 @@ export interface AppSettings {
   printerMode: 'external' | 'cat-ble';
   catPrinterId: string;
   catPrinterName: string;
+  /** Print darkness for the Cat Printer BLE path (1 = lightest, 5 = darkest). */
+  catPrinterDarkness: number;
 }
 
 // Defaults tied to the user's repo
@@ -56,6 +59,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   printerMode: 'external',
   catPrinterId: '',
   catPrinterName: '',
+  catPrinterDarkness: 3,
 };
 
 // Legacy placeholder; auto-upgrade users who never changed the default URL
@@ -90,7 +94,7 @@ export async function loadSettings(): Promise<AppSettings> {
   // Ensure any pre-existing plaintext token is moved to the secure enclave first.
   await migrateTokenToSecureStore();
 
-  const [url, name, phone, secureToken, owner, repo, branch, folder, country, printerMode, catId, catName] =
+  const [url, name, phone, secureToken, owner, repo, branch, folder, country, printerMode, catId, catName, catDarkness] =
     await Promise.all([
       AsyncStorage.getItem(KEY_GH_BASE_URL),
       AsyncStorage.getItem(KEY_GARAGE_NAME),
@@ -104,6 +108,7 @@ export async function loadSettings(): Promise<AppSettings> {
       AsyncStorage.getItem(KEY_PRINTER_MODE),
       AsyncStorage.getItem(KEY_CAT_PRINTER_ID),
       AsyncStorage.getItem(KEY_CAT_PRINTER_NAME),
+      AsyncStorage.getItem(KEY_CAT_PRINTER_DARKNESS),
     ]);
 
   let effectiveUrl = url || DEFAULT_SETTINGS.githubBaseUrl;
@@ -132,7 +137,14 @@ export async function loadSettings(): Promise<AppSettings> {
     printerMode: (printerMode === 'cat-ble' ? 'cat-ble' : 'external'),
     catPrinterId: catId || '',
     catPrinterName: catName || '',
+    catPrinterDarkness: clampDarkness(catDarkness),
   };
+}
+
+function clampDarkness(raw: string | null | undefined): number {
+  const n = raw == null ? DEFAULT_SETTINGS.catPrinterDarkness : parseInt(raw, 10);
+  if (!Number.isFinite(n)) return DEFAULT_SETTINGS.catPrinterDarkness;
+  return Math.max(1, Math.min(5, Math.round(n)));
 }
 
 export async function saveSettings(s: AppSettings): Promise<void> {
@@ -154,6 +166,10 @@ export async function saveSettings(s: AppSettings): Promise<void> {
     AsyncStorage.setItem(KEY_PRINTER_MODE, s.printerMode === 'cat-ble' ? 'cat-ble' : 'external'),
     AsyncStorage.setItem(KEY_CAT_PRINTER_ID, s.catPrinterId || ''),
     AsyncStorage.setItem(KEY_CAT_PRINTER_NAME, s.catPrinterName || ''),
+    AsyncStorage.setItem(
+      KEY_CAT_PRINTER_DARKNESS,
+      String(Math.max(1, Math.min(5, Math.round(s.catPrinterDarkness || DEFAULT_SETTINGS.catPrinterDarkness))))
+    ),
   ]);
 
   // SEC-001: Store the GitHub PAT in the secure enclave. If cleared, wipe it.

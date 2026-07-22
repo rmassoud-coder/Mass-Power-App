@@ -14,7 +14,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { listInventory, InventoryItem } from '../src/db/database';
 import { loadSettings } from '../src/utils/settings';
-import { printHtml } from '../src/utils/printer';
+import { printJob } from '../src/utils/printService';
 import { buildPriceStickersHtml } from '../src/utils/htmlBuilder';
 
 export default function PriceStickersScreen() {
@@ -83,7 +83,7 @@ export default function PriceStickersScreen() {
       const settings = await loadSettings();
       const selected = items.filter((it) => selectedIds.has(it.id));
       const html = buildPriceStickersHtml(selected, settings.garageName);
-      await printHtml(html);
+      await printJob(html, { jobName: 'Price Stickers' });
     } catch (e: any) {
       Alert.alert(
         'Print failed',

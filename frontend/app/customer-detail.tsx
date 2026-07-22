@@ -34,7 +34,7 @@ import {
   buildHvacStickerHtml,
   buildCombinedInvoiceHtml,
 } from '../src/utils/htmlBuilder';
-import { printHtml } from '../src/utils/printer';
+import { printJob } from '../src/utils/printService';
 import CombinedInvoiceModal from '../src/components/CombinedInvoiceModal';
 
 interface Vehicle extends DBVehicle {}
@@ -152,7 +152,7 @@ export default function CustomerDetailScreen() {
     try {
       const settings = await loadSettings();
       const html = buildThermalReceiptHtml(details.customer, vehicle, service, settings);
-      await printHtml(html);
+      await printJob(html, { jobName: 'Receipt' });
     } catch (e: any) {
       Alert.alert(
         'Print failed',
@@ -170,7 +170,7 @@ export default function CustomerDetailScreen() {
     try {
       const settings = await loadSettings();
       const html = buildOilStickerHtml(details.customer, vehicle, service, settings);
-      await printHtml(html);
+      await printJob(html, { jobName: 'Oil Sticker' });
     } catch (e: any) {
       Alert.alert(
         'Print failed',
@@ -188,7 +188,7 @@ export default function CustomerDetailScreen() {
     try {
       const settings = await loadSettings();
       const html = buildBatteryStickerHtml(details.customer, vehicle, service, settings);
-      await printHtml(html);
+      await printJob(html, { jobName: 'Battery Sticker' });
     } catch (e: any) {
       Alert.alert(
         'Print failed',
@@ -206,7 +206,7 @@ export default function CustomerDetailScreen() {
     try {
       const settings = await loadSettings();
       const html = buildHvacStickerHtml(details.customer, vehicle, service, settings);
-      await printHtml(html);
+      await printJob(html, { jobName: 'HVAC Sticker' });
     } catch (e: any) {
       Alert.alert(
         'Print failed',
@@ -235,7 +235,7 @@ export default function CustomerDetailScreen() {
         discountAmount,
         settings,
       );
-      await printHtml(html);
+      await printJob(html, { jobName: 'Combined Invoice' });
       // Ask if the user wants to mark these as paid now that the invoice is out.
       const unpaidInSelection = selectedServices.filter((s) => !s.is_paid);
       const promptText = `Mark ${unpaidInSelection.length} service${unpaidInSelection.length === 1 ? '' : 's'} as paid?\n\nThey will flip to green ✓ in the customer's history.`;
