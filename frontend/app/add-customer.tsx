@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { createCustomer } from '../src/db/database';
+import { triggerAutoPush } from '../src/utils/autoSync';
 
 export default function AddCustomerScreen() {
   const [name, setName] = useState('');
@@ -31,6 +32,7 @@ export default function AddCustomerScreen() {
     setLoading(true);
     try {
       const customer = await createCustomer(name.trim(), mobileNumber.trim());
+      triggerAutoPush();
       // After creating, navigate to add-vehicle for this customer
       router.replace({
         pathname: '/add-vehicle',

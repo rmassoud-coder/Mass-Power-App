@@ -27,6 +27,7 @@ import {
   BatteryReplacement,
   HvacService,
 } from '../src/db/database';
+import { triggerAutoPush } from '../src/utils/autoSync';
 import DashLightsPicker from '../src/components/DashLightsPicker';
 import OilReminderForm from '../src/components/OilReminderForm';
 import BatteryReplacementForm from '../src/components/BatteryReplacementForm';
@@ -136,6 +137,7 @@ export default function AddServiceScreen() {
         isHvacService ? hvacService : undefined,
         parseFloat(outsourceCost || '0') || 0
       );
+      triggerAutoPush();
 
       router.back();
     } catch (error: any) {

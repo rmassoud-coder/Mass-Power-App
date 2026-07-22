@@ -26,6 +26,7 @@ import {
 } from '../src/db/database';
 import { loadSettings } from '../src/utils/settings';
 import { printJob } from '../src/utils/printService';
+import { triggerAutoPush } from '../src/utils/autoSync';
 import { MASS_POWER_LOGO_PNG_BASE64 } from '../src/utils/logoBase64';
 
 interface ReportItem {
@@ -240,6 +241,7 @@ export default function ReportScreen() {
       } else {
         await addSupplier(name, supplierContact.trim());
       }
+      triggerAutoPush();
       setSupplierName('');
       setSupplierContact('');
       setEditingSupplier(null);
@@ -267,6 +269,7 @@ export default function ReportScreen() {
     const doDelete = async () => {
       try {
         await deleteSupplier(s.id);
+        triggerAutoPush();
         if (editingSupplier?.id === s.id) handleCancelEditSupplier();
         await loadSuppliers();
       } catch (e: any) {

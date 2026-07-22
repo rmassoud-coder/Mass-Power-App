@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { createVehicle } from '../src/db/database';
+import { triggerAutoPush } from '../src/utils/autoSync';
 import { decodeVin } from '../src/utils/vinDecoder';
 import { scanVinWithCamera, isValidVin } from '../src/utils/vinScanner';
 
@@ -139,6 +140,7 @@ export default function AddVehicleScreen() {
         model.trim(),
         year.trim() || undefined
       );
+      triggerAutoPush();
 
       // Navigate back to customer detail
       router.replace({

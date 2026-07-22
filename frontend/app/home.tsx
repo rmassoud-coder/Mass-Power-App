@@ -22,6 +22,7 @@ import {
   listInventory,
   listDueOilReminders,
 } from '../src/db/database';
+import SyncStatusPill from '../src/components/SyncStatusPill';
 
 // Module-level flag so the out-of-stock + reminder alerts only trigger once per app session
 let outOfStockReminderShown = false;
@@ -187,6 +188,9 @@ export default function HomeScreen() {
             <View>
               <Text style={styles.headerTitle}>Mass Power</Text>
               <Text style={styles.headerSubtitle}>Auto Services</Text>
+              <View style={{ marginTop: 4 }}>
+                <SyncStatusPill />
+              </View>
             </View>
           </View>
           <TouchableOpacity

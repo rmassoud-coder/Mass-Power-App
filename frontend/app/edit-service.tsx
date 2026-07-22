@@ -26,6 +26,7 @@ import {
   EMPTY_BATTERY_REPLACEMENT,
   EMPTY_HVAC_SERVICE,
 } from '../src/db/database';
+import { triggerAutoPush } from '../src/utils/autoSync';
 import DashLightsPicker from '../src/components/DashLightsPicker';
 import OilReminderForm from '../src/components/OilReminderForm';
 import BatteryReplacementForm from '../src/components/BatteryReplacementForm';
@@ -179,6 +180,7 @@ export default function EditServiceScreen() {
         isHvacService ? hvacService : EMPTY_HVAC_SERVICE,
         parseFloat(outsourceCost || '0') || 0
       );
+      triggerAutoPush();
 
       router.back();
     } catch (error: any) {

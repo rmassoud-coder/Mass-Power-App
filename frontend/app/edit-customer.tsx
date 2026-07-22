@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { updateCustomer } from '../src/db/database';
+import { triggerAutoPush } from '../src/utils/autoSync';
 
 export default function EditCustomerScreen() {
   const params = useLocalSearchParams();
@@ -32,6 +33,7 @@ export default function EditCustomerScreen() {
     setLoading(true);
     try {
       await updateCustomer(params.customerId as string, name.trim(), mobileNumber.trim());
+      triggerAutoPush();
 
       router.back();
     } catch (error: any) {

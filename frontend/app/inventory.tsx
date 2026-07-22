@@ -26,6 +26,7 @@ import {
   Supplier,
   listSuppliers,
 } from '../src/db/database';
+import { triggerAutoPush } from '../src/utils/autoSync';
 
 export default function InventoryScreen() {
   const router = useRouter();
@@ -124,6 +125,7 @@ export default function InventoryScreen() {
       } else {
         await addInventoryItem(formType, qty, price, extras);
       }
+      triggerAutoPush();
       setModalOpen(false);
       await load();
     } catch (e: any) {
@@ -136,6 +138,7 @@ export default function InventoryScreen() {
   const handleAdjustQty = async (it: InventoryItem, delta: number) => {
     try {
       const nextQty = await adjustInventoryQuantity(it.id, delta);
+      triggerAutoPush();
       // Optimistic local update so the number changes instantly without a full
       // reload; the list will re-sort on the next full `load()`.
       setItems((prev) =>
@@ -152,6 +155,7 @@ export default function InventoryScreen() {
     const doDelete = async () => {
       try {
         await deleteInventoryItem(it.id);
+        triggerAutoPush();
         await load();
       } catch (e: any) {
         Alert.alert('Error', e.message || 'Failed to delete');

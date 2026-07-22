@@ -35,6 +35,7 @@ import {
   buildCombinedInvoiceHtml,
 } from '../src/utils/htmlBuilder';
 import { printJob } from '../src/utils/printService';
+import { triggerAutoPush } from '../src/utils/autoSync';
 import CombinedInvoiceModal from '../src/components/CombinedInvoiceModal';
 
 interface Vehicle extends DBVehicle {}
@@ -94,6 +95,7 @@ export default function CustomerDetailScreen() {
       } else if (deleteTarget.type === 'service') {
         await deleteService(deleteTarget.id);
       }
+      triggerAutoPush();
 
       const wasCustomer = deleteTarget.type === 'customer';
       setDeleteTarget(null);
@@ -242,6 +244,7 @@ export default function CustomerDetailScreen() {
       const doMark = async () => {
         try {
           await markServicesPaid(unpaidInSelection.map((s) => s.id));
+          triggerAutoPush();
           await fetchCustomerDetails();
           setInvoiceModalOpen(false);
         } catch (e: any) {

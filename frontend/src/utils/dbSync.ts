@@ -104,6 +104,65 @@ async function fetchCloudSnapshot(settings: AppSettings): Promise<FullDbSnapshot
   }
 }
 
+export function formatSyncedAt(iso: string | null): string {
+  if (!iso) return 'Never synced';
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    const diffMs = Date.now() - d.getTime();
+    const min = Math.round(diffMs / 60000);
+    if (min < 1) return 'Just now';
+    if (min < 60) return `${min} min ago`;
+    const hr = Math.round(min / 60);
+    if (hr < 24) return `${hr} h ago`;
+    return d.toLocaleString(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+  } catch {
+    return iso;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                        Helpers used by autoSync                            */
+/* -------------------------------------------------------------------------- */
+
+/** Fetch cloud snapshot without applying it. Returns null if the file
+ *  doesn't exist yet. Bubbles up 401/403 so autoSync can surface bad tokens. */
+export async function fetchCloudSnapshotForCheck(
+  settings: AppSettings
+): Promise<FullDbSnapshot | null> {
+  assertConfigured(settings);
+  return fetchCloudSnapshot(settings);
+}
+
+/**
+ * Read cloud snapshot; if its `exported_at` is strictly newer than the caller's
+ * `lastLocalIso` marker, replace the local DB with it and return true. Returns
+ * false otherwise (cloud missing / same-or-older). Never pushes.
+ */
+export async function applyCloudIfNewer(
+  settings: AppSettings,
+  lastLocalIso: string,
+  _fetch?: (s: AppSettings) => Promise<FullDbSnapshot | null>
+): Promise<boolean> {
+  const cloud = await (_fetch || fetchCloudSnapshotForCheck)(settings);
+  if (!cloud) return false;
+  const cloudTs = cloud.exported_at ? Date.parse(cloud.exported_at) : 0;
+  const localTs = lastLocalIso ? Date.parse(lastLocalIso) : 0;
+  if (cloudTs > 0 && cloudTs > localTs) {
+    await replaceFullDatabase(cloud);
+    await setLastSyncAt(new Date().toISOString());
+    return true;
+  }
+  return false;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                  runSync                                   */
+/* -------------------------------------------------------------------------- */
+
 /**
  * Runs a full sync cycle:
  *   1. PULL: fetch cloud snapshot. If it exists AND its `exported_at` is newer
@@ -234,24 +293,4 @@ export async function isDailyDue(): Promise<boolean> {
   const lastMs = Date.parse(last);
   if (Number.isNaN(lastMs)) return true;
   return Date.now() - lastMs >= 24 * 60 * 60 * 1000;
-}
-
-export function formatSyncedAt(iso: string | null): string {
-  if (!iso) return 'Never synced';
-  try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return iso;
-    const diffMs = Date.now() - d.getTime();
-    const min = Math.round(diffMs / 60000);
-    if (min < 1) return 'Just now';
-    if (min < 60) return `${min} min ago`;
-    const hr = Math.round(min / 60);
-    if (hr < 24) return `${hr} h ago`;
-    return d.toLocaleString(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    });
-  } catch {
-    return iso;
-  }
 }
