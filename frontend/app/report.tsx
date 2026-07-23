@@ -26,6 +26,7 @@ import {
 } from '../src/db/database';
 import { loadSettings } from '../src/utils/settings';
 import { printJob } from '../src/utils/printService';
+import { buildReorderDoc } from '../src/utils/thermalDoc';
 import { triggerAutoPush } from '../src/utils/autoSync';
 import { MASS_POWER_LOGO_PNG_BASE64 } from '../src/utils/logoBase64';
 
@@ -319,7 +320,13 @@ export default function ReportScreen() {
         settings.garagePhone,
         lastThresholdUsed,
       );
-      await printJob(html, { jobName: 'Reorder Report' });
+      const thermal = buildReorderDoc(
+        reorderGroups,
+        settings.garageName,
+        settings.garagePhone,
+        lastThresholdUsed,
+      );
+      await printJob(html, { jobName: 'Reorder Report', thermal });
     } catch (e: any) {
       Alert.alert(
         'Print failed',

@@ -34,6 +34,13 @@ import {
   buildHvacStickerHtml,
   buildCombinedInvoiceHtml,
 } from '../src/utils/htmlBuilder';
+import {
+  buildThermalReceiptDoc,
+  buildOilStickerDoc,
+  buildBatteryStickerDoc,
+  buildHvacStickerDoc,
+  buildCombinedInvoiceDoc,
+} from '../src/utils/thermalDoc';
 import { printJob } from '../src/utils/printService';
 import { triggerAutoPush } from '../src/utils/autoSync';
 import CombinedInvoiceModal from '../src/components/CombinedInvoiceModal';
@@ -154,7 +161,8 @@ export default function CustomerDetailScreen() {
     try {
       const settings = await loadSettings();
       const html = buildThermalReceiptHtml(details.customer, vehicle, service, settings);
-      await printJob(html, { jobName: 'Receipt' });
+      const thermal = buildThermalReceiptDoc(details.customer, vehicle, service, settings);
+      await printJob(html, { jobName: 'Receipt', thermal });
     } catch (e: any) {
       Alert.alert(
         'Print failed',
@@ -172,7 +180,8 @@ export default function CustomerDetailScreen() {
     try {
       const settings = await loadSettings();
       const html = buildOilStickerHtml(details.customer, vehicle, service, settings);
-      await printJob(html, { jobName: 'Oil Sticker' });
+      const thermal = buildOilStickerDoc(details.customer, vehicle, service, settings);
+      await printJob(html, { jobName: 'Oil Sticker', thermal });
     } catch (e: any) {
       Alert.alert(
         'Print failed',
@@ -190,7 +199,8 @@ export default function CustomerDetailScreen() {
     try {
       const settings = await loadSettings();
       const html = buildBatteryStickerHtml(details.customer, vehicle, service, settings);
-      await printJob(html, { jobName: 'Battery Sticker' });
+      const thermal = buildBatteryStickerDoc(details.customer, vehicle, service, settings);
+      await printJob(html, { jobName: 'Battery Sticker', thermal });
     } catch (e: any) {
       Alert.alert(
         'Print failed',
@@ -208,7 +218,8 @@ export default function CustomerDetailScreen() {
     try {
       const settings = await loadSettings();
       const html = buildHvacStickerHtml(details.customer, vehicle, service, settings);
-      await printJob(html, { jobName: 'HVAC Sticker' });
+      const thermal = buildHvacStickerDoc(details.customer, vehicle, service, settings);
+      await printJob(html, { jobName: 'HVAC Sticker', thermal });
     } catch (e: any) {
       Alert.alert(
         'Print failed',
@@ -237,7 +248,14 @@ export default function CustomerDetailScreen() {
         discountAmount,
         settings,
       );
-      await printJob(html, { jobName: 'Combined Invoice' });
+      const thermal = buildCombinedInvoiceDoc(
+        details.customer,
+        details.vehicles,
+        selectedServices,
+        discountAmount,
+        settings,
+      );
+      await printJob(html, { jobName: 'Combined Invoice', thermal });
       // Ask if the user wants to mark these as paid now that the invoice is out.
       const unpaidInSelection = selectedServices.filter((s) => !s.is_paid);
       const promptText = `Mark ${unpaidInSelection.length} service${unpaidInSelection.length === 1 ? '' : 's'} as paid?\n\nThey will flip to green ✓ in the customer's history.`;

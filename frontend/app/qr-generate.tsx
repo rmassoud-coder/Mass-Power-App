@@ -19,6 +19,7 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { currentMonthPayload } from '../src/utils/guaranteeQr';
 import { printJob } from '../src/utils/printService';
+import { buildGuaranteeStickerDoc } from '../src/utils/thermalDoc';
 
 /**
  * Generates the monthly Mass Power guarantee sticker as a **Data Matrix** at
@@ -167,7 +168,8 @@ export default function QrGenerateScreen() {
     setPrinting(true);
     try {
       const html = buildPrintHtml(dataUrl, monthLabel);
-      await printJob(html, { jobName: 'Guarantee Sticker' });
+      const thermal = buildGuaranteeStickerDoc(dataUrl, monthLabel);
+      await printJob(html, { jobName: 'Guarantee Sticker', thermal });
     } catch (e: any) {
       Alert.alert('Print failed', e?.message || 'Could not open the print dialog.');
     } finally {

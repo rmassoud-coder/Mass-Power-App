@@ -20,6 +20,8 @@ import { shareHtml, sharePdfFromHtml } from '../utils/printer';
 // SEC-006: printJob routes to Cat Printer BLE when configured, else falls
 // back to the OS print flow.
 import { printJob } from '../utils/printService';
+import { buildVehicleQrDoc } from '../utils/thermalDoc';
+import bwipjs from '@bwip-js/react-native';
 import { uploadVehicleProfile } from '../utils/githubUploader';
 
 interface Props {
@@ -82,8 +84,25 @@ export default function VehicleQrModal({ visible, customer, vehicle, services, o
     if (!settings || !vehicle) return;
     setPrintingQr(true);
     try {
-      // Use a public QR-as-image service so the printer renders a real QR PNG.
-      // The QR encodes the same URL shown in the modal.
+      // Local (offline) QR data URI for the Cat Printer path
+      let qrDataUri = '';
+      try {
+        const raw = await bwipjs.toDataURL({
+          bcid: 'qrcode',
+          text: url,
+          scale: 4,
+          padding: 2,
+          backgroundcolor: 'FFFFFF',
+          barcolor: '000000',
+        } as Record<string, unknown>);
+        qrDataUri =
+          typeof raw === 'string'
+            ? raw
+            : (raw as { uri?: string; url?: string }).uri || (raw as { uri?: string; url?: string }).url || '';
+      } catch {
+        qrDataUri = '';
+      }
+      // Rich HTML (uses external QR image service) for the OS/PrinterShare path
       const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=1&data=${encodeURIComponent(url)}`;
       const safeMake = esc(vehicle.make || '');
       const safeModel = esc(vehicle.model || '');
@@ -114,7 +133,8 @@ export default function VehicleQrModal({ visible, customer, vehicle, services, o
   </div>
   <div style="height: 18px;"></div>
 </body></html>`;
-      await printJob(html, { jobName: 'Vehicle QR Sticker' });
+      const thermal = buildVehicleQrDoc(vehicle, qrDataUri, settings.garageName || '');
+      await printJob(html, { jobName: 'Vehicle QR Sticker', thermal });
     } catch (e: any) {
       Alert.alert('Print failed', e?.message || 'Unable to open printer.');
     } finally {

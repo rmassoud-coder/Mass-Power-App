@@ -1,30 +1,27 @@
 /**
- * HTML → 384-px-wide 1-bit dithered bitmap.
+ * ThermalDoc → 384-px-wide 1-bit dithered bitmap.
  *
- * Design:
- *   - A single hidden <WebView> is mounted at the app root via
- *     <HtmlRasterizerHost />. It hosts a bootstrap HTML page that owns a
- *     rendering <div> plus a <canvas>.
- *   - Native RN code calls `rasterizeHtml(html, opts)` and awaits a
- *     Promise<MonoBitmap>. The request is dispatched to the WebView via
- *     `injectJavaScript`. The WebView renders the HTML, snaps it to canvas,
- *     applies Floyd–Steinberg dithering, then postMessages the packed rows
- *     back to native.
+ * Design rewrite: the previous version relied on SVG <foreignObject> to
+ * rasterize arbitrary HTML in a hidden WebView. That approach turned out to
+ * be flaky on real Android WebViews (Huawei, LG etc. return "SVG image load
+ * failed"). We now paint the receipt DIRECTLY on a Canvas 2D context, one
+ * op at a time. No SVG, no HTML parsing — just deterministic drawing.
  *
- * The rasterizer is a no-op on web (Cat Printer BLE isn't reachable there
- * anyway) and simply throws — callers should fall back to the OS print flow.
+ *   • A single hidden <WebView> is mounted at the app root via
+ *     <HtmlRasterizerHost />. It hosts a bootstrap page that owns a <canvas>.
+ *   • Native RN calls `rasterizeThermalDoc(doc, opts)` → the JSON payload is
+ *     injected via `injectJavaScript`, the WebView paints the ops, dithers
+ *     to 1-bit rows and posts the base64 rows back.
  */
 import type { MonoBitmap } from './catPrinter';
+import type { ThermalDoc } from './thermalDoc';
 
 export interface RasterizeOptions {
   /** Target width in pixels. PD01/GT01 = 384. */
   width?: number;
-  /**
-   * Extra "boost" applied to every pixel before dithering to make the print
-   * darker (1..5). 1 = very light, 3 = normal, 5 = very dark.
-   */
+  /** 1..5 darkness (shifts luminance before dithering). */
   darkness?: number;
-  /** Max seconds to wait for the WebView to respond. */
+  /** Max ms to wait for the WebView to respond. */
   timeoutMs?: number;
 }
 
@@ -47,7 +44,6 @@ export function _registerRasterizerHost(injectJs: ((js: string) => void) | null)
   _injectJs = injectJs;
   _hostReady = !!injectJs;
   if (!injectJs) {
-    // Host went away — reject anything still waiting
     _pending.forEach((p) => {
       clearTimeout(p.timer);
       p.reject(new Error('Rasterizer host unmounted'));
@@ -59,11 +55,7 @@ export function _registerRasterizerHost(injectJs: ((js: string) => void) | null)
 /** Called by the RN host on every message coming out of the WebView. */
 export function _onRasterizerMessage(raw: string): void {
   let payload: any;
-  try {
-    payload = JSON.parse(raw);
-  } catch {
-    return;
-  }
+  try { payload = JSON.parse(raw); } catch { return; }
   const { id } = payload || {};
   if (!id || !_pending.has(id)) return;
   const p = _pending.get(id)!;
@@ -84,18 +76,13 @@ export function isRasterizerReady(): boolean {
   return _hostReady && _injectJs != null;
 }
 
-/**
- * Rasterize the supplied HTML into a 384-px-wide monochrome bitmap.
- * The Promise resolves when the WebView finishes rendering + dithering.
- */
-export function rasterizeHtml(html: string, opts: RasterizeOptions = {}): Promise<MonoBitmap> {
+/** Rasterize a ThermalDoc → mono bitmap. */
+export function rasterizeThermalDoc(doc: ThermalDoc, opts: RasterizeOptions = {}): Promise<MonoBitmap> {
   const width = opts.width ?? 384;
   const darkness = Math.max(1, Math.min(5, Math.round(opts.darkness ?? 3)));
-  const timeoutMs = opts.timeoutMs ?? 20000;
+  const timeoutMs = opts.timeoutMs ?? 25000;
 
-  if (!_injectJs) {
-    return Promise.reject(new Error('Rasterizer host not mounted'));
-  }
+  if (!_injectJs) return Promise.reject(new Error('Rasterizer host not mounted'));
 
   const id = `r_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
   const p = new Promise<MonoBitmap>((resolve, reject) => {
@@ -108,47 +95,38 @@ export function rasterizeHtml(html: string, opts: RasterizeOptions = {}): Promis
     _pending.set(id, { resolve, reject, timer });
   });
 
-  // JSON-encode payload safely for injection
-  const payload = JSON.stringify({ id, html, width, darkness });
-  const js = `window.__rasterize__(${JSON.stringify(payload)}); true;`;
+  const payload = JSON.stringify({ id, doc, width, darkness });
+  const js = `window.__rasterizeDoc__(${JSON.stringify(payload)}); true;`;
   try {
     _injectJs(js);
   } catch (e: any) {
     _pending.delete(id);
     return Promise.reject(new Error('Failed to inject rasterizer request: ' + (e?.message || e)));
   }
-
   return p;
+}
+
+/**
+ * @deprecated — kept only so old imports don't break. Immediately rejects.
+ * New callers should build a ThermalDoc and use rasterizeThermalDoc.
+ */
+export function rasterizeHtml(_html: string, _opts: RasterizeOptions = {}): Promise<MonoBitmap> {
+  return Promise.reject(new Error('HTML rasterization is deprecated — use rasterizeThermalDoc'));
 }
 
 /* -------------------------------------------------------------------------- */
 /*                    Bootstrap HTML for the hidden WebView                   */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Returns the full HTML document that the hidden WebView loads once.
- *
- * The document exposes:
- *   window.__rasterize__(payloadJson): void — kicks off a render+dither job
- *
- * When done, it posts a JSON message back:
- *   { id, ok:true, width, height, rowsBase64: string[] }
- *   { id, ok:false, error: string }
- */
 export function getRasterizerHostHtml(): string {
   return `<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<style>
-  html, body { margin:0; padding:0; background:#fff; }
-  /* Container gets sized precisely to the target width so widthPX matches. */
-  #stage { display:block; }
-</style>
+<style> html, body { margin:0; padding:0; background:#fff; } canvas { display:none; } </style>
 </head>
 <body>
-<div id="stage"></div>
-<canvas id="cv" style="display:none;"></canvas>
+<canvas id="cv"></canvas>
 <script>
 (function () {
   function send(obj) {
@@ -159,122 +137,323 @@ export function getRasterizerHostHtml(): string {
     } catch (e) {}
   }
 
-  // Wait for all <img> tags inside \`el\` to load (or fail).
-  function waitForImages(el) {
-    var imgs = el.querySelectorAll('img');
-    if (!imgs.length) return Promise.resolve();
-    var arr = [];
-    for (var i=0; i<imgs.length; i++) (function(im){
-      if (im.complete && im.naturalWidth > 0) { arr.push(Promise.resolve()); return; }
-      arr.push(new Promise(function(res){
-        im.onload = function(){ res(); };
-        im.onerror = function(){ res(); };
-        // Safety: don't wait forever
-        setTimeout(res, 3000);
-      }));
-    })(imgs[i]);
-    return Promise.all(arr);
+  /* ---------------- Text helpers ---------------- */
+
+  function measureText(ctx, text, font) {
+    ctx.font = font;
+    return ctx.measureText(text).width;
   }
 
-  /**
-   * Render \`html\` into a hidden div sized to \`width\` px, then
-   * rasterize via the SVG <foreignObject> trick.
-   * Returns a Promise<HTMLCanvasElement>.
-   */
-  function renderToCanvas(html, width) {
-    var stage = document.getElementById('stage');
-    stage.style.width = width + 'px';
-    stage.style.margin = '0';
-    stage.style.padding = '0';
-    stage.style.background = '#fff';
-    stage.style.color = '#000';
-    // Inline wrapper: strip out <html>/<body>/<head> — foreignObject wants
-    // XHTML-compatible fragments. We match anything between <body ...> and </body>.
-    var body = html;
-    var m = html.match(/<body[^>]*>([\\s\\S]*?)<\\/body>/i);
-    if (m) body = m[1];
-    // Also grab any <style> blocks from <head> so styling survives.
-    var styles = '';
-    var re = /<style[^>]*>([\\s\\S]*?)<\\/style>/gi;
-    var sm;
-    while ((sm = re.exec(html)) !== null) styles += sm[1] + '\\n';
+  function fontFor(size, bold) {
+    return (bold ? 'bold ' : '') + size + 'px Arial, sans-serif';
+  }
 
-    stage.innerHTML =
-      '<div id="rp-root" style="width:' + width + 'px; background:#fff; color:#000;">' +
-        (styles ? '<style>' + styles + '</style>' : '') +
-        body +
-      '</div>';
+  // Greedy word-wrap. Returns array of lines that each fit within maxWidth.
+  function wrapLines(ctx, text, font, maxWidth) {
+    ctx.font = font;
+    if (!text) return [''];
+    var paragraphs = String(text).split(/\\r?\\n/);
+    var out = [];
+    for (var p = 0; p < paragraphs.length; p++) {
+      var words = paragraphs[p].split(/\\s+/).filter(Boolean);
+      if (!words.length) { out.push(''); continue; }
+      var line = words[0];
+      for (var i = 1; i < words.length; i++) {
+        var w = words[i];
+        var test = line + ' ' + w;
+        if (ctx.measureText(test).width <= maxWidth) {
+          line = test;
+        } else {
+          out.push(line);
+          line = w;
+        }
+      }
+      out.push(line);
+    }
+    return out;
+  }
 
-    // Force load of any <img> tags first (they should already be base64,
-    // but be defensive).
-    return waitForImages(stage).then(function () {
-      var root = document.getElementById('rp-root');
-      // Take a beat so the browser fully lays out (fonts / img sizes)
-      return new Promise(function(res){ requestAnimationFrame(function(){ setTimeout(res, 30); }); })
-        .then(function () {
-          // Height = measured content height. We clamp to a hard max so a
-          // runaway page can't OOM the printer.
-          var h = Math.min(4000, Math.max(1, root.scrollHeight));
-          // Build a self-contained XHTML document string.
-          var htmlNS = 'http://www.w3.org/1999/xhtml';
-          var outer = document.createElement('div');
-          outer.appendChild(root.cloneNode(true));
-          var xhtml =
-            '<div xmlns="' + htmlNS + '" style="width:' + width + 'px; background:#fff; color:#000; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif;">' +
-              outer.innerHTML +
-            '</div>';
+  function drawTextLine(ctx, text, x, y, size, align, maxWidth) {
+    ctx.textBaseline = 'top';
+    var w = ctx.measureText(text).width;
+    var drawX = x;
+    if (align === 'center') drawX = x + (maxWidth - w) / 2;
+    else if (align === 'right') drawX = x + (maxWidth - w);
+    ctx.fillText(text, drawX, y);
+  }
 
-          var svg =
-            '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + h + '">' +
-              '<foreignObject width="100%" height="100%">' + xhtml + '</foreignObject>' +
-            '</svg>';
+  /* ---------------- Op sizing (pass 1) ---------------- */
 
-          var svg64;
-          try {
-            svg64 = btoa(unescape(encodeURIComponent(svg)));
-          } catch (e) {
-            return Promise.reject(new Error('encode failed: ' + e.message));
-          }
+  var MARGIN = 8;               // horizontal margin in px
+  var LINE_GAP = 2;
 
-          var img = new Image();
-          return new Promise(function (resolve, reject) {
-            img.onload = function () {
-              var cv = document.getElementById('cv');
-              cv.width = width;
-              cv.height = h;
-              var ctx = cv.getContext('2d');
-              ctx.fillStyle = '#ffffff';
-              ctx.fillRect(0, 0, width, h);
-              try {
-                ctx.drawImage(img, 0, 0, width, h);
-                resolve(cv);
-              } catch (err) {
-                reject(new Error('drawImage failed: ' + err.message));
-              }
-            };
-            img.onerror = function () { reject(new Error('SVG image load failed')); };
-            img.src = 'data:image/svg+xml;base64,' + svg64;
-          });
-        });
+  // Load one image (data URI) as HTMLImageElement.
+  function loadImage(uri) {
+    return new Promise(function (resolve) {
+      var img = new Image();
+      img.onload = function () { resolve(img); };
+      img.onerror = function () { resolve(null); };
+      img.src = uri;
+      // Safety: if it never fires, resolve after 4s
+      setTimeout(function () { resolve(null); }, 4000);
     });
   }
 
-  /**
-   * Floyd–Steinberg dither on a grayscale copy of the canvas, packed to a
-   * 1-bit-per-pixel LSB-first byte array per row, base64-encoded for RN.
-   *
-   * darkness (1..5): shifts the input downward so more pixels burn black.
-   */
+  // Preload all images referenced in ops so we know their dimensions before
+  // computing total height.
+  function preloadImages(ops) {
+    var jobs = [];
+    for (var i = 0; i < ops.length; i++) {
+      if (ops[i] && ops[i].t === 'image' && ops[i].dataUri) {
+        (function (op) {
+          jobs.push(loadImage(op.dataUri).then(function (im) { op.__img = im; }));
+        })(ops[i]);
+      }
+    }
+    return Promise.all(jobs);
+  }
+
+  // Compute the y-height each op needs. Also stores the op's cached wrapped
+  // lines so pass 2 doesn't recompute.
+  function measureOps(ctx, ops, width) {
+    var innerW = width - MARGIN * 2;
+    var total = 0;
+    for (var i = 0; i < ops.length; i++) {
+      var op = ops[i];
+      var h = 0;
+      switch (op.t) {
+        case 'text': {
+          var size = op.size || 22;
+          var font = fontFor(size, !!op.bold);
+          var lines = wrapLines(ctx, op.text || '', font, innerW);
+          op.__lines = lines;
+          op.__size = size;
+          op.__font = font;
+          h = lines.length * (size + LINE_GAP);
+          break;
+        }
+        case 'wrap': {
+          var size2 = op.size || 20;
+          var font2 = fontFor(size2, !!op.bold);
+          var lines2 = wrapLines(ctx, op.text || '', font2, innerW);
+          op.__lines = lines2;
+          op.__size = size2;
+          op.__font = font2;
+          h = lines2.length * (size2 + LINE_GAP);
+          break;
+        }
+        case 'row': {
+          var size3 = op.size || 22;
+          var font3 = fontFor(size3, !!op.bold);
+          op.__font = font3;
+          op.__size = size3;
+          h = size3 + LINE_GAP;
+          break;
+        }
+        case 'band': {
+          var sizeB = op.size || 24;
+          var fontB = fontFor(sizeB, true);
+          op.__font = fontB;
+          op.__size = sizeB;
+          // 6px vertical padding inside the black band
+          h = sizeB + 12;
+          break;
+        }
+        case 'header': {
+          op.__size = 24;
+          op.__font = fontFor(24, true);
+          h = 24 + 12; // text + underline gap
+          break;
+        }
+        case 'divider': {
+          h = 8;
+          break;
+        }
+        case 'space': {
+          h = Math.max(0, op.h || 8);
+          break;
+        }
+        case 'checkbox': {
+          var sizeC = op.size || 18;
+          op.__size = sizeC;
+          op.__font = fontFor(sizeC, true);
+          // taller of box (22) and text
+          h = Math.max(22, sizeC) + 6;
+          break;
+        }
+        case 'image': {
+          var img = op.__img;
+          if (!img) { h = 0; break; }
+          var maxW = Math.min(innerW, op.maxWidth || innerW);
+          var iw = img.width, ih = img.height;
+          var scale = maxW / iw;
+          if (scale > 1) scale = 1; // never upscale
+          op.__drawW = Math.round(iw * scale);
+          op.__drawH = Math.round(ih * scale);
+          h = op.__drawH + 4;
+          break;
+        }
+        default:
+          h = 0;
+      }
+      op.__h = h;
+      total += h;
+    }
+    return total + MARGIN * 2; // top+bottom padding
+  }
+
+  /* ---------------- Draw ops (pass 2) ---------------- */
+
+  function drawOps(ctx, ops, width) {
+    var innerW = width - MARGIN * 2;
+    var y = MARGIN;
+    for (var i = 0; i < ops.length; i++) {
+      var op = ops[i];
+      switch (op.t) {
+        case 'text': {
+          ctx.fillStyle = '#000';
+          ctx.font = op.__font;
+          var align = op.align || 'center';
+          for (var l = 0; l < op.__lines.length; l++) {
+            drawTextLine(ctx, op.__lines[l], MARGIN, y, op.__size, align, innerW);
+            y += op.__size + LINE_GAP;
+          }
+          break;
+        }
+        case 'wrap': {
+          ctx.fillStyle = '#000';
+          ctx.font = op.__font;
+          var align2 = op.align || 'left';
+          for (var l2 = 0; l2 < op.__lines.length; l2++) {
+            drawTextLine(ctx, op.__lines[l2], MARGIN, y, op.__size, align2, innerW);
+            y += op.__size + LINE_GAP;
+          }
+          break;
+        }
+        case 'row': {
+          ctx.fillStyle = '#000';
+          ctx.font = op.__font;
+          ctx.textBaseline = 'top';
+          // Clip left+right if too wide by truncating with ellipsis on left.
+          var right = String(op.right == null ? '' : op.right);
+          var left = String(op.left == null ? '' : op.left);
+          var rightW = ctx.measureText(right).width;
+          var leftMax = innerW - rightW - 8;
+          if (leftMax < 20) leftMax = 20;
+          while (ctx.measureText(left).width > leftMax && left.length > 3) {
+            left = left.substring(0, left.length - 2) + '…';
+          }
+          ctx.fillText(left, MARGIN, y);
+          ctx.fillText(right, MARGIN + innerW - rightW, y);
+          y += op.__size + LINE_GAP;
+          break;
+        }
+        case 'band': {
+          var bh = op.__h;
+          ctx.fillStyle = '#000';
+          ctx.fillRect(0, y, width, bh);
+          ctx.fillStyle = '#fff';
+          ctx.font = op.__font;
+          // If text is wider than innerW, shrink until it fits (down to 12px).
+          var text = String(op.text || '');
+          var sz = op.__size;
+          while (ctx.measureText(text).width > innerW - 6 && sz > 12) {
+            sz -= 1;
+            ctx.font = fontFor(sz, true);
+          }
+          var tw = ctx.measureText(text).width;
+          ctx.fillText(text, (width - tw) / 2, y + (bh - sz) / 2);
+          y += bh;
+          break;
+        }
+        case 'header': {
+          ctx.fillStyle = '#000';
+          ctx.font = op.__font;
+          ctx.textBaseline = 'top';
+          var head = String(op.text || '');
+          var hsz = op.__size;
+          while (ctx.measureText(head).width > innerW - 4 && hsz > 12) {
+            hsz -= 1;
+            ctx.font = fontFor(hsz, true);
+          }
+          var hw = ctx.measureText(head).width;
+          ctx.fillText(head, (width - hw) / 2, y);
+          // Underline
+          ctx.fillRect(MARGIN, y + hsz + 4, innerW, 2);
+          y += hsz + 12;
+          break;
+        }
+        case 'divider': {
+          if ((op.style || 'solid') === 'dashed') {
+            ctx.fillStyle = '#000';
+            for (var dx = MARGIN; dx < MARGIN + innerW; dx += 8) {
+              ctx.fillRect(dx, y + 3, 4, 2);
+            }
+          } else {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(MARGIN, y + 3, innerW, 2);
+          }
+          y += 8;
+          break;
+        }
+        case 'space':
+          y += op.__h;
+          break;
+        case 'checkbox': {
+          var boxSize = 20;
+          var boxY = y + 2;
+          var boxX = MARGIN + 4;
+          ctx.fillStyle = '#000';
+          // Box outline
+          ctx.fillRect(boxX, boxY, boxSize, 2);
+          ctx.fillRect(boxX, boxY + boxSize - 2, boxSize, 2);
+          ctx.fillRect(boxX, boxY, 2, boxSize);
+          ctx.fillRect(boxX + boxSize - 2, boxY, 2, boxSize);
+          if (op.checked) {
+            // Draw a chunky ✓
+            ctx.beginPath();
+            ctx.moveTo(boxX + 4, boxY + boxSize / 2);
+            ctx.lineTo(boxX + boxSize / 2 - 1, boxY + boxSize - 5);
+            ctx.lineTo(boxX + boxSize - 3, boxY + 4);
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+          }
+          ctx.font = op.__font;
+          ctx.textBaseline = 'top';
+          ctx.fillStyle = '#000';
+          ctx.fillText(String(op.label || ''), boxX + boxSize + 8, boxY + (boxSize - op.__size) / 2 + 2);
+          y += op.__h;
+          break;
+        }
+        case 'image': {
+          if (op.__img) {
+            var iw = op.__drawW;
+            var ih = op.__drawH;
+            var ix = MARGIN;
+            if ((op.align || 'center') === 'center') ix = (width - iw) / 2;
+            else if (op.align === 'right') ix = width - MARGIN - iw;
+            try {
+              ctx.drawImage(op.__img, Math.floor(ix), Math.floor(y), iw, ih);
+            } catch (e) { /* ignore */ }
+            y += ih + 4;
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  /* ---------------- 1-bit Floyd–Steinberg dither ---------------- */
+
   function ditherAndPack(cv, darkness) {
     var w = cv.width, h = cv.height;
     var ctx = cv.getContext('2d');
     var img = ctx.getImageData(0, 0, w, h);
     var d = img.data;
-    // Grayscale + darkness shift into an Int16Array (we need signed for FS)
     var gray = new Int16Array(w * h);
     var shift = ({1:-30, 2:-15, 3:0, 4:15, 5:30})[darkness] || 0;
     for (var i = 0, p = 0; i < d.length; i += 4, p++) {
-      // sRGB luma; alpha-blend transparent pixels with white
       var a = d[i + 3] / 255;
       var r = d[i]     * a + 255 * (1 - a);
       var g = d[i + 1] * a + 255 * (1 - a);
@@ -283,62 +462,80 @@ export function getRasterizerHostHtml(): string {
       if (y < 0) y = 0; if (y > 255) y = 255;
       gray[p] = y;
     }
-
-    // Row-based FS dither
     var bytesPerRow = Math.ceil(w / 8);
     var rowsB64 = new Array(h);
-    for (var y = 0; y < h; y++) {
+    for (var yy = 0; yy < h; yy++) {
       var row = new Uint8Array(bytesPerRow);
       for (var x = 0; x < w; x++) {
-        var idx = y * w + x;
+        var idx = yy * w + x;
         var old = gray[idx];
         var nw = old < 128 ? 0 : 255;
         var err = old - nw;
         gray[idx] = nw;
-        // Propagate error (FS coefficients)
         if (x + 1 < w)                gray[idx + 1]         += (err * 7) >> 4;
-        if (y + 1 < h) {
+        if (yy + 1 < h) {
           if (x > 0)                  gray[idx + w - 1]     += (err * 3) >> 4;
                                        gray[idx + w]         += (err * 5) >> 4;
           if (x + 1 < w)              gray[idx + w + 1]     += (err * 1) >> 4;
         }
-        if (nw === 0) {
-          // bit set = burn (black). LSB-first per Cat Printer protocol.
-          row[x >> 3] |= (1 << (x & 7));
-        }
+        if (nw === 0) row[x >> 3] |= (1 << (x & 7));
       }
-      // base64 encode this row
       var s = '';
       for (var k = 0; k < row.length; k++) s += String.fromCharCode(row[k]);
-      rowsB64[y] = btoa(s);
+      rowsB64[yy] = btoa(s);
     }
     return { width: w, height: h, rowsBase64: rowsB64 };
   }
 
-  window.__rasterize__ = function (payloadJson) {
+  /* ---------------- Public API ---------------- */
+
+  window.__rasterizeDoc__ = function (payloadJson) {
     var payload;
     try { payload = JSON.parse(payloadJson); }
     catch (e) { send({ id: null, ok: false, error: 'bad payload' }); return; }
     var id = payload.id;
     try {
-      renderToCanvas(payload.html, payload.width || 384)
-        .then(function (cv) {
-          try {
-            var bmp = ditherAndPack(cv, payload.darkness || 3);
-            send({ id: id, ok: true, width: bmp.width, height: bmp.height, rowsBase64: bmp.rowsBase64 });
-          } catch (e) {
-            send({ id: id, ok: false, error: 'dither failed: ' + (e && e.message || e) });
-          }
-        })
-        .catch(function (e) {
-          send({ id: id, ok: false, error: 'render failed: ' + (e && e.message || e) });
-        });
+      var width = payload.width || 384;
+      var doc = payload.doc || { ops: [] };
+      var ops = (doc.ops || []).slice();
+
+      var cv = document.getElementById('cv');
+      cv.width = width;
+      cv.height = 100;
+      var ctx = cv.getContext('2d');
+
+      preloadImages(ops).then(function () {
+        // Pass 1 — measure
+        var totalH = measureOps(ctx, ops, width);
+        // Feed rows show up as blank whitespace so paper can be torn off
+        var feed = Math.max(0, doc.feedRows || 0);
+        var canvasH = totalH + feed;
+        cv.width = width;
+        cv.height = canvasH;
+        ctx = cv.getContext('2d');
+        // White background
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, canvasH);
+        // Pass 2 — draw
+        try {
+          drawOps(ctx, ops, width);
+        } catch (e) {
+          send({ id: id, ok: false, error: 'draw failed: ' + (e && e.message || e) });
+          return;
+        }
+        // Dither + return
+        try {
+          var bmp = ditherAndPack(cv, payload.darkness || 3);
+          send({ id: id, ok: true, width: bmp.width, height: bmp.height, rowsBase64: bmp.rowsBase64 });
+        } catch (e2) {
+          send({ id: id, ok: false, error: 'dither failed: ' + (e2 && e2.message || e2) });
+        }
+      });
     } catch (e) {
       send({ id: id, ok: false, error: 'rasterize failed: ' + (e && e.message || e) });
     }
   };
 
-  // Tell native we're ready in case it wants to preload jobs
   send({ id: '__ready__', ok: true });
 })();
 </script>

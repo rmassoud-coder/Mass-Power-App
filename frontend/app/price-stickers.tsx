@@ -16,6 +16,7 @@ import { listInventory, InventoryItem } from '../src/db/database';
 import { loadSettings } from '../src/utils/settings';
 import { printJob } from '../src/utils/printService';
 import { buildPriceStickersHtml } from '../src/utils/htmlBuilder';
+import { buildPriceStickersDoc } from '../src/utils/thermalDoc';
 
 export default function PriceStickersScreen() {
   const router = useRouter();
@@ -83,7 +84,8 @@ export default function PriceStickersScreen() {
       const settings = await loadSettings();
       const selected = items.filter((it) => selectedIds.has(it.id));
       const html = buildPriceStickersHtml(selected, settings.garageName);
-      await printJob(html, { jobName: 'Price Stickers' });
+      const thermal = buildPriceStickersDoc(selected, settings.garageName);
+      await printJob(html, { jobName: 'Price Stickers', thermal });
     } catch (e: any) {
       Alert.alert(
         'Print failed',
