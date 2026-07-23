@@ -144,8 +144,35 @@ export function getRasterizerHostHtml(): string {
     return ctx.measureText(text).width;
   }
 
-  function fontFor(size, bold) {
-    return (bold ? 'bold ' : '') + size + 'px Arial, sans-serif';
+  function fontFor(size, bold, family) {
+    var fam = (family === 'mono')
+      ? '"Courier New", "Menlo", monospace'
+      : 'Arial, "Arial Black", sans-serif';
+    return (bold ? 'bold ' : '') + size + 'px ' + fam;
+  }
+
+  // Draw a string with per-character letter spacing.
+  function drawSpacedText(ctx, text, x, y, letterSpacing) {
+    if (!letterSpacing || letterSpacing <= 0) {
+      ctx.fillText(text, x, y);
+      return ctx.measureText(text).width;
+    }
+    var cx = x;
+    for (var i = 0; i < text.length; i++) {
+      var ch = text.charAt(i);
+      ctx.fillText(ch, cx, y);
+      cx += ctx.measureText(ch).width + letterSpacing;
+    }
+    return cx - x - letterSpacing; // total width without trailing gap
+  }
+
+  function measureSpacedText(ctx, text, letterSpacing) {
+    if (!letterSpacing || letterSpacing <= 0) return ctx.measureText(text).width;
+    var w = 0;
+    for (var i = 0; i < text.length; i++) {
+      w += ctx.measureText(text.charAt(i)).width;
+    }
+    return w + Math.max(0, (text.length - 1)) * letterSpacing;
   }
 
   // Greedy word-wrap. Returns array of lines that each fit within maxWidth.
@@ -224,17 +251,22 @@ export function getRasterizerHostHtml(): string {
       switch (op.t) {
         case 'text': {
           var size = op.size || 22;
-          var font = fontFor(size, !!op.bold);
-          var lines = wrapLines(ctx, op.text || '', font, innerW);
-          op.__lines = lines;
+          var font = fontFor(size, !!op.bold, op.family);
           op.__size = size;
           op.__font = font;
-          h = lines.length * (size + LINE_GAP);
+          // letterSpacing disables word-wrap (used for headings/titles)
+          if (op.letterSpacing && op.letterSpacing > 0) {
+            op.__lines = [op.text || ''];
+          } else {
+            op.__lines = wrapLines(ctx, op.text || '', font, innerW);
+          }
+          var extraUnderline = op.underline && op.underline !== 'none' ? 8 : 0;
+          h = op.__lines.length * (size + LINE_GAP) + extraUnderline;
           break;
         }
         case 'wrap': {
           var size2 = op.size || 20;
-          var font2 = fontFor(size2, !!op.bold);
+          var font2 = fontFor(size2, !!op.bold, op.family);
           var lines2 = wrapLines(ctx, op.text || '', font2, innerW);
           op.__lines = lines2;
           op.__size = size2;
@@ -244,7 +276,7 @@ export function getRasterizerHostHtml(): string {
         }
         case 'row': {
           var size3 = op.size || 22;
-          var font3 = fontFor(size3, !!op.bold);
+          var font3 = fontFor(size3, !!op.bold, op.family);
           op.__font = font3;
           op.__size = size3;
           h = size3 + LINE_GAP;
@@ -252,21 +284,21 @@ export function getRasterizerHostHtml(): string {
         }
         case 'band': {
           var sizeB = op.size || 24;
-          var fontB = fontFor(sizeB, true);
+          var fontB = fontFor(sizeB, op.bold === false ? false : true, op.family);
           op.__font = fontB;
           op.__size = sizeB;
-          // 6px vertical padding inside the black band
-          h = sizeB + 12;
+          h = sizeB + 14;
           break;
         }
         case 'header': {
-          op.__size = 24;
-          op.__font = fontFor(24, true);
-          h = 24 + 12; // text + underline gap
+          var sizeH = op.size || 24;
+          op.__size = sizeH;
+          op.__font = fontFor(sizeH, true, op.family);
+          h = sizeH + 14;
           break;
         }
         case 'divider': {
-          h = 8;
+          h = 8 + (op.thick || 0);
           break;
         }
         case 'space': {
@@ -276,9 +308,16 @@ export function getRasterizerHostHtml(): string {
         case 'checkbox': {
           var sizeC = op.size || 18;
           op.__size = sizeC;
-          op.__font = fontFor(sizeC, true);
-          // taller of box (22) and text
-          h = Math.max(22, sizeC) + 6;
+          op.__font = fontFor(sizeC, true, op.family);
+          h = Math.max(24, sizeC) + 6;
+          break;
+        }
+        case 'boxed_text': {
+          var sizeBx = op.size || 20;
+          op.__size = sizeBx;
+          op.__font = fontFor(sizeBx, true);
+          var padYBx = op.padY == null ? 6 : op.padY;
+          h = sizeBx + padYBx * 2 + 4; // + 2px border top/bottom
           break;
         }
         case 'image': {
@@ -313,10 +352,27 @@ export function getRasterizerHostHtml(): string {
         case 'text': {
           ctx.fillStyle = '#000';
           ctx.font = op.__font;
+          ctx.textBaseline = 'top';
           var align = op.align || 'center';
+          var ls = op.letterSpacing || 0;
           for (var l = 0; l < op.__lines.length; l++) {
-            drawTextLine(ctx, op.__lines[l], MARGIN, y, op.__size, align, innerW);
+            var lt = op.__lines[l];
+            var lw = ls > 0 ? measureSpacedText(ctx, lt, ls) : ctx.measureText(lt).width;
+            var lx = MARGIN;
+            if (align === 'center') lx = MARGIN + (innerW - lw) / 2;
+            else if (align === 'right') lx = MARGIN + (innerW - lw);
+            if (ls > 0) drawSpacedText(ctx, lt, lx, y, ls);
+            else ctx.fillText(lt, lx, y);
             y += op.__size + LINE_GAP;
+          }
+          if (op.underline === 'solid') {
+            ctx.fillRect(MARGIN, y + 2, innerW, 2);
+            y += 8;
+          } else if (op.underline === 'dashed') {
+            for (var udx = MARGIN; udx < MARGIN + innerW; udx += 8) {
+              ctx.fillRect(udx, y + 3, 4, 2);
+            }
+            y += 8;
           }
           break;
         }
@@ -334,7 +390,6 @@ export function getRasterizerHostHtml(): string {
           ctx.fillStyle = '#000';
           ctx.font = op.__font;
           ctx.textBaseline = 'top';
-          // Clip left+right if too wide by truncating with ellipsis on left.
           var right = String(op.right == null ? '' : op.right);
           var left = String(op.left == null ? '' : op.left);
           var rightW = ctx.measureText(right).width;
@@ -350,18 +405,19 @@ export function getRasterizerHostHtml(): string {
         }
         case 'band': {
           var bh = op.__h;
+          // Full-width black bar (bleeds to edges like the HTML negative side margins).
           ctx.fillStyle = '#000';
           ctx.fillRect(0, y, width, bh);
           ctx.fillStyle = '#fff';
           ctx.font = op.__font;
-          // If text is wider than innerW, shrink until it fits (down to 12px).
           var text = String(op.text || '');
           var sz = op.__size;
-          while (ctx.measureText(text).width > innerW - 6 && sz > 12) {
+          while (ctx.measureText(text).width > width - 8 && sz > 12) {
             sz -= 1;
-            ctx.font = fontFor(sz, true);
+            ctx.font = fontFor(sz, op.bold === false ? false : true, op.family);
           }
           var tw = ctx.measureText(text).width;
+          ctx.textBaseline = 'top';
           ctx.fillText(text, (width - tw) / 2, y + (bh - sz) / 2);
           y += bh;
           break;
@@ -372,45 +428,49 @@ export function getRasterizerHostHtml(): string {
           ctx.textBaseline = 'top';
           var head = String(op.text || '');
           var hsz = op.__size;
-          while (ctx.measureText(head).width > innerW - 4 && hsz > 12) {
+          var ls2 = op.letterSpacing || 0;
+          var hw = ls2 > 0 ? measureSpacedText(ctx, head, ls2) : ctx.measureText(head).width;
+          while (hw > innerW - 4 && hsz > 12) {
             hsz -= 1;
-            ctx.font = fontFor(hsz, true);
+            ctx.font = fontFor(hsz, true, op.family);
+            hw = ls2 > 0 ? measureSpacedText(ctx, head, ls2) : ctx.measureText(head).width;
           }
-          var hw = ctx.measureText(head).width;
-          ctx.fillText(head, (width - hw) / 2, y);
-          // Underline
+          var hx = (width - hw) / 2;
+          if (ls2 > 0) drawSpacedText(ctx, head, hx, y, ls2);
+          else ctx.fillText(head, hx, y);
+          // Solid underline (matches shop-name border in HTML stickers)
           ctx.fillRect(MARGIN, y + hsz + 4, innerW, 2);
-          y += hsz + 12;
+          y += hsz + 14;
           break;
         }
         case 'divider': {
+          var thick = op.thick || 2;
           if ((op.style || 'solid') === 'dashed') {
             ctx.fillStyle = '#000';
             for (var dx = MARGIN; dx < MARGIN + innerW; dx += 8) {
-              ctx.fillRect(dx, y + 3, 4, 2);
+              ctx.fillRect(dx, y + 3, 4, thick);
             }
           } else {
             ctx.fillStyle = '#000';
-            ctx.fillRect(MARGIN, y + 3, innerW, 2);
+            ctx.fillRect(MARGIN, y + 3, innerW, thick);
           }
-          y += 8;
+          y += 8 + (op.thick || 0);
           break;
         }
         case 'space':
           y += op.__h;
           break;
         case 'checkbox': {
-          var boxSize = 20;
+          var boxSize = 22;
           var boxY = y + 2;
           var boxX = MARGIN + 4;
           ctx.fillStyle = '#000';
-          // Box outline
+          // Box outline (2px)
           ctx.fillRect(boxX, boxY, boxSize, 2);
           ctx.fillRect(boxX, boxY + boxSize - 2, boxSize, 2);
           ctx.fillRect(boxX, boxY, 2, boxSize);
           ctx.fillRect(boxX + boxSize - 2, boxY, 2, boxSize);
           if (op.checked) {
-            // Draw a chunky ✓
             ctx.beginPath();
             ctx.moveTo(boxX + 4, boxY + boxSize / 2);
             ctx.lineTo(boxX + boxSize / 2 - 1, boxY + boxSize - 5);
@@ -422,7 +482,33 @@ export function getRasterizerHostHtml(): string {
           ctx.font = op.__font;
           ctx.textBaseline = 'top';
           ctx.fillStyle = '#000';
-          ctx.fillText(String(op.label || ''), boxX + boxSize + 8, boxY + (boxSize - op.__size) / 2 + 2);
+          ctx.fillText(String(op.label || ''), boxX + boxSize + 10, boxY + (boxSize - op.__size) / 2 + 2);
+          y += op.__h;
+          break;
+        }
+        case 'boxed_text': {
+          var bt = String(op.text || '');
+          var btSize = op.__size;
+          var btPadX = op.padX == null ? 10 : op.padX;
+          var btPadY = op.padY == null ? 6 : op.padY;
+          var btLs = op.letterSpacing || 0;
+          ctx.font = op.__font;
+          ctx.fillStyle = '#000';
+          ctx.textBaseline = 'top';
+          var btW = btLs > 0 ? measureSpacedText(ctx, bt, btLs) : ctx.measureText(bt).width;
+          var rectW = btW + btPadX * 2;
+          if (rectW > innerW) rectW = innerW;
+          var rectX = MARGIN + (innerW - rectW) / 2;
+          var rectH = btSize + btPadY * 2;
+          // 2px border rectangle
+          ctx.fillRect(rectX, y, rectW, 2);
+          ctx.fillRect(rectX, y + rectH - 2, rectW, 2);
+          ctx.fillRect(rectX, y, 2, rectH);
+          ctx.fillRect(rectX + rectW - 2, y, 2, rectH);
+          var btX = rectX + (rectW - btW) / 2;
+          var btY = y + btPadY;
+          if (btLs > 0) drawSpacedText(ctx, bt, btX, btY, btLs);
+          else ctx.fillText(bt, btX, btY);
           y += op.__h;
           break;
         }
@@ -522,6 +608,18 @@ export function getRasterizerHostHtml(): string {
         } catch (e) {
           send({ id: id, ok: false, error: 'draw failed: ' + (e && e.message || e) });
           return;
+        }
+        // Outer frame (3 px solid border around the *content*, not the feed area)
+        if (doc.frame) {
+          ctx.fillStyle = '#000';
+          var thick = 3;
+          var fx = 2, fy = 2;
+          var fw = width - fx * 2;
+          var fh = totalH - fy * 2;
+          ctx.fillRect(fx, fy, fw, thick);              // top
+          ctx.fillRect(fx, fy + fh - thick, fw, thick); // bottom
+          ctx.fillRect(fx, fy, thick, fh);              // left
+          ctx.fillRect(fx + fw - thick, fy, thick, fh); // right
         }
         // Dither + return
         try {
