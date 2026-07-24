@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Updates from 'expo-updates';
 import {
   searchCustomers,
   searchVehiclesByVin,
@@ -27,6 +28,30 @@ import SyncStatusPill from '../src/components/SyncStatusPill';
 // Module-level flag so the out-of-stock + reminder alerts only trigger once per app session
 let outOfStockReminderShown = false;
 let oilReminderShown = false;
+
+/**
+ * Small label shown at the bottom of the landing screen. In a production
+ * build `Updates.createdAt` is set to the moment the current JS bundle was
+ * published; in a plain dev / Expo Go session that field is null so we fall
+ * back to a friendly "Local Dev" tag.
+ */
+function formatUpdateStamp(): string {
+  try {
+    const created = (Updates as any)?.createdAt as Date | string | null | undefined;
+    if (created) {
+      const d = created instanceof Date ? created : new Date(created);
+      if (!Number.isNaN(d.getTime())) {
+        return `Updated · ${d.toLocaleString(undefined, {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        })}`;
+      }
+    }
+  } catch {
+    // fall through
+  }
+  return 'Local Dev';
+}
 
 export default function HomeScreen() {
   const [mobileNumber, setMobileNumber] = useState('');
@@ -305,6 +330,11 @@ export default function HomeScreen() {
             <Ionicons name="construct-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
             <Text style={styles.reportButtonText}>Backend Management</Text>
           </TouchableOpacity>
+
+          {/* Muted build/update timestamp (bottom of landing page) */}
+          <Text style={styles.buildStamp} testID="build-timestamp">
+            {formatUpdateStamp()}
+          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -482,5 +512,12 @@ const styles = StyleSheet.create({
   },
   managementButton: {
     backgroundColor: '#0f172a',
+  },
+  buildStamp: {
+    marginTop: 20,
+    marginBottom: 8,
+    textAlign: 'center',
+    fontSize: 11,
+    color: '#94a3b8',
   },
 });
