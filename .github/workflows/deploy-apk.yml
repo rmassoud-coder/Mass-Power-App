@@ -21,8 +21,8 @@ jobs:
           cd frontend
           npm install --legacy-peer-deps
       - name: Build Standalone APK
+        env:
+          EAS_PROJECT_ID: 'da7e8ad1-adbd-4341-9221-78c6702a848f'
         run: |
           cd frontend
           npx eas-cli build --platform android --profile preview --non-interactive --auto-credentials
-        env:
-          EAS_PROJECT_ID: 'da7e8ad1-adbd-4341-9221-78c6702a848f'

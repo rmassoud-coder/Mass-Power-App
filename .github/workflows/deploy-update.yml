@@ -24,8 +24,8 @@ jobs:
           cd frontend
           npm install --legacy-peer-deps
       - name: Publish EAS Update
+        env:
+          EAS_PROJECT_ID: 'da7e8ad1-adbd-4341-9221-78c6702a848f'
         run: |
           cd frontend
           npx eas-cli update --branch preview --message "Automated update via GitHub Actions"
-        env:
-          EAS_PROJECT_ID: 'da7e8ad1-adbd-4341-9221-78c6702a848f'
