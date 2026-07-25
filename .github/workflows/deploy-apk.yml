@@ -20,9 +20,6 @@ jobs:
   build:
     name: eas build --platform android --profile preview
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -40,7 +37,14 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install dependencies (npm, legacy peer deps)
-        run: npm install --legacy-peer-deps
+        run: |
+          cd frontend
+          npm install --legacy-peer-deps
 
       - name: Build Android APK (preview)
-        run: eas build --platform android --profile preview --non-interactive --auto-credentials
+        run: |
+          cd frontend
+          npx eas-cli build --platform android --profile preview --non-interactive --auto-credentials
+        env:
+          EAS_PROJECT_ID: 'da7e8ad1-adbd-4341-9221-78c6702a848f'
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

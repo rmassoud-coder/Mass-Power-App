@@ -18,9 +18,6 @@ jobs:
   update:
     name: eas update --branch preview
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -38,7 +35,14 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install dependencies (npm, legacy peer deps)
-        run: npm install --legacy-peer-deps
+        run: |
+          cd frontend
+          npm install --legacy-peer-deps
 
-      - name: Publish EAS Update to preview branch
-        run: eas update --branch preview --auto --non-interactive
+      - name: Publish EAS Update
+        run: |
+          cd frontend
+          npx eas-cli update --branch preview --message "Automated update via GitHub Actions" --non-interactive
+        env:
+          EAS_PROJECT_ID: 'da7e8ad1-adbd-4341-9221-78c6702a848f'
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
