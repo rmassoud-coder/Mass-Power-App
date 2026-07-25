@@ -1,0 +1,48 @@
+name: EAS Build (Android APK — Preview)
+
+# Kick off an Android APK build against the "preview" EAS profile. This is
+# manual-only by default so it doesn't fire on every push, but can also run
+# when the EAS config / this workflow itself changes on main.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/eas.json'
+      - 'frontend/app.json'
+      - '.github/workflows/deploy-apk.yml'
+
+concurrency:
+  group: eas-build-preview-android
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: eas build --platform android --profile preview
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up Expo / EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          expo-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies (npm, legacy peer deps)
+        run: npm install --legacy-peer-deps
+
+      - name: Build Android APK (preview)
+        run: eas build --platform android --profile preview --non-interactive --auto-credentials
