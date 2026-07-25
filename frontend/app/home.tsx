@@ -29,30 +29,6 @@ import SyncStatusPill from '../src/components/SyncStatusPill';
 let outOfStockReminderShown = false;
 let oilReminderShown = false;
 
-/**
- * Small label shown at the bottom of the landing screen. In a production
- * build `Updates.createdAt` is set to the moment the current JS bundle was
- * published; in a plain dev / Expo Go session that field is null so we fall
- * back to a friendly "Local Dev" tag.
- */
-function formatUpdateStamp(): string {
-  try {
-    const created = (Updates as any)?.createdAt as Date | string | null | undefined;
-    if (created) {
-      const d = created instanceof Date ? created : new Date(created);
-      if (!Number.isNaN(d.getTime())) {
-        return `Updated · ${d.toLocaleString(undefined, {
-          dateStyle: 'medium',
-          timeStyle: 'short',
-        })}`;
-      }
-    }
-  } catch {
-    // fall through
-  }
-  return 'Local Dev';
-}
-
 export default function HomeScreen() {
   const [mobileNumber, setMobileNumber] = useState('');
   const [vinNumber, setVinNumber] = useState('');
@@ -331,9 +307,11 @@ export default function HomeScreen() {
             <Text style={styles.reportButtonText}>Backend Management</Text>
           </TouchableOpacity>
 
-          {/* Muted build/update timestamp (bottom of landing page) */}
+          {/* Muted deployment/sync timestamp (bottom of landing page) */}
           <Text style={styles.buildStamp} testID="build-timestamp">
-            {formatUpdateStamp()}
+            {Updates.createdAt
+              ? `App Sync: ${new Date(Updates.createdAt).toLocaleString()}`
+              : 'Local Dev Mode'}
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>

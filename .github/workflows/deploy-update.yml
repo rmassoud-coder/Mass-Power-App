@@ -1,48 +1,31 @@
-name: EAS Update (Preview)
-
-# Publish an OTA update to the "preview" EAS branch every time frontend
-# changes land on main. Also runnable on-demand via the Actions tab.
+name: Deploy OTA Update
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'frontend/**'
-      - '.github/workflows/deploy-update.yml'
   workflow_dispatch:
-
-concurrency:
-  group: eas-update-preview
-  cancel-in-progress: false
-
+  push:
+    branches:
+      - main
 jobs:
   update:
-    name: eas update --branch preview
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Set up Node 22
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
-
-      - name: Set up Expo / EAS CLI
+          node-version: 22
+      - name: Setup Expo EAS
         uses: expo/expo-github-action@v8
         with:
           eas-version: latest
-          expo-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
-
-      - name: Install dependencies (npm, legacy peer deps)
+      - name: Install Dependencies
         run: |
           cd frontend
           npm install --legacy-peer-deps
-
       - name: Publish EAS Update
         run: |
           cd frontend
-          npx eas-cli update --branch preview --message "Automated update via GitHub Actions" --non-interactive
+          npx eas-cli update --branch preview --message "Automated update via GitHub Actions"
         env:
           EAS_PROJECT_ID: 'da7e8ad1-adbd-4341-9221-78c6702a848f'
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

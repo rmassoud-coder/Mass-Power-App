@@ -1,50 +1,28 @@
-name: EAS Build (Android APK — Preview)
-
-# Kick off an Android APK build against the "preview" EAS profile. This is
-# manual-only by default so it doesn't fire on every push, but can also run
-# when the EAS config / this workflow itself changes on main.
+name: Generate Cloud APK
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'frontend/eas.json'
-      - 'frontend/app.json'
-      - '.github/workflows/deploy-apk.yml'
-
-concurrency:
-  group: eas-build-preview-android
-  cancel-in-progress: false
-
 jobs:
   build:
-    name: eas build --platform android --profile preview
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Set up Node 22
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
-
-      - name: Set up Expo / EAS CLI
+          node-version: 22
+      - name: Setup Expo EAS
         uses: expo/expo-github-action@v8
         with:
           eas-version: latest
-          expo-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
-
-      - name: Install dependencies (npm, legacy peer deps)
+      - name: Install Dependencies
         run: |
           cd frontend
           npm install --legacy-peer-deps
-
-      - name: Build Android APK (preview)
+      - name: Build Standalone APK
         run: |
           cd frontend
           npx eas-cli build --platform android --profile preview --non-interactive --auto-credentials
         env:
           EAS_PROJECT_ID: 'da7e8ad1-adbd-4341-9221-78c6702a848f'
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
