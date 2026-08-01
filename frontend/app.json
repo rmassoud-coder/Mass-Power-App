@@ -1,8 +1,9 @@
 {
   "expo": {
+    "owner": "rmassoud",
     "name": "Mass Power Auto Services",
     "slug": "mass-power-auto-services",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "garage-service",
@@ -14,7 +15,8 @@
     "updates": {
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 0
+      "fallbackToCacheTimeout": 0,
+      "url": "https://expo.dev"
     },
     "ios": {
       "supportsTablet": true,
@@ -71,6 +73,11 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "da7e8ad1-adbd-4341-9221-78c6702a848f"
+      }
     }
   }
 }
