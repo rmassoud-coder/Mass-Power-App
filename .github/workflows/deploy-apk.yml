@@ -25,4 +25,4 @@ jobs:
           EAS_PROJECT_ID: 'da7e8ad1-adbd-4341-9221-78c6702a848f'
         run: |
           cd frontend
-          npx eas-cli build --platform android --profile preview --non-interactive --auto-credentials
+          npx eas-cli build --platform android --profile preview --non-interactive
