@@ -310,7 +310,7 @@ export default function HomeScreen() {
           {/* Muted deployment/sync timestamp (bottom of landing page) */}
           <Text style={styles.buildStamp} testID="build-timestamp">
             {Updates.createdAt
-              ? `App Sync: ${new Date(Updates.createdAt).toLocaleString()}`
+              ? `Last update: ${new Date(Updates.createdAt).toLocaleString()}`
               : 'Local Dev Mode'}
           </Text>
         </ScrollView>
