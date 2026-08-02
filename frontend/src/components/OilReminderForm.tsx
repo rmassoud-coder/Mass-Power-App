@@ -293,9 +293,6 @@ export default function OilReminderForm({ value, onChange, make, model }: Props)
           <TouchableOpacity style={styles.presetBtn} onPress={() => presetDate(6)} testID="oil-date-6mo">
             <Text style={styles.presetBtnText}>+6 months</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.presetBtn} onPress={() => presetDate(12)} testID="oil-date-12mo">
-            <Text style={styles.presetBtnText}>+12 months</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -317,13 +314,10 @@ export default function OilReminderForm({ value, onChange, make, model }: Props)
         </View>
         <View style={styles.presetRow}>
           <TouchableOpacity style={styles.presetBtn} onPress={() => presetMileage(3000)} testID="oil-mileage-3k">
-            <Text style={styles.presetBtnText}>+3,000 km</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.presetBtn} onPress={() => presetMileage(5000)} testID="oil-mileage-5k">
             <Text style={styles.presetBtnText}>+5,000 km</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.presetBtn} onPress={() => presetMileage(7000)} testID="oil-mileage-7k">
-            <Text style={styles.presetBtnText}>+7,000 km</Text>
+          <TouchableOpacity style={styles.presetBtn} onPress={() => presetMileage(5000)} testID="oil-mileage-5k">
+            <Text style={styles.presetBtnText}>+10,000 km</Text>
           </TouchableOpacity>
         </View>
       </View>
