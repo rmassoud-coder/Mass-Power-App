@@ -4,6 +4,80 @@
     "name": "Mass Power Auto Services",
     "slug": "mass-power-auto-services",
     "version": "1.0.1",
-    // ... rest
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "garage-service",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "url": "https://expo.dev"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.garageservice.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Scan VIN plates to auto-fill vehicle details",
+        "NSBluetoothAlwaysUsageDescription": "Connect to your Cat Printer for direct thermal printing",
+        "NSBluetoothPeripheralUsageDescription": "Print receipts and stickers directly on your Cat Printer"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.garageservice.app",
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#2563eb"
+        }
+      ],
+      "expo-font",
+      "expo-sqlite",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Scan VIN plates and guarantee QR stickers"
+        }
+      ],
+      "@react-native-community/datetimepicker",
+      "react-native-ble-plx"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "da7e8ad1-adbd-4341-9221-78c6702a848f"
+      }
+    }
   }
 }
