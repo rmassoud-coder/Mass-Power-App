@@ -8,6 +8,11 @@
     "icon": "./assets/images/icon.png",
     "scheme": "garage-service",
     "userInterfaceStyle": "automatic",
+    "extra": {
+  "eas": {
+    "projectId": "your-project-id-here"
+  }
+},
     "newArchEnabled": true,
     "runtimeVersion": {
       "policy": "appVersion"
