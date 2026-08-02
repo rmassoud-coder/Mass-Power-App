@@ -70,8 +70,8 @@
     "eslint-config-expo": "~10.0.0",
     "typescript": "~5.9.3"
   },
-  "private": true
+  "private": true,
   "engines": {
-  "node": "18.x",
+  "node": "18.x"
   }
 }
