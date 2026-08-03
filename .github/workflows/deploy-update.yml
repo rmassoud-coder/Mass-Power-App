@@ -26,12 +26,12 @@ jobs:
       - name: Install Dependencies
         run: |
           cd frontend
+          npm install expo-build-properties --legacy-peer-deps
           npm install --legacy-peer-deps
 
       - name: Publish EAS Update
         env:
-          EAS_PROJECT_ID: 'da7e8ad1-adbd-4341-9221-78c6702a848f'
+          EAS_PROJECT_ID: da7e8ad1-adbd-4341-9221-78c6702a848f
         run: |
           cd frontend
-          npx expo install --fix
           npx eas-cli update --branch preview --message "Automated update via GitHub Actions"
