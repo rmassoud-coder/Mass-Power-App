@@ -1,18 +1,18 @@
 {
+{
   "expo": {
-    "owner": "rmassoud",
     "name": "Mass Power Auto Services",
     "slug": "mass-power-auto-services",
-    "version": "1.0.2",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "garage-service",
     "userInterfaceStyle": "automatic",
-    "extra": {
-  "eas": {
-    "projectId": "your-project-id-here"
-  }
-},
+    "newArchEnabled": true,
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+
     "newArchEnabled": true,
     "runtimeVersion": {
       "policy": "appVersion"
