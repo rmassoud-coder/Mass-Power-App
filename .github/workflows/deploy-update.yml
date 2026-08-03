@@ -17,14 +17,20 @@ jobs:
         with:
           node-version: 22
 
+      - name: Setup Expo EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
       - name: Install Dependencies
         run: |
           cd frontend
-          npm install
+          npm install --legacy-peer-deps --no-package-lock
 
       - name: Publish EAS Update
         env:
           EAS_PROJECT_ID: 'da7e8ad1-adbd-4341-9221-78c6702a848f'
         run: |
           cd frontend
-          npx expo publish --non-interactive
+          npx eas-cli update --branch preview --platform android --message "Automated update via GitHub Actions" --non-interactive
