@@ -1,5 +1,4 @@
 {
-{
   "expo": {
     "name": "Mass Power Auto Services",
     "slug": "mass-power-auto-services",
@@ -8,11 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "garage-service",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-
     "newArchEnabled": true,
     "runtimeVersion": {
       "policy": "appVersion"
@@ -74,18 +68,7 @@
         }
       ],
       "@react-native-community/datetimepicker",
-      "react-native-ble-plx",
-      [
-  "expo-build-properties",
-  {
-    "android": {
-      "compileSdkVersion": 34,
-      "targetSdkVersion": 34,
-      "buildToolsVersion": "34.0.0",
-      "kotlinVersion": "1.9.22"
-    }
-  }
-]
+      "react-native-ble-plx"
     ],
     "experiments": {
       "typedRoutes": true
