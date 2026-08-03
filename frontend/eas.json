@@ -1,20 +1,19 @@
 {
   "cli": {
-    "version": ">= 3.0.0"
+    "version": ">= 12.0.0"
   },
   "build": {
-    "development": {
-      "developmentClient": true,
-      "distribution": "internal"
-    },
     "preview": {
+      "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "cache": {
+        "disabled": true
+      },
+      "env": {
+        "EAS_BUILD_NPM_FORCE_INSTALL": "1"
       }
-    },
-    "production": {}
-  },
-  "submit": {
-    "production": {}
+    }
   }
 }
