@@ -68,7 +68,15 @@
         }
       ],
       "@react-native-community/datetimepicker",
-      "react-native-ble-plx"
+      "react-native-ble-plx",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "2.1.0"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
