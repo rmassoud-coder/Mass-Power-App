@@ -11,7 +11,7 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk",
-        "image": "ubuntu-22.04-jdk17-ndk26"
+        "image": "ubuntu-24.04-jdk-17-ndk-r27b"
       },
       "cache": {
         "disabled": true
