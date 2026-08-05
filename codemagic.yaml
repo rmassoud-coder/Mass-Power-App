@@ -12,6 +12,7 @@ workflows:
       - name: Install dependencies
         script: |
           cd frontend
+          npm install expo-build-properties
           npm install
       - name: Prebuild Android folder
         script: |
