@@ -188,7 +188,7 @@ export default function HomeScreen() {
             />
             <View>
               <Text style={styles.headerTitle}>Mass Power</Text>
-              <Text style={styles.headerSubtitle}>Auto Services Testing</Text>
+              <Text style={styles.headerSubtitle}>Auto Services</Text>
               <View style={{ marginTop: 4 }}>
                 <SyncStatusPill />
               </View>
