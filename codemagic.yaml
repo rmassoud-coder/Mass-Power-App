@@ -19,7 +19,6 @@ workflows:
           cd frontend
           npx expo prebuild --platform android --clean
       - name: Build Android APK
-        - name: Build Android APK
   script: |
     cd frontend/android
     ./gradlew assembleDebug --warning-mode all
