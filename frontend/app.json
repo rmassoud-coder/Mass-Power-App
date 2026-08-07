@@ -15,7 +15,7 @@
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0,
-      "url": "https://expo.dev"
+      "url": "https://u.expo.dev/da7e8ad1-adbd-4341-9221-78c6702a848f"
     },
     "ios": {
       "supportsTablet": true,
@@ -72,7 +72,9 @@
       [
         "expo-build-properties",
         {
-          "android": {}
+          "android": {
+            "kotlinVersion": "2.1.20"
+          }
         }
       ]
     ],
