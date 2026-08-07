@@ -1,352 +1,219 @@
 /**
- * Cat Printer (PD01 / GT01 / GB02) BLE driver — Phase 1
- * -----------------------------------------------------
- * Protocol reference: WerWolv Cat Printer reverse-engineering,
- * rbaron/catprinter, NaitLee/Cat-Printer.
+ * Cat-printer BLE driver — corrected against the community-documented
+ * "GT01/GB02/GB03/MX-series" protocol (confirmed via rbaron/catprinter,
+ * NaitLee/Cat-Printer, bitbank2/Thermal_Printer — all independently
+ * reverse-engineered from the same family of printers your GATT UUIDs match).
  *
- * Frame format:
- *   0x51 0x78 [CmdID] 0x00 [DataLen] 0x00 [Data...] [CRC8(Data)] 0xFF
- *
- * BLE:
- *   Service UUID:  0000ae30-0000-1000-8000-00805f9b34fb
- *   Write char:    0000ae01-0000-1000-8000-00805f9b34fb
- *   Notify char:   0000ae02-0000-1000-8000-00805f9b34fb
- *
- * Every function here is safe to call from Expo Go / web preview — the BLE
- * module is lazy-required, and if it isn't available we simply return / no-op.
+ * Frame structure:
+ *   0x51 0x78 | CC | DD | LL LH | ...data... | CRC | 0xFF
+ *   - 0x51 0x78 : magic header (STX)
+ *   - CC        : command byte (0xA2 = Draw Bitmap row, 0xA1 = Feed Paper,
+ *                 0xA0 = Retract Paper)
+ *   - DD        : direction, 0x00 = host -> printer
+ *   - LL, LH    : data length, little-endian (low byte, high byte)
+ *   - data      : payload (for bitmap: 48 bytes = 384 bits, 1 bit/pixel,
+ *                 1 = print dot, 0 = blank)
+ *   - CRC       : CRC-8 (poly 0x07, init 0x00) of the `data` bytes ONLY
+ *   - 0xFF      : terminator (ETX)
  */
 
-import { Platform } from 'react-native';
+import { BleManager, Device } from 'react-native-ble-plx';
+import { Buffer } from 'buffer'; // RN usually has this polyfilled already;
+                                  // if not: npx expo install buffer
 
-/* -------------------------------------------------------------------------- */
-/*                        Lazy BLE module loader                              */
-/* -------------------------------------------------------------------------- */
+// ---- Printer constants (from your handover) --------------------------
+export const SERVICE_UUID = '0000af30-0000-1000-8000-00805f9b34fb';
+export const WRITE_CHAR_UUID = '0000ae01-0000-1000-8000-00805f9b34fb';
 
-let _bleManager: any = null;
-let _bleAvailable: boolean | null = null;
+const MAGIC = [0x51, 0x78];
+const CMD_RETRACT_PAPER = 0xa0;
+const CMD_FEED_PAPER = 0xa1;
+const CMD_DRAW_BITMAP = 0xa2; // <-- was wrongly 0xA1 in the old driver
+const DIRECTION_HOST_TO_PRINTER = 0x00;
 
-/** Returns true only when running on a native build with react-native-ble-plx
- *  linked (i.e. NOT Expo Go, NOT web). */
-export function isCatPrinterAvailable(): boolean {
-  if (_bleAvailable !== null) return _bleAvailable;
-  if (Platform.OS === 'web') {
-    _bleAvailable = false;
-    return false;
-  }
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires, import/no-extraneous-dependencies
-    const ble = require('react-native-ble-plx');
-    if (!ble?.BleManager) {
-      _bleAvailable = false;
-      return false;
-    }
-    if (!_bleManager) _bleManager = new ble.BleManager();
-    _bleAvailable = true;
-    return true;
-  } catch {
-    _bleAvailable = false;
-    return false;
-  }
-}
+const BITMAP_WIDTH_PX = 384; // fixed for 57/58mm printers at 200 DPI
+const ROW_BYTES = BITMAP_WIDTH_PX / 8; // 48 bytes per row
 
-/* -------------------------------------------------------------------------- */
-/*                         Protocol constants                                 */
-/* -------------------------------------------------------------------------- */
+// Some cat-printer clones expect each data byte's bits mirrored
+// (bit 0 <-> bit 7). If your prints come out looking like a scrambled/
+// mirrored version of the real content, flip this to true and retest.
+const REVERSE_BITS_PER_BYTE = false;
 
-export const CAT_SERVICE_UUID = '0000ae30-0000-1000-8000-00805f9b34fb';
-export const CAT_WRITE_CHAR   = '0000ae01-0000-1000-8000-00805f9b34fb';
-export const CAT_NOTIFY_CHAR  = '0000ae02-0000-1000-8000-00805f9b34fb';
-
-/** Names commonly advertised by Cat-family printers (case-insensitive match). */
-const CAT_NAME_PATTERNS = [
-  'pd01', 'gt01', 'gb01', 'gb02', 'gb03', 'mx02', 'mx05', 'mx06',
-  'mxw01', 'yt01', 'yhk', 'cat',
-];
-
-/** CRC-8 lookup table used by Cat printers (poly 0x07, init 0x00). */
+// ---- CRC-8 (poly 0x07, init 0x00) — build lookup table once ----------
 const CRC8_TABLE: number[] = (() => {
-  const t: number[] = [];
+  const table: number[] = [];
   for (let i = 0; i < 256; i++) {
-    let c = i;
-    for (let j = 0; j < 8; j++) {
-      c = (c & 0x80) ? ((c << 1) ^ 0x07) & 0xff : (c << 1) & 0xff;
+    let crc = i;
+    for (let bit = 0; bit < 8; bit++) {
+      crc = (crc & 0x80) ? ((crc << 1) ^ 0x07) & 0xff : (crc << 1) & 0xff;
     }
-    t.push(c);
+    table[i] = crc;
   }
-  return t;
+  return table;
 })();
 
-function crc8(data: number[]): number {
-  let c = 0;
-  for (const b of data) c = CRC8_TABLE[(c ^ b) & 0xff];
-  return c & 0xff;
-}
-
-/** Build a single command frame. */
-function buildFrame(cmdId: number, data: number[]): number[] {
-  return [
-    0x51, 0x78,
-    cmdId,
-    0x00,
-    data.length & 0xff,
-    (data.length >> 8) & 0xff,
-    ...data,
-    crc8(data),
-    0xff,
-  ];
-}
-
-// Command IDs
-const CMD_FEED_PAPER     = 0xa1;
-const CMD_DRAW_BITMAP    = 0xa2;
-const CMD_SET_QUALITY    = 0xa4;
-const CMD_LATTICE        = 0xa6;
-const CMD_SET_ENERGY     = 0xaf;
-const CMD_DRAWING_MODE   = 0xbe;
-
-// Pre-computed "start printing" and "stop printing" lattice sequences that
-// most Cat printers expect around a print job.
-const START_LATTICE = [0xaa, 0x55, 0x17, 0x38, 0x44, 0x5f, 0x5f, 0x5f, 0x44, 0x38, 0x2c];
-const END_LATTICE   = [0xaa, 0x55, 0x17, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x17, 0x38];
-
-/* -------------------------------------------------------------------------- */
-/*                        Public high-level API                               */
-/* -------------------------------------------------------------------------- */
-
-export interface CatDevice {
-  id: string;
-  name: string;
-  rssi?: number | null;
-}
-
-/** Ask for BT permissions on Android 12+. No-op on iOS / other platforms. */
-export async function ensureCatPrinterPermissions(): Promise<boolean> {
-  if (!isCatPrinterAvailable()) return false;
-  if (Platform.OS !== 'android') return true;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { PermissionsAndroid } = require('react-native');
-    const perms: string[] = [];
-    // 31+ needs the two new BT permissions
-    if (Platform.Version >= 31) {
-      perms.push(
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-      );
-    } else {
-      perms.push(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
-    }
-    const results = await PermissionsAndroid.requestMultiple(perms);
-    for (const p of perms) {
-      if (results[p] !== PermissionsAndroid.RESULTS.GRANTED) return false;
-    }
-    return true;
-  } catch {
-    return false;
+function crc8(data: Uint8Array): number {
+  let crc = 0x00;
+  for (let i = 0; i < data.length; i++) {
+    crc = CRC8_TABLE[(crc ^ data[i]) & 0xff];
   }
+  return crc;
 }
 
-/** Scan for nearby Cat printers for up to `timeoutMs` (default 6s). */
-export async function scanForCatPrinters(
-  timeoutMs: number = 6000
-): Promise<CatDevice[]> {
-  if (!isCatPrinterAvailable() || !_bleManager) return [];
-  const found = new Map<string, CatDevice>();
-  return new Promise((resolve) => {
-    _bleManager.startDeviceScan(null, null, (error: any, device: any) => {
-      if (error) {
-        _bleManager.stopDeviceScan();
-        resolve([...found.values()]);
-        return;
-      }
-      if (!device) return;
-      const name = (device.name || device.localName || '').toLowerCase();
-      const isCat = CAT_NAME_PATTERNS.some((p) => name.includes(p));
-      if (isCat && !found.has(device.id)) {
-        found.set(device.id, {
-          id: device.id,
-          name: device.name || device.localName || 'Cat Printer',
-          rssi: device.rssi,
-        });
-      }
-    });
-    setTimeout(() => {
-      try { _bleManager.stopDeviceScan(); } catch { /* ignore */ }
-      resolve([...found.values()]);
-    }, timeoutMs);
-  });
-}
-
-/** Connect + discover services + write a fixed "test print" job. */
-export async function testPrint(deviceId: string, darkness: number = 3): Promise<void> {
-  if (!isCatPrinterAvailable() || !_bleManager) {
-    throw new Error('BLE not available in preview / Expo Go');
-  }
-  const device = await _bleManager.connectToDevice(deviceId, {
-    requestMTU: 200,
-    autoConnect: false,
-  });
-  await device.discoverAllServicesAndCharacteristics();
-  try {
-    // Build a small test job: header commands + a black-band bitmap
-    const bytes: number[] = [];
-
-    const energy = darknessToEnergy(darkness);
-    // Housekeeping
-    bytes.push(...buildFrame(CMD_LATTICE, START_LATTICE));
-    bytes.push(...buildFrame(CMD_SET_QUALITY, [0x03]));           // med quality
-    bytes.push(...buildFrame(CMD_DRAWING_MODE, [0x00]));          // image mode
-    bytes.push(...buildFrame(CMD_SET_ENERGY, [energy & 0xff, (energy >> 8) & 0xff]));
-
-    // 20 solid-black rows (each row = 48 bytes = 384 pixels wide, all 1's)
-    const blackRow = Array(48).fill(0xff);
-    for (let i = 0; i < 20; i++) {
-      bytes.push(...buildFrame(CMD_DRAW_BITMAP, blackRow));
+// Precomputed bit-reversal lookup, only used if REVERSE_BITS_PER_BYTE
+const BIT_MIRROR_TABLE: number[] = (() => {
+  const table: number[] = [];
+  for (let i = 0; i < 256; i++) {
+    let b = i, r = 0;
+    for (let k = 0; k < 8; k++) {
+      r = (r << 1) | (b & 1);
+      b >>= 1;
     }
-    // 20 empty rows for spacing
-    const whiteRow = Array(48).fill(0x00);
-    for (let i = 0; i < 20; i++) {
-      bytes.push(...buildFrame(CMD_DRAW_BITMAP, whiteRow));
-    }
-    // Feed paper 100 dot rows so the strip clears the print head
-    bytes.push(...buildFrame(CMD_FEED_PAPER, [0x64, 0x00]));
-    bytes.push(...buildFrame(CMD_LATTICE, END_LATTICE));
-
-    await _writeBytes(device, bytes);
-  } finally {
-    try { await device.cancelConnection(); } catch { /* ignore */ }
+    table[i] = r;
   }
+  return table;
+})();
+
+// ---- Frame builder -----------------------------------------------------
+function buildFrame(command: number, data: Uint8Array): Uint8Array {
+  const length = data.length;
+  const checksum = crc8(data);
+  const frame = new Uint8Array(MAGIC.length + 2 + 2 + length + 1 + 1);
+  let offset = 0;
+  frame.set(MAGIC, offset); offset += MAGIC.length;
+  frame[offset++] = command;
+  frame[offset++] = DIRECTION_HOST_TO_PRINTER;
+  frame[offset++] = length & 0xff;        // LL
+  frame[offset++] = (length >> 8) & 0xff; // LH
+  frame.set(data, offset); offset += length;
+  frame[offset++] = checksum;
+  frame[offset++] = 0xff;
+  return frame;
 }
 
-/* -------------------------------------------------------------------------- */
-/*                     Full-bitmap printing (Phase 2)                         */
-/* -------------------------------------------------------------------------- */
-
-/** Map a 1..5 UI darkness value to a printer energy value (~8000..20000). */
-export function darknessToEnergy(d: number): number {
-  const clamped = Math.max(1, Math.min(5, Math.round(d)));
-  // 1 -> 8000, 3 -> 14000, 5 -> 20000 (linear)
-  return 8000 + (clamped - 1) * 3000;
+export function buildDrawBitmapRowFrame(rowBytes: Uint8Array): Uint8Array {
+  if (rowBytes.length !== ROW_BYTES) {
+    throw new Error(`Row must be exactly ${ROW_BYTES} bytes (384px / 8), got ${rowBytes.length}`);
+  }
+  const payload = REVERSE_BITS_PER_BYTE
+    ? Uint8Array.from(rowBytes, (b) => BIT_MIRROR_TABLE[b])
+    : rowBytes;
+  return buildFrame(CMD_DRAW_BITMAP, payload);
 }
 
-export interface MonoBitmap {
-  /** Width in pixels — MUST equal 384 for PD01 / GT01. */
-  width: number;
-  /** Height in pixels. */
-  height: number;
-  /**
-   * Array of rows, each row is a base64 string of ceil(width/8) bytes.
-   * Bit 1 = burn (black), bit 0 = white. LSB-first within each byte
-   * (matches the Cat Printer protocol).
-   */
-  rowsBase64: string[];
+export function buildFeedPaperFrame(steps: number): Uint8Array {
+  return buildFrame(CMD_FEED_PAPER, Uint8Array.from([steps & 0xff]));
 }
 
+export function buildRetractPaperFrame(steps: number): Uint8Array {
+  return buildFrame(CMD_RETRACT_PAPER, Uint8Array.from([steps & 0xff]));
+}
+
+// ---- Floyd–Steinberg dithering: RGBA pixels -> packed 1-bit rows -------
 /**
- * Print a full 384-px-wide monochrome bitmap over BLE.
- * Each row of `bitmap.rowsBase64` is emitted as a DRAW_BITMAP frame.
- * Darkness (1..5) tweaks the printer's SET_ENERGY value so the same bitmap
- * can be printed lighter or darker on demand.
+ * Takes raw RGBA pixel data (e.g. from a canvas getImageData() call inside
+ * a hidden WebView, postMessage'd back as a flat array) and converts it to
+ * an array of 48-byte rows ready for buildDrawBitmapRowFrame().
+ *
+ * width MUST be 384. height is whatever your content needs.
  */
-export async function printMonoBitmap(
-  deviceId: string,
-  bitmap: MonoBitmap,
-  darkness: number = 3
-): Promise<void> {
-  if (!isCatPrinterAvailable() || !_bleManager) {
-    throw new Error('BLE not available in preview / Expo Go');
-  }
-  if (bitmap.width !== 384) {
-    throw new Error(`Cat Printer expects 384-px-wide bitmaps (got ${bitmap.width})`);
-  }
-  if (!bitmap.rowsBase64.length) {
-    throw new Error('Empty bitmap — nothing to print');
+export function ditherToPackedRows(
+  rgba: Uint8ClampedArray | Uint8Array,
+  width: number,
+  height: number
+): Uint8Array[] {
+  if (width !== BITMAP_WIDTH_PX) {
+    throw new Error(`Canvas width must be ${BITMAP_WIDTH_PX}px, got ${width}`);
   }
 
-  const device = await _bleManager.connectToDevice(deviceId, {
-    requestMTU: 200,
-    autoConnect: false,
-  });
-  await device.discoverAllServicesAndCharacteristics();
-  try {
-    const energy = darknessToEnergy(darkness);
+  // Convert to grayscale luminance buffer (float, for error diffusion)
+  const gray = new Float32Array(width * height);
+  for (let i = 0; i < width * height; i++) {
+    const r = rgba[i * 4], g = rgba[i * 4 + 1], b = rgba[i * 4 + 2];
+    gray[i] = 0.299 * r + 0.587 * g + 0.114 * b;
+  }
 
-    // Header
-    const header: number[] = [];
-    header.push(...buildFrame(CMD_LATTICE, START_LATTICE));
-    header.push(...buildFrame(CMD_SET_QUALITY, [0x03]));            // med quality (0x01..0x05)
-    header.push(...buildFrame(CMD_DRAWING_MODE, [0x00]));           // image mode
-    header.push(...buildFrame(CMD_SET_ENERGY, [energy & 0xff, (energy >> 8) & 0xff]));
-    await _writeBytes(device, header);
-
-    // Bitmap rows — write in row-batches so we can breathe between chunks
-    const ROWS_PER_BATCH = 24;
-    for (let start = 0; start < bitmap.rowsBase64.length; start += ROWS_PER_BATCH) {
-      const batch: number[] = [];
-      const end = Math.min(start + ROWS_PER_BATCH, bitmap.rowsBase64.length);
-      for (let r = start; r < end; r++) {
-        const rowBytes = _base64ToBytes(bitmap.rowsBase64[r]);
-        batch.push(...buildFrame(CMD_DRAW_BITMAP, rowBytes));
+  // Floyd–Steinberg error diffusion, output 1 = black/print, 0 = white
+  const bits = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      const old = gray[idx];
+      const newVal = old < 128 ? 0 : 255;
+      bits[idx] = newVal === 0 ? 1 : 0; // dark pixel -> print dot
+      const err = old - newVal;
+      if (x + 1 < width) gray[idx + 1] += err * (7 / 16);
+      if (y + 1 < height) {
+        if (x > 0) gray[idx + width - 1] += err * (3 / 16);
+        gray[idx + width] += err * (5 / 16);
+        if (x + 1 < width) gray[idx + width + 1] += err * (1 / 16);
       }
-      await _writeBytes(device, batch);
     }
-
-    // Trailer: feed 80 rows so the sticker/receipt clears the print head, then end lattice.
-    const trailer: number[] = [];
-    trailer.push(...buildFrame(CMD_FEED_PAPER, [0x50, 0x00])); // 80 rows
-    trailer.push(...buildFrame(CMD_LATTICE, END_LATTICE));
-    await _writeBytes(device, trailer);
-  } finally {
-    try { await device.cancelConnection(); } catch { /* ignore */ }
   }
+
+  // Pack into 48-byte rows, MSB first
+  const rows: Uint8Array[] = [];
+  for (let y = 0; y < height; y++) {
+    const row = new Uint8Array(ROW_BYTES);
+    for (let x = 0; x < width; x++) {
+      if (bits[y * width + x]) {
+        row[x >> 3] |= 0x80 >> (x & 7);
+      }
+    }
+    rows.push(row);
+  }
+  return rows;
 }
 
-async function _writeBytes(device: any, bytes: number[]): Promise<void> {
-  // Write in ~180-byte chunks (safe under most Cat printer MTUs)
-  const CHUNK = 180;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    const slice = bytes.slice(i, i + CHUNK);
-    const b64 = _numsToBase64(slice);
-    await device.writeCharacteristicWithoutResponseForService(
-      CAT_SERVICE_UUID,
-      CAT_WRITE_CHAR,
-      b64,
+// ---- BLE transmission ---------------------------------------------------
+/**
+ * Sends a full set of bitmap rows to the connected printer.
+ * Negotiates a larger MTU if possible, then writes in MTU-sized chunks
+ * with a short delay between writes (printer has a small internal buffer).
+ */
+export async function sendBitmapToPrinter(
+  manager: BleManager,
+  device: Device,
+  rows: Uint8Array[],
+  opts: { feedAfter?: number; writeDelayMs?: number } = {}
+): Promise<void> {
+  const feedAfter = opts.feedAfter ?? 80; // steps of paper feed after printing
+  const writeDelayMs = opts.writeDelayMs ?? 20;
+
+  // Try to negotiate a bigger MTU (Android only; iOS ignores this)
+  let mtu = 23;
+  try {
+    const connected = await manager.requestMTUForDevice(device.id, 185);
+    mtu = connected.mtu ?? 23;
+  } catch {
+    // fall back silently to default MTU
+  }
+  const maxChunk = Math.max(20, mtu - 3); // ATT overhead is 3 bytes
+
+  // Build the full byte stream: one frame per row, concatenated
+  const frames = rows.map(buildDrawBitmapRowFrame);
+  const feedFrame = buildFeedPaperFrame(feedAfter);
+  const totalLength =
+    frames.reduce((sum, f) => sum + f.length, 0) + feedFrame.length;
+  const fullStream = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const f of frames) { fullStream.set(f, offset); offset += f.length; }
+  fullStream.set(feedFrame, offset);
+
+  // Write in MTU-sized slices — the printer treats the incoming
+  // characteristic writes as one continuous byte stream, so frame
+  // boundaries don't need to align with BLE write boundaries.
+  for (let i = 0; i < fullStream.length; i += maxChunk) {
+    const slice = fullStream.slice(i, i + maxChunk);
+    const base64Chunk = Buffer.from(slice).toString('base64');
+    await manager.writeCharacteristicWithoutResponseForDevice(
+      device.id,
+      SERVICE_UUID,
+      WRITE_CHAR_UUID,
+      base64Chunk
     );
-    // Tiny delay to let the printer breathe
-    await new Promise((r) => setTimeout(r, 15));
-  }
-}
-
-function _base64ToBytes(b64: string): number[] {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const B = require('buffer').Buffer;
-    return Array.from(B.from(b64, 'base64')) as number[];
-  } catch {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const atob = (global as any).atob as ((s: string) => string) | undefined;
-    if (!atob) return [];
-    const bin = atob(b64);
-    const out: number[] = [];
-    for (let i = 0; i < bin.length; i++) out.push(bin.charCodeAt(i) & 0xff);
-    return out;
-  }
-}
-
-/** Utility: convert a number array to a base64 string (what ble-plx expects). */
-function _numsToBase64(nums: number[]): string {
-  // Prefer Buffer if the polyfill is present, otherwise use btoa fallback.
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const B = require('buffer').Buffer;
-    return B.from(nums).toString('base64');
-  } catch {
-    let bin = '';
-    for (const n of nums) bin += String.fromCharCode(n & 0xff);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (global as any).btoa
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ? (global as any).btoa(bin)
-      : '';
+    if (writeDelayMs > 0) {
+      await new Promise((res) => setTimeout(res, writeDelayMs));
+    }
   }
 }
