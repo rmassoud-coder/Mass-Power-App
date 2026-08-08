@@ -1,35 +1,33 @@
 /**
- * catPrinter.ts — BLE driver for GT01/GB02/GB03/MX-series "cat printers".
+ * catPrinter.ts — BLE driver for GT01/GB02/GB03/MX/PD01-series "cat printers".
  *
  * Protocol (confirmed against rbaron/catprinter, NaitLee/Cat-Printer,
- * bitbank2/Thermal_Printer — independent reverse-engineering of this
- * printer family):
- *
+ * bitbank2/Thermal_Printer):
  *   0x51 0x78 | CC | DD | LL LH | ...data... | CRC | 0xFF
- *   - 0x51 0x78 : magic header
- *   - CC        : 0xA2 = Draw Bitmap row, 0xA1 = Feed Paper, 0xA0 = Retract
- *   - DD        : 0x00 = host -> printer
- *   - LL, LH    : data length, little-endian
- *   - data      : 48 bytes/row (384px / 8), MSB-first bit order
- *   - CRC       : CRC-8 (poly 0x07, init 0x00) of `data` only
- *   - 0xFF      : terminator
+ *   - CC   : 0xA2 = Draw Bitmap row, 0xA1 = Feed Paper, 0xA0 = Retract
+ *   - LL,LH: data length, little-endian
+ *   - data : 48 bytes/row (384px / 8)
+ *   - CRC  : CRC-8 (poly 0x07, init 0x00) of `data` only
  *
- * BIT ORDER NOTE: htmlRasterizer.ts packs each row as
- *   row[x >> 3] |= (1 << (x & 7))
- * — pixel 0 goes into the LOWEST bit of the byte (LSB-first). This printer
- * protocol expects MSB-first (pixel 0 = highest bit). We mirror every byte
- * before sending to correct for this. If prints still look wrong after
- * this fix, set MIRROR_BITS = false below and retest — it means the
- * rasterizer's convention was already correct and this was double-flipping.
+ * BIT ORDER: htmlRasterizer.ts packs each row as row[x>>3] |= (1 << (x&7))
+ * — LSB-first. This protocol expects MSB-first, so we mirror bits before
+ * sending (see MIRROR_BITS below).
  */
-import { BleManager, Device } from 'react-native-ble-plx';
+import { BleManager, Device, State as BleState } from 'react-native-ble-plx';
+import { PermissionsAndroid, Platform } from 'react-native';
 import { Buffer } from 'buffer'; // npx expo install buffer if missing
 
 export interface MonoBitmap {
   width: number;
   height: number;
-  /** Each entry: base64-encoded row, bytesPerRow long, LSB-first packed (see note above). */
+  /** Each entry: base64-encoded row, bytesPerRow long, LSB-first packed. */
   rowsBase64: string[];
+}
+
+export interface CatDevice {
+  id: string;
+  name: string;
+  rssi?: number;
 }
 
 const SERVICE_UUID = '0000af30-0000-1000-8000-00805f9b34fb';
@@ -41,7 +39,7 @@ const CMD_FEED_PAPER = 0xa1;
 const CMD_DRAW_BITMAP = 0xa2;
 const DIRECTION_HOST_TO_PRINTER = 0x00;
 
-const MIRROR_BITS = true; // see note above — flip to false if output is still wrong
+const MIRROR_BITS = true; // flip to false if prints look bit-scrambled after testing
 
 let _manager: BleManager | null = null;
 function getManager(): BleManager {
@@ -56,6 +54,65 @@ export function isCatPrinterAvailable(): boolean {
   } catch {
     return false;
   }
+}
+
+// ---- Permissions -----------------------------------------------------
+export async function ensureCatPrinterPermissions(): Promise<boolean> {
+  if (Platform.OS !== 'android') return true;
+
+  try {
+    if (Platform.Version >= 31) {
+      const granted = await PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      ]);
+      return Object.values(granted).every(
+        (v) => v === PermissionsAndroid.RESULTS.GRANTED
+      );
+    } else {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+      );
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    }
+  } catch {
+    return false;
+  }
+}
+
+// ---- Scanning ----------------------------------------------------------
+export function scanForCatPrinters(timeoutMs = 7000): Promise<CatDevice[]> {
+  return new Promise((resolve, reject) => {
+    const manager = getManager();
+    const found = new Map<string, CatDevice>();
+
+    manager.state().then((state) => {
+      if (state !== BleState.PoweredOn) {
+        reject(new Error('Bluetooth is off. Please enable Bluetooth and try again.'));
+        return;
+      }
+
+      manager.startDeviceScan(null, { allowDuplicates: false }, (error, device) => {
+        if (error) {
+          manager.stopDeviceScan();
+          reject(new Error(error.message || 'BLE scan failed'));
+          return;
+        }
+        if (device && device.name) {
+          found.set(device.id, { id: device.id, name: device.name, rssi: device.rssi ?? undefined });
+        }
+      });
+
+      setTimeout(() => {
+        manager.stopDeviceScan();
+        const list = Array.from(found.values()).sort(
+          (a, b) => (b.rssi ?? -999) - (a.rssi ?? -999)
+        );
+        resolve(list);
+      }, timeoutMs);
+    }).catch((e) => reject(e));
+  });
 }
 
 // ---- CRC-8 (poly 0x07, init 0x00) ----
@@ -76,7 +133,7 @@ function crc8(data: Uint8Array): number {
   return crc;
 }
 
-// ---- Bit mirror table (byte-wise bit reversal) ----
+// ---- Bit mirror table ----
 const BIT_MIRROR_TABLE: number[] = (() => {
   const table: number[] = [];
   for (let i = 0; i < 256; i++) {
@@ -103,7 +160,6 @@ function buildFrame(command: number, data: Uint8Array): Uint8Array {
   return frame;
 }
 
-/** Decode one base64 row from the rasterizer, correcting bit order if needed. */
 function decodeRow(rowBase64: string): Uint8Array {
   const bytes = Uint8Array.from(Buffer.from(rowBase64, 'base64'));
   if (!MIRROR_BITS) return bytes;
@@ -112,19 +168,11 @@ function decodeRow(rowBase64: string): Uint8Array {
   return mirrored;
 }
 
-/**
- * Connect to the given printer (by BLE device id), stream the bitmap,
- * feed paper, and disconnect. Matches the signature printService.ts expects.
- */
-export async function printMonoBitmap(
-  catPrinterId: string,
-  bmp: MonoBitmap,
-  _darkness?: number
-): Promise<void> {
+async function sendBitmap(deviceId: string, bmp: MonoBitmap): Promise<void> {
   const manager = getManager();
   let device: Device;
   try {
-    device = await manager.connectToDevice(catPrinterId, { autoConnect: false, timeout: 10000 });
+    device = await manager.connectToDevice(deviceId, { autoConnect: false, timeout: 10000 });
     await device.discoverAllServicesAndCharacteristics();
   } catch (e: any) {
     throw new Error('Could not connect to printer: ' + (e?.message || e));
@@ -163,4 +211,33 @@ export async function printMonoBitmap(
   } finally {
     await manager.cancelDeviceConnection(device.id).catch(() => {});
   }
+}
+
+/** Matches printService.ts's expected signature. */
+export async function printMonoBitmap(
+  catPrinterId: string,
+  bmp: MonoBitmap,
+  _darkness?: number
+): Promise<void> {
+  return sendBitmap(catPrinterId, bmp);
+}
+
+/** Sends a simple black-band test pattern so the user can confirm the connection works. */
+export async function testPrint(deviceId: string, _darkness = 3): Promise<void> {
+  const width = 384;
+  const rowBytes = width / 8;
+  const height = 120;
+  const rows: string[] = [];
+
+  for (let y = 0; y < height; y++) {
+    const row = new Uint8Array(rowBytes);
+    if (y > height / 3 && y < (height * 2) / 3) {
+      row.fill(0xff);
+    }
+    let bin = '';
+    for (let i = 0; i < row.length; i++) bin += String.fromCharCode(row[i]);
+    rows.push(Buffer.from(bin, 'binary').toString('base64'));
+  }
+
+  await sendBitmap(deviceId, { width, height, rowsBase64: rows });
 }
