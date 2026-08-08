@@ -30,7 +30,7 @@ export interface CatDevice {
   rssi?: number;
 }
 
-const SERVICE_UUID = '0000af30-0000-1000-8000-00805f9b34fb';
+const SERVICE_UUID = '0000ae30-0000-1000-8000-00805f9b34fb';
 const WRITE_CHAR_UUID = '0000ae01-0000-1000-8000-00805f9b34fb';
 
 const MAGIC = [0x51, 0x78];
