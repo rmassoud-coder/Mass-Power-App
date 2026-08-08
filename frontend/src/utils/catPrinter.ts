@@ -39,7 +39,7 @@ const CMD_FEED_PAPER = 0xa1;
 const CMD_DRAW_BITMAP = 0xa2;
 const DIRECTION_HOST_TO_PRINTER = 0x00;
 
-const MIRROR_BITS = true; // flip to false if prints look bit-scrambled after testing
+const MIRROR_BITS = false; // flip to false if prints look bit-scrambled after testing
 
 let _manager: BleManager | null = null;
 function getManager(): BleManager {
