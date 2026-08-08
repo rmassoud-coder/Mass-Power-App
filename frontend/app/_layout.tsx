@@ -8,7 +8,6 @@ import { Image, Platform, View, Text } from 'react-native';
 import { initDatabase } from '../src/db/database';
 import RpmLoader from '../src/components/RpmLoader';
 import HtmlRasterizerHost from '../src/components/HtmlRasterizerHost';
-import { runStartupPull } from '../src/utils/autoSync';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -24,10 +23,6 @@ export default function RootLayout() {
       try {
         // Initialize local SQLite database
         await initDatabase();
-
-        // Kick off startup pull in background — never blocks app boot.
-        // (Silent no-op if GitHub isn't configured.)
-        runStartupPull().catch(() => { /* swallowed intentionally */ });
 
         // Prewarm icon assets only on native (skip on web)
         if (Platform.OS !== 'web') {
