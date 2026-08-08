@@ -22,12 +22,16 @@ import { loadSettings, saveSettings, AppSettings } from '../src/utils/settings';
 
 export default function CatPrinterScreen() {
   const router = useRouter();
-  const [available] = useState<boolean>(() => isCatPrinterAvailable());
+  const [available, setAvailable] = useState<boolean>(true);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [scanning, setScanning] = useState(false);
   const [devices, setDevices] = useState<CatDevice[]>([]);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setAvailable(isCatPrinterAvailable());
+  }, []);
 
   const load = useCallback(async () => {
     const s = await loadSettings();
@@ -39,8 +43,22 @@ export default function CatPrinterScreen() {
   }, [load]);
 
   const handleScan = async () => {
-    if (!available) return;
-    const ok = await ensureCatPrinterPermissions();
+    if (!available) {
+      Alert.alert(
+        'Bluetooth unavailable',
+        'The BLE module did not load on this device/build. Try a fresh install of the latest APK.'
+      );
+      return;
+    }
+
+    let ok = false;
+    try {
+      ok = await ensureCatPrinterPermissions();
+    } catch (e: any) {
+      Alert.alert('Permission check failed', e?.message || 'Unknown error');
+      return;
+    }
+
     if (!ok) {
       Alert.alert('Bluetooth permission needed', 'Please allow Nearby-Devices / Bluetooth permissions in your Android settings, then try again.');
       return;
@@ -228,9 +246,9 @@ export default function CatPrinterScreen() {
 
         {/* Scan button */}
         <TouchableOpacity
-          style={[styles.scanBtn, (!available || scanning) && styles.btnDisabled]}
+          style={[styles.scanBtn, scanning && styles.btnDisabled]}
           onPress={handleScan}
-          disabled={!available || scanning}
+          disabled={scanning}
           testID="cat-scan-button"
         >
           {scanning ? (
