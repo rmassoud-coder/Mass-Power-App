@@ -178,8 +178,9 @@ async function sendBitmap(deviceId: string, bmp: MonoBitmap): Promise<void> {
     throw new Error('Could not connect to printer: ' + (e?.message || e));
   }
 
-  try {
-    const rowFrames = bmp.rowsBase64.map((r) => buildFrame(CMD_DRAW_BITMAP, decodeRow(r)));
+ try {
+    const orderedRows = [...bmp.rowsBase64].reverse();
+    const rowFrames = orderedRows.map((r) => buildFrame(CMD_DRAW_BITMAP, decodeRow(r)));
     const feedFrame = buildFrame(CMD_FEED_PAPER, Uint8Array.from([80]));
 
     let mtu = 23;
