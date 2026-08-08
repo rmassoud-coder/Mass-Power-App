@@ -17,6 +17,12 @@
  *
  * If GitHub isn't configured (no token / owner / repo) every call is a silent
  * no-op — the app continues to work purely offline.
+ *
+ * *** runStartupPull() TEMPORARILY DISABLED (2026-08-08) ***
+ * A silent startup pull overwrote real local data on a device with a stale
+ * cloud snapshot, with no confirmation step. Disabled until a safer version
+ * (confirm before overwrite, or a real merge instead of last-write-wins) is
+ * built. triggerAutoPush() (push-only) is untouched and still runs normally.
  */
 import { pushToCloud, pullFromCloud, getLastSyncAt, applyCloudIfNewer } from './dbSync';
 import { loadSettings, isGithubConfigured } from './settings';
@@ -68,12 +74,15 @@ export function getAutoSyncState(): AutoSyncState {
 let _startupPullDone = false;
 
 /**
- * Idempotent — subsequent calls after the first are no-ops.
- * Safe to await from app init even without network: only touches HTTP after
- * confirming settings are configured, and any failure is swallowed so app
- * boot never blocks.
+ * TEMPORARILY DISABLED — see file header. Returns immediately and does
+ * nothing. Re-enable only after adding a confirmation step / smarter merge
+ * logic than plain last-write-wins-by-timestamp.
  */
 export async function runStartupPull(): Promise<void> {
+  return;
+
+  // --- Original implementation, kept for reference, currently unreachable ---
+  // eslint-disable-next-line no-unreachable
   if (_startupPullDone) return;
   _startupPullDone = true;
 
@@ -82,14 +91,8 @@ export async function runStartupPull(): Promise<void> {
     if (!isGithubConfigured(settings)) return;
 
     _setState({ status: 'syncing', lastError: null });
-    // pullFromCloud() unconditionally overwrites local — we DON'T want that.
-    // Instead we mimic runSync's smarter path: only replace when cloud is
-    // strictly newer than our last recorded sync. runSync does this AND
-    // pushes; on startup we want pull-only so we call pullFromCloud only when
-    // it's safe (i.e. we've never synced yet OR cloud > local last-sync).
     const lastLocal = await getLastSyncAt();
     if (!lastLocal) {
-      // Very first launch after configuring GH — safe to seed local from cloud
       try {
         await pullFromCloud(settings);
       } catch {
@@ -99,7 +102,6 @@ export async function runStartupPull(): Promise<void> {
       return;
     }
 
-    // Subsequent launches: pull-only if cloud > local last-sync
     const applied = await applyCloudIfNewer(settings, lastLocal);
     _setState({
       status: applied ? 'ok' : 'idle',
