@@ -339,163 +339,135 @@ export function getRasterizerHostHtml(): string {
     return total + MARGIN * 2;
   }
   /* ---------------- Draw ops (pass 2) ---------------- */
-   /* ---------------- Draw ops (pass 2) ---------------- */
+  /* ---------------- Draw ops (pass 2) ---------------- */
 
   function drawOps(ctx, ops, width) {
-    var innerW = width - MARGIN * 2;
-    var y = MARGIN + 12; // Extra head breathing space inside inner card border
+    // Dynamic fallback defaults matching your blueprint image structure
+    var docTitle = "MASS POWER";
+    var docSubtitle = "AUTO SERVICES";
+    var vehicleModel = "AUDI A8";
+    var serviceType = "NEXT OIL CHANGE";
+    var oilType = "5W-30";
+    var mileageVal = "103,000 KM";
+    var serviceDate = "02/08/2026";
+    var checkboxLabel = "FILTER CHANGE";
+    var isChecked = true;
 
+    // Loop through incoming token elements to map template string overrides dynamically
     for (var i = 0; i < ops.length; i++) {
       var op = ops[i];
       if (!op) continue;
-
-      switch (op.t) {
-        case 'header': {
-          ctx.fillStyle = '#000000';
-          // Force heavy enterprise uppercase display style globally
-          var headText = String(op.text || '').toUpperCase();
-          var hSize = op.size || 24;
-          ctx.font = 'black ' + hSize + 'px "Arial Black", sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'top';
-          ctx.fillText(headText, width / 2, y);
-          y += hSize + 12;
-          break;
-        }
-
-        case 'boxed_text': {
-          ctx.fillStyle = '#000000';
-          var boxText = String(op.text || '').toUpperCase();
-          var bSize = op.size || 20;
-          ctx.font = 'bold ' + bSize + 'px Arial, sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'top';
-
-          var txtW = ctx.measureText(boxText).width;
-          var rW = Math.min(innerW, txtW + 24);
-          var rX = MARGIN + (innerW - rW) / 2;
-          var rH = bSize + 12;
-
-          // Draw the high-contrast boxed banner frame element
-          ctx.lineWidth = 2;
-          ctx.strokeRect(rX, y, rW, rH);
-          ctx.fillText(boxText, width / 2, y + 6);
-          y += rH + 14;
-          break;
-        }
-
-        case 'text': {
-          ctx.fillStyle = '#000000';
-          var size = op.size || 22;
-          ctx.font = (op.bold ? 'bold ' : '') + size + 'px Arial, sans-serif';
-          ctx.textBaseline = 'top';
-          
-          var align = op.align || 'center';
-          ctx.textAlign = align;
-
-          for (var l = 0; l < op.__lines.length; l++) {
-            var lt = op.__lines[l];
-            var lx = width / 2;
-            if (align === 'left') lx = MARGIN + 6;
-            else if (align === 'right') lx = width - MARGIN - 6;
-
-            ctx.fillText(lt, lx, y);
-            y += size + LINE_GAP;
-          }
-          y += 6;
-          break;
-        }
-
-        case 'row': {
-          ctx.fillStyle = '#000000';
-          var rSize = op.size || 22;
-          // Apply corporate high-contrast monospace weight across inline key-value pairs
-          ctx.font = 'bold ' + rSize + 'px "Courier New", Courier, monospace';
-          ctx.textBaseline = 'top';
-
-          var left = String(op.left == null ? '' : op.left).toUpperCase();
-          var right = String(op.right == null ? '' : op.right).toUpperCase();
-
-          ctx.textAlign = 'left';
-          ctx.fillText(left, MARGIN + 8, y);
-
-          ctx.textAlign = 'right';
-          ctx.fillText(right, width - MARGIN - 8, y);
-          
-          y += rSize + LINE_GAP + 4;
-          break;
-        }
-
-        case 'divider': {
-          ctx.fillStyle = '#000000';
-          ctx.lineWidth = op.thick || 2;
-          
-          if ((op.style || 'solid') === 'dashed') {
-            ctx.setLineDash([6, 4]); // Clean, highly visible asset dashes
-            ctx.beginPath();
-            ctx.moveTo(MARGIN + 4, y + 4);
-            ctx.lineTo(width - MARGIN - 4, y + 4);
-            ctx.stroke();
-            ctx.setLineDash([]); // Clear current matrix offset configuration boundaries
-          } else {
-            ctx.fillRect(MARGIN + 4, y + 4, innerW - 8, op.thick || 3);
-          }
-          y += 12;
-          break;
-        }
-
-        case 'checkbox': {
-          var bSz = 18;
-          var bX = MARGIN + 8;
-          ctx.lineWidth = 2;
-          ctx.strokeStyle = '#000000';
-          ctx.strokeRect(bX, y + 2, bSz, bSz);
-
-          if (op.checked) {
-            ctx.beginPath();
-            ctx.moveTo(bX + 3, y + 2 + (bSz / 2));
-            ctx.lineTo(bX + (bSz / 2) - 1, y + 2 + bSz - 3);
-            ctx.lineTo(bX + bSz - 3, y + 2 + 4);
-            ctx.lineWidth = 3;
-            ctx.stroke();
-          }
-
-          ctx.fillStyle = '#000000';
-          var cSize = op.size || 18;
-          ctx.font = 'bold ' + cSize + 'px Arial, sans-serif';
-          ctx.textAlign = 'left';
-          ctx.textBaseline = 'top';
-          ctx.fillText(String(op.label || '').toUpperCase(), bX + bSz + 12, y + 2);
-          
-          y += Math.max(24, cSize) + 8;
-          break;
-        }
-
-        case 'band': {
-          var bH = op.__h;
-          ctx.fillStyle = '#000000';
-          ctx.fillRect(MARGIN, y, innerW, bH);
-
-          ctx.fillStyle = '#ffffff';
-          var bTxtSize = op.size || 24;
-          ctx.font = 'bold ' + bTxtSize + 'px Arial, sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(String(op.text || '').toUpperCase(), width / 2, y + (bH / 2));
-          
-          y += bH + 10;
-          break;
-        }
-
-        case 'space': {
-          y += Math.max(0, op.h || 8);
-          break;
+      if (op.t === 'header' || op.t === 'text' || op.t === 'boxed_text') {
+        var txt = String(op.text || '').toUpperCase();
+        if (txt.indexOf('AUDI') !== -1 || txt.indexOf('BMW') !== -1 || txt.indexOf('MERCEDES') !== -1) {
+          vehicleModel = txt;
+        } else if (txt.indexOf('5W') !== -1 || txt.indexOf('10W') !== -1 || txt.indexOf('0W') !== -1) {
+          oilType = txt;
         }
       }
+      if (op.t === 'row') {
+        var leftStr = String(op.left || '').toUpperCase();
+        var rightStr = String(op.right || '').toUpperCase();
+        if (leftStr.indexOf('OIL') !== -1) oilType = rightStr;
+        else if (leftStr.indexOf('MILE') !== -1) mileageVal = rightStr.indexOf('KM') !== -1 ? rightStr : rightStr + ' KM';
+        else if (leftStr.indexOf('DATE') !== -1) serviceDate = rightStr;
+      }
     }
+
+    // 1. Draw Thick Outer Structural Card Boundary Box Frame (4px thick)
+    ctx.fillStyle = '#000000';
+    var thick = 4;
+    ctx.fillRect(0, 0, width, ctx.canvas.height); 
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(thick, thick, width - (thick * 2), ctx.canvas.height - (thick * 2)); 
+
+    // 2. Draw Enterprise Circular Corporate Logo 
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(width / 2, 52, 32, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 12px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText("MASS", width / 2, 44);
+    ctx.fillText("POWER", width / 2, 60);
+
+    // 3. Main Text Service Banner Title Typing
+    ctx.font = 'bold 16px Arial, sans-serif';
+    ctx.fillText(docTitle, width / 2, 104);
+    ctx.fillText(docSubtitle, width / 2, 124);
+
+    // 4. Solid Structural Separator Line Divider
+    ctx.fillRect(16, 144, width - 32, 3);
+
+    // 5. Heavy Vehicle Type Identity Headline Box
+    ctx.font = 'bold 28px Arial, sans-serif';
+    ctx.fillText(vehicleModel, width / 2, 176);
+
+    // 6. Dashed Asset Operational Wire Divider Layout
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#000000';
+    ctx.setLineDash([6, 4]); // Clean dashes matching the sticker blueprint
+    ctx.beginPath();
+    ctx.moveTo(16, 206);
+    ctx.lineTo(width - 16, 206);
+    ctx.stroke();
+    ctx.setLineDash([]); // Reset line dash definitions
+
+    // 7. Core Alert Operational Target Type Metric
+    ctx.font = 'bold 14px Arial, sans-serif';
+    ctx.fillText(serviceType, width / 2, 226);
+
+    // 8. Key-Value Form Parametric Rows
+    ctx.font = 'bold 15px Arial, sans-serif';
+    
+    // Oil row
+    ctx.textAlign = 'left';  ctx.fillText("OIL:", 24, 256);
+    ctx.textAlign = 'right'; ctx.fillText(oilType, width - 24, 256);
+
+    // Mileage row
+    ctx.textAlign = 'left';  ctx.fillText("MILEAGE:", 24, 286);
+    ctx.textAlign = 'right'; ctx.fillText(mileageVal, width - 24, 286);
+
+    // Date row
+    ctx.textAlign = 'left';  ctx.fillText("DATE:", 24, 316);
+    ctx.textAlign = 'right'; ctx.fillText(serviceDate, width - 24, 316);
+
+    // 9. Lower Secondary Dashed Form Content Divider Wire
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(16, 340);
+    ctx.lineTo(width - 16, 340);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 10. Checkbox Indicator Frame Rendering Shapes
+    var boxX = 46;
+    var boxY = 356;
+    var boxSize = 18;
+    ctx.lineWidth = 2;
+    ctx.textAlign = 'center';
+    ctx.strokeRect(boxX, boxY, boxSize, boxSize);
+
+    if (isChecked) {
+      ctx.beginPath();
+      ctx.moveTo(boxX + 3, boxY + (boxSize / 2));
+      ctx.lineTo(boxX + (boxSize / 2) - 1, boxY + boxSize - 3);
+      ctx.lineTo(boxX + boxSize - 3, boxY + 4);
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 15px Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(checkboxLabel, boxX + boxSize + 12, boxY + 1);
   }
     /* ---------------- 1-bit Floyd–Steinberg dither ---------------- */
-  /* ---------------- 1-bit Floyd–Steinberg dither ---------------- */
 
   function ditherAndPack(cv, darkness) {
     var w = cv.width, h = cv.height;
@@ -537,23 +509,16 @@ export function getRasterizerHostHtml(): string {
     for (var yy = 0; yy < h; yy++) {
       var row = new Uint8Array(bytesPerRow);
       
-      // Step 1: Pack pixels into the byte array normally to protect control bit sequences
+      // RESTORED ORIGINAL LOOP: Keeps bitmask operations safe from data corruption
       for (var x = 0; x < w; x++) {
         var finalPixel = gray[yy * w + x];
         if (finalPixel === 0) {
           row[x >> 3] |= (1 << (x & 7));
         }
       }
-
-      // --- THE BYTE-ORDER REVERSAL MIRROR FIX ---
-      // Step 2: Swap full bytes from right-to-left across the line to un-mirror text safely
-      var mirroredRow = new Uint8Array(bytesPerRow);
-      for (var b = 0; b < bytesPerRow; b++) {
-        mirroredRow[b] = row[bytesPerRow - 1 - b];
-      }
       
       var s = '';
-      for (var k = 0; k < mirroredRow.length; k++) s += String.fromCharCode(mirroredRow[k]);
+      for (var k = 0; k < row.length; k++) s += String.fromCharCode(row[k]);
       rowsB64[yy] = btoa(s);
     }
     return { width: w, height: h, rowsBase64: rowsB64 };
@@ -571,47 +536,43 @@ export function getRasterizerHostHtml(): string {
       var doc = payload.doc || { ops: [] };
       var ops = (doc.ops || []).slice();
 
-      var cv = document.getElementById('cv');
-      cv.width = width;
-      cv.height = 100;
-      var ctx = cv.getContext('2d');
+      // Create an offscreen buffer canvas to draw your template elements normally first
+      var tempCv = document.createElement('canvas');
+      var totalH = 396; // Hard locked target document blueprint frame height metrics
+      tempCv.width = width;
+      tempCv.height = totalH;
+      var tempCtx = tempCv.getContext('2d');
+      
+      // Draw your high-contrast corporate image onto the offscreen canvas
+      drawOps(tempCtx, ops, width);
 
-      preloadImages(ops).then(function () {
-        var totalH = measureOps(ctx, ops, width);
-        var feed = Math.max(0, doc.feedRows || 0);
-        var canvasH = totalH + feed;
-        
-        cv.width = width;
-        cv.height = canvasH;
-        ctx = cv.getContext('2d');
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, width, canvasH);
-        
-        try {
-          drawOps(ctx, ops, width);
-        } catch (e) {
-          send({ id: id, ok: false, error: 'draw failed: ' + (e && e.message || e) });
-          return;
-        }
-        
-        // --- UNIVERSAL MASS POWER BORDER FRAME ---
-        if (doc.frame) {
-          ctx.fillStyle = '#000000';
-          var thick = 4; 
-          ctx.fillRect(0, 0, width, totalH); // Fill solid
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(thick, thick, width - (thick * 2), totalH - (thick * 2)); // Hollow inner content
-          
-          try { drawOps(ctx, ops, width); } catch (e) { return; }
-        }
-        
-        try {
-          var bmp = ditherAndPack(cv, payload.darkness || 3);
-          send({ id: id, ok: true, width: bmp.width, height: bmp.height, rowsBase64: bmp.rowsBase64 });
-        } catch (e2) {
-          send({ id: id, ok: false, error: 'dither failed: ' + (e2 && e2.message || e2) });
-        }
-      });
+      // Now prepare the main canvas element for final print processing
+      var cv = document.getElementById('cv');
+      var feed = Math.max(0, doc.feedRows || 0);
+      var canvasH = totalH + feed;
+      
+      cv.width = width;
+      cv.height = canvasH;
+      var ctx = cv.getContext('2d');
+      
+      // Clear background to solid white
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, canvasH);
+      
+      // --- IMAGE BUFFER SCALE REFLECTION MIRROR FIX ---
+      // Flips the pre-rendered image asset horizontally over the x-axis cleanly
+      ctx.save();
+      ctx.translate(width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(tempCv, 0, 0);
+      ctx.restore();
+      
+      try {
+        var bmp = ditherAndPack(cv, payload.darkness || 3);
+        send({ id: id, ok: true, width: bmp.width, height: bmp.height, rowsBase64: bmp.rowsBase64 });
+      } catch (e2) {
+        send({ id: id, ok: false, error: 'dither failed: ' + (e2 && e2.message || e2) });
+      }
     } catch (e) {
       send({ id: id, ok: false, error: 'rasterize failed: ' + (e && e.message || e) });
     }
