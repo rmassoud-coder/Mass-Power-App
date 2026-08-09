@@ -1,9 +1,21 @@
 /**
  * catPrinter.ts — BLE driver for GT01/GB02/GB03/MX/PD01-series "cat printers".
+ *
+ * Protocol (confirmed against rbaron/catprinter, NaitLee/Cat-Printer,
+ * bitbank2/Thermal_Printer):
+ *   0x51 0x78 | CC | DD | LL LH | ...data... | CRC | 0xFF
+ *   - CC   : 0xA2 = Draw Bitmap row, 0xA1 = Feed Paper, 0xA0 = Retract
+ *   - LL,LH: data length, little-endian
+ *   - data : 48 bytes/row (384px / 8)
+ *   - CRC  : CRC-8 (poly 0x07, init 0x00) of `data` only
+ *
+ * BIT ORDER: htmlRasterizer.ts packs each row as row[x>>3] |= (1 << (x&7))
+ * — LSB-first. This protocol expects MSB-first, so we mirror bits before
+ * sending (see MIRROR_BITS below).
  */
 import { BleManager, Device, State as BleState } from 'react-native-ble-plx';
 import { PermissionsAndroid, Platform } from 'react-native';
-import { Buffer } from 'buffer';
+import { Buffer } from 'buffer'; // npx expo install buffer if missing
 
 export interface MonoBitmap {
   width: number;
@@ -26,9 +38,6 @@ const CMD_RETRACT_PAPER = 0xa0;
 const CMD_FEED_PAPER = 0xa1;
 const CMD_DRAW_BITMAP = 0xa2;
 const DIRECTION_HOST_TO_PRINTER = 0x00;
-
-// FIXED: Returned to false to stop the garbled letter corruptions
-const MIRROR_BITS = false; 
 
 let _manager: BleManager | null = null;
 function getManager(): BleManager {
@@ -149,12 +158,20 @@ function buildFrame(command: number, data: Uint8Array): Uint8Array {
   return frame;
 }
 
+// Horizontal mirror fix: testing confirmed per-byte bit order is already
+// correct with no per-byte mirroring (text was legible, just read
+// right-to-left). The remaining issue is a FULL-ROW mirror, not a per-byte
+// one: the printer wants each 384-pixel row read left-to-right, but our
+// source rows come out reversed at the row level. Reversing a bit-packed
+// sequence is mathematically equivalent to reversing the byte order AND
+// bit-mirroring each byte — so this reuses BIT_MIRROR_TABLE, just applied
+// row-wide instead of byte-local (a byte-local-only mirror is what produced
+// scrambled noise earlier: it reversed each 8-pixel group in place without
+// also reversing which byte holds which group).
 function decodeRow(rowBase64: string): Uint8Array {
   const bytes = Uint8Array.from(Buffer.from(rowBase64, 'base64'));
-  if (!MIRROR_BITS) return bytes;
-  const mirrored = new Uint8Array(bytes.length);
-  for (let i = 0; i < bytes.length; i++) mirrored[i] = BIT_MIRROR_TABLE[bytes[i]];
-  return mirrored;
+  const reversed = Array.from(bytes).reverse();
+  return Uint8Array.from(reversed, (b) => BIT_MIRROR_TABLE[b]);
 }
 
 async function sendBitmap(deviceId: string, bmp: MonoBitmap): Promise<void> {
@@ -167,8 +184,8 @@ async function sendBitmap(deviceId: string, bmp: MonoBitmap): Promise<void> {
     throw new Error('Could not connect to printer: ' + (e?.message || e));
   }
 
- try {
-    const orderedRows = [...bmp.rowsBase64]; 
+  try {
+    const orderedRows = [...bmp.rowsBase64].reverse();
     const rowFrames = orderedRows.map((r) => buildFrame(CMD_DRAW_BITMAP, decodeRow(r)));
     const feedFrame = buildFrame(CMD_FEED_PAPER, Uint8Array.from([80]));
 
@@ -203,6 +220,7 @@ async function sendBitmap(deviceId: string, bmp: MonoBitmap): Promise<void> {
   }
 }
 
+/** Matches printService.ts's expected signature. */
 export async function printMonoBitmap(
   catPrinterId: string,
   bmp: MonoBitmap,
@@ -211,6 +229,7 @@ export async function printMonoBitmap(
   return sendBitmap(catPrinterId, bmp);
 }
 
+/** Sends a simple black-band test pattern so the user can confirm the connection works. */
 export async function testPrint(deviceId: string, _darkness = 3): Promise<void> {
   const width = 384;
   const rowBytes = width / 8;
