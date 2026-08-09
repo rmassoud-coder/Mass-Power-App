@@ -240,7 +240,7 @@ export default function ManagementScreen() {
           </View>
           <Text style={styles.syncHint}>
             Push uploads THIS device&apos;s data to the cloud. Pull replaces THIS device&apos;s data
-            with the cloud copy. Auto-pull+push runs once per day when you open the app.
+            with the cloud copy. Nothing syncs automatically — you control every sync.
           </Text>
         </View>
 
