@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "exported_at": "2026-08-02T18:33:41.193Z",
+  "exported_at": "2026-08-09T11:57:34.253Z",
   "customers": [
     {
       "id": "6a1dcd13d860efc6bc5dc11e",
@@ -84,6 +84,7 @@
       "is_paid": true,
       "service_date": "2026-06-01T18:19:15.953000",
       "created_at": "2026-06-01T18:19:15.953000",
+      "partial_paid": 0,
       "dash_abs": false,
       "dash_check_engine": false,
       "dash_brake": false,
@@ -97,7 +98,6 @@
       "oil_grade": null,
       "oil_filter_changed": false,
       "reminder_dismissed": false,
-      "partial_paid": 0,
       "battery_amp_rate": null,
       "battery_install_date": null,
       "battery_warranty_months": null,
@@ -116,6 +116,7 @@
       "is_paid": true,
       "service_date": "2026-06-01T19:35:00.840000",
       "created_at": "2026-06-01T19:35:00.840000",
+      "partial_paid": 0,
       "dash_abs": false,
       "dash_check_engine": false,
       "dash_brake": false,
@@ -129,7 +130,6 @@
       "oil_grade": null,
       "oil_filter_changed": false,
       "reminder_dismissed": false,
-      "partial_paid": 0,
       "battery_amp_rate": null,
       "battery_install_date": null,
       "battery_warranty_months": null,
@@ -148,6 +148,7 @@
       "is_paid": true,
       "service_date": "2026-06-01T19:24:29.262000",
       "created_at": "2026-06-01T19:24:29.262000",
+      "partial_paid": 0,
       "dash_abs": false,
       "dash_check_engine": false,
       "dash_brake": false,
@@ -161,7 +162,6 @@
       "oil_grade": null,
       "oil_filter_changed": false,
       "reminder_dismissed": false,
-      "partial_paid": 0,
       "battery_amp_rate": null,
       "battery_install_date": null,
       "battery_warranty_months": null,
@@ -180,6 +180,7 @@
       "is_paid": true,
       "service_date": "2026-08-02T18:33:39.909Z",
       "created_at": "2026-08-02T18:33:39.909Z",
+      "partial_paid": 0,
       "dash_abs": false,
       "dash_check_engine": false,
       "dash_brake": false,
@@ -193,10 +194,9 @@
       "oil_grade": "5W-30",
       "oil_filter_changed": true,
       "reminder_dismissed": false,
-      "partial_paid": 0,
       "battery_amp_rate": null,
       "battery_install_date": null,
-      "battery_warranty_months": 12,
+      "battery_warranty_months": null,
       "battery_parasitic_tested": false,
       "hvac_freon_date": null,
       "hvac_leak_tested": false,
@@ -204,19 +204,6 @@
     }
   ],
   "service_items": [],
-  "inventory": [
-    {
-      "id": "mruz2trth18zhk3j",
-      "item_number": "INV-001",
-      "item_type": "Test",
-      "item_quantity": 5,
-      "item_price": 5,
-      "created_at": "2026-07-21T18:13:56.928Z",
-      "updated_at": "2026-07-21T18:14:01.651Z",
-      "item_retail_price": 10,
-      "item_supplier": null,
-      "item_code": null
-    }
-  ],
+  "inventory": [],
   "suppliers": []
 }
