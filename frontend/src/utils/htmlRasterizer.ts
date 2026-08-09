@@ -339,125 +339,160 @@ export function getRasterizerHostHtml(): string {
     return total + MARGIN * 2;
   }
   /* ---------------- Draw ops (pass 2) ---------------- */
-    /* ---------------- Draw ops (pass 2) ---------------- */
+   /* ---------------- Draw ops (pass 2) ---------------- */
 
   function drawOps(ctx, ops, width) {
-    // This engine processes explicit data mappings to recreate your blueprint image layout.
-    // Standard properties are extracted safely from the receipt data payload context.
-    var docTitle = "MASS POWER";
-    var docSubtitle = "AUTO SERVICES";
-    var vehicleModel = "AUDI A8";
-    var serviceType = "NEXT OIL CHANGE";
-    var oilType = "5W-30";
-    var mileageVal = "103,000 KM";
-    var serviceDate = "02/08/2026";
-    var checkboxLabel = "FILTER CHANGE";
-    var isChecked = true;
+    var innerW = width - MARGIN * 2;
+    var y = MARGIN + 12; // Extra head breathing space inside inner card border
 
-    // Search operations array dynamically for any specific template data overrides
     for (var i = 0; i < ops.length; i++) {
       var op = ops[i];
-      if (op.t === 'header' || op.t === 'text') {
-        var txt = String(op.text || '').toUpperCase();
-        if (txt.indexOf('AUDI') !== -1) vehicleModel = txt;
-        else if (txt.indexOf('5W') !== -1) oilType = txt;
-        else if (txt.indexOf('KM') !== -1) mileageVal = txt;
+      if (!op) continue;
+
+      switch (op.t) {
+        case 'header': {
+          ctx.fillStyle = '#000000';
+          // Force heavy enterprise uppercase display style globally
+          var headText = String(op.text || '').toUpperCase();
+          var hSize = op.size || 24;
+          ctx.font = 'black ' + hSize + 'px "Arial Black", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          ctx.fillText(headText, width / 2, y);
+          y += hSize + 12;
+          break;
+        }
+
+        case 'boxed_text': {
+          ctx.fillStyle = '#000000';
+          var boxText = String(op.text || '').toUpperCase();
+          var bSize = op.size || 20;
+          ctx.font = 'bold ' + bSize + 'px Arial, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+
+          var txtW = ctx.measureText(boxText).width;
+          var rW = Math.min(innerW, txtW + 24);
+          var rX = MARGIN + (innerW - rW) / 2;
+          var rH = bSize + 12;
+
+          // Draw the high-contrast boxed banner frame element
+          ctx.lineWidth = 2;
+          ctx.strokeRect(rX, y, rW, rH);
+          ctx.fillText(boxText, width / 2, y + 6);
+          y += rH + 14;
+          break;
+        }
+
+        case 'text': {
+          ctx.fillStyle = '#000000';
+          var size = op.size || 22;
+          ctx.font = (op.bold ? 'bold ' : '') + size + 'px Arial, sans-serif';
+          ctx.textBaseline = 'top';
+          
+          var align = op.align || 'center';
+          ctx.textAlign = align;
+
+          for (var l = 0; l < op.__lines.length; l++) {
+            var lt = op.__lines[l];
+            var lx = width / 2;
+            if (align === 'left') lx = MARGIN + 6;
+            else if (align === 'right') lx = width - MARGIN - 6;
+
+            ctx.fillText(lt, lx, y);
+            y += size + LINE_GAP;
+          }
+          y += 6;
+          break;
+        }
+
+        case 'row': {
+          ctx.fillStyle = '#000000';
+          var rSize = op.size || 22;
+          // Apply corporate high-contrast monospace weight across inline key-value pairs
+          ctx.font = 'bold ' + rSize + 'px "Courier New", Courier, monospace';
+          ctx.textBaseline = 'top';
+
+          var left = String(op.left == null ? '' : op.left).toUpperCase();
+          var right = String(op.right == null ? '' : op.right).toUpperCase();
+
+          ctx.textAlign = 'left';
+          ctx.fillText(left, MARGIN + 8, y);
+
+          ctx.textAlign = 'right';
+          ctx.fillText(right, width - MARGIN - 8, y);
+          
+          y += rSize + LINE_GAP + 4;
+          break;
+        }
+
+        case 'divider': {
+          ctx.fillStyle = '#000000';
+          ctx.lineWidth = op.thick || 2;
+          
+          if ((op.style || 'solid') === 'dashed') {
+            ctx.setLineDash([6, 4]); // Clean, highly visible asset dashes
+            ctx.beginPath();
+            ctx.moveTo(MARGIN + 4, y + 4);
+            ctx.lineTo(width - MARGIN - 4, y + 4);
+            ctx.stroke();
+            ctx.setLineDash([]); // Clear current matrix offset configuration boundaries
+          } else {
+            ctx.fillRect(MARGIN + 4, y + 4, innerW - 8, op.thick || 3);
+          }
+          y += 12;
+          break;
+        }
+
+        case 'checkbox': {
+          var bSz = 18;
+          var bX = MARGIN + 8;
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = '#000000';
+          ctx.strokeRect(bX, y + 2, bSz, bSz);
+
+          if (op.checked) {
+            ctx.beginPath();
+            ctx.moveTo(bX + 3, y + 2 + (bSz / 2));
+            ctx.lineTo(bX + (bSz / 2) - 1, y + 2 + bSz - 3);
+            ctx.lineTo(bX + bSz - 3, y + 2 + 4);
+            ctx.lineWidth = 3;
+            ctx.stroke();
+          }
+
+          ctx.fillStyle = '#000000';
+          var cSize = op.size || 18;
+          ctx.font = 'bold ' + cSize + 'px Arial, sans-serif';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'top';
+          ctx.fillText(String(op.label || '').toUpperCase(), bX + bSz + 12, y + 2);
+          
+          y += Math.max(24, cSize) + 8;
+          break;
+        }
+
+        case 'band': {
+          var bH = op.__h;
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(MARGIN, y, innerW, bH);
+
+          ctx.fillStyle = '#ffffff';
+          var bTxtSize = op.size || 24;
+          ctx.font = 'bold ' + bTxtSize + 'px Arial, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(op.text || '').toUpperCase(), width / 2, y + (bH / 2));
+          
+          y += bH + 10;
+          break;
+        }
+
+        case 'space': {
+          y += Math.max(0, op.h || 8);
+          break;
+        }
       }
     }
-
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, width, ctx.canvas.height);
-
-    // 1. Draw Thick Outer Structural Frame Boundary (4px)
-    ctx.fillStyle = '#000000';
-    var thick = 4;
-    ctx.fillRect(0, 0, width, ctx.canvas.height); // Outer frame block
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(thick, thick, width - (thick * 2), ctx.canvas.height - (thick * 2)); // Hollow center
-
-    // 2. Draw High-Contrast Circular Header Logo Area
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(width / 2, 50, 32, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.fillStyle = '#000000';
-    ctx.font = 'bold 12px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText("MASS", width / 2, 42);
-    ctx.fillText("POWER", width / 2, 58);
-
-    // 3. Main Enterprise Title Branding Block
-    ctx.font = 'black 16px "Arial Black", sans-serif';
-    ctx.fillText(docTitle, width / 2, 102);
-    ctx.fillText(docSubtitle, width / 2, 122);
-
-    // 4. Solid High-Contrast Separator Bar Line (3px thick)
-    ctx.fillRect(16, 142, width - 32, 3);
-
-    // 5. Heavy Vehicle Banner Accent Header Section
-    ctx.font = 'black 28px "Arial Black", sans-serif';
-    ctx.fillText(vehicleModel, width / 2, 172);
-
-    // 6. Dashed Functional Metadata Separator Wire
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(16, 202);
-    ctx.lineTo(width - 16, 202);
-    ctx.stroke();
-    ctx.setLineDash([]); // Reset line configurations
-
-    // 7. Middle Alert Context Section
-    ctx.font = 'bold 13px Arial, sans-serif';
-    ctx.fillText(serviceType, width / 2, 222);
-
-    // 8. Key-Value Operational Parameters Row Map
-    ctx.font = 'bold 14px Arial, sans-serif';
-    
-    // Oil Data Line Row
-    ctx.textAlign = 'left';  ctx.fillText("OIL:", 20, 252);
-    ctx.textAlign = 'right'; ctx.fillText(oilType, width - 20, 252);
-
-    // Mileage Operational Metadata Line Row
-    ctx.textAlign = 'left';  ctx.fillText("MILEAGE:", 20, 282);
-    ctx.textAlign = 'right'; ctx.fillText(mileageVal, width - 20, 282);
-
-    // Expiration Target Operational Timing Line Row
-    ctx.textAlign = 'left';  ctx.fillText("DATE:", 20, 312);
-    ctx.textAlign = 'right'; ctx.fillText(serviceDate, width - 20, 312);
-
-    // 9. Secondary Dashed Parameter Divider Area Wire
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(16, 336);
-    ctx.lineTo(width - 16, 336);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // 10. Checkbox Indicator Frame Elements
-    var boxX = 42;
-    var boxY = 354;
-    var boxSize = 18;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(boxX, boxY, boxSize, boxSize);
-
-    if (isChecked) {
-      ctx.beginPath();
-      ctx.moveTo(boxX + 3, boxY + (boxSize / 2));
-      ctx.lineTo(boxX + (boxSize / 2) - 1, boxY + boxSize - 3);
-      ctx.lineTo(boxX + boxSize - 3, boxY + 4);
-      ctx.lineWidth = 3;
-      ctx.stroke();
-    }
-
-    ctx.fillStyle = '#000000';
-    ctx.font = 'bold 14px Arial, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText(checkboxLabel, boxX + boxSize + 12, boxY + 2);
   }
     /* ---------------- 1-bit Floyd–Steinberg dither ---------------- */
 
@@ -469,7 +504,6 @@ export function getRasterizerHostHtml(): string {
     var gray = new Int16Array(w * h);
     var shift = ({1:-30, 2:-15, 3:0, 4:15, 5:30})[darkness] || 0;
     
-    // Convert canvas color components to linear grayscale data spaces
     for (var i = 0, p = 0; i < d.length; i += 4, p++) {
       var a = d[i + 3] / 255;
       var r = d[i]     * a + 255 * (1 - a);
@@ -480,7 +514,6 @@ export function getRasterizerHostHtml(): string {
       gray[p] = y;
     }
     
-    // Process error distribution thresholds
     for (var yy = 0; yy < h; yy++) {
       for (var xx = 0; xx < w; xx++) {
         var idx = yy * w + xx;
@@ -498,13 +531,12 @@ export function getRasterizerHostHtml(): string {
       }
     }
 
-    // Reflect image layout across your printer's memory byte block strings
     var bytesPerRow = Math.ceil(w / 8);
     var rowsB64 = new Array(h);
     for (var yy = 0; yy < h; yy++) {
       var row = new Uint8Array(bytesPerRow);
       for (var x = 0; x < w; x++) {
-        // --- MEMORY PIXEL MATRIX HORIZONTAL AXIS REFLECTION FIX ---
+        // --- MEMORY BIT STREAM REFLECTION ---
         var targetX = w - 1 - x;
         var finalPixel = gray[yy * w + targetX];
         
@@ -532,28 +564,47 @@ export function getRasterizerHostHtml(): string {
       var ops = (doc.ops || []).slice();
 
       var cv = document.getElementById('cv');
-      // Set explicit layout block frame height to guarantee blueprint space
-      var totalH = 390; 
-      var feed = Math.max(0, doc.feedRows || 0);
-      var canvasH = totalH + feed;
-      
       cv.width = width;
-      cv.height = canvasH;
+      cv.height = 100;
       var ctx = cv.getContext('2d');
-      
-      try {
-        drawOps(ctx, ops, width);
-      } catch (e) {
-        send({ id: id, ok: false, error: 'draw failed: ' + (e && e.message || e) });
-        return;
-      }
-      
-      try {
-        var bmp = ditherAndPack(cv, payload.darkness || 3);
-        send({ id: id, ok: true, width: bmp.width, height: bmp.height, rowsBase64: bmp.rowsBase64 });
-      } catch (e2) {
-        send({ id: id, ok: false, error: 'dither failed: ' + (e2 && e2.message || e2) });
-      }
+
+      preloadImages(ops).then(function () {
+        var totalH = measureOps(ctx, ops, width);
+        var feed = Math.max(0, doc.feedRows || 0);
+        var canvasH = totalH + feed;
+        
+        cv.width = width;
+        cv.height = canvasH;
+        ctx = cv.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, canvasH);
+        
+        try {
+          drawOps(ctx, ops, width);
+        } catch (e) {
+          send({ id: id, ok: false, error: 'draw failed: ' + (e && e.message || e) });
+          return;
+        }
+        
+        // --- UNIVERSAL MASS POWER BORDER FRAME ---
+        if (doc.frame) {
+          ctx.fillStyle = '#000000';
+          var thick = 4; 
+          ctx.fillRect(0, 0, width, totalH); // Fill solid
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(thick, thick, width - (thick * 2), totalH - (thick * 2)); // Hollow inner content
+          
+          // Redraw layout cleanly on top of inner spacing bounds
+          try { drawOps(ctx, ops, width); } catch (e) { return; }
+        }
+        
+        try {
+          var bmp = ditherAndPack(cv, payload.darkness || 3);
+          send({ id: id, ok: true, width: bmp.width, height: bmp.height, rowsBase64: bmp.rowsBase64 });
+        } catch (e2) {
+          send({ id: id, ok: false, error: 'dither failed: ' + (e2 && e2.message || e2) });
+        }
+      });
     } catch (e) {
       send({ id: id, ok: false, error: 'rasterize failed: ' + (e && e.message || e) });
     }
@@ -564,3 +615,5 @@ export function getRasterizerHostHtml(): string {
 </script>
 </body></html>`;
 }
+
+  
