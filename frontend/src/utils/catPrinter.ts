@@ -1,21 +1,9 @@
 /**
  * catPrinter.ts — BLE driver for GT01/GB02/GB03/MX/PD01-series "cat printers".
- *
- * Protocol (confirmed against rbaron/catprinter, NaitLee/Cat-Printer,
- * bitbank2/Thermal_Printer):
- *   0x51 0x78 | CC | DD | LL LH | ...data... | CRC | 0xFF
- *   - CC   : 0xA2 = Draw Bitmap row, 0xA1 = Feed Paper, 0xA0 = Retract
- *   - LL,LH: data length, little-endian
- *   - data : 48 bytes/row (384px / 8)
- *   - CRC  : CRC-8 (poly 0x07, init 0x00) of `data` only
- *
- * BIT ORDER: htmlRasterizer.ts packs each row as row[x>>3] |= (1 << (x&7))
- * — LSB-first. This protocol expects MSB-first, so we mirror bits before
- * sending (see MIRROR_BITS below).
  */
 import { BleManager, Device, State as BleState } from 'react-native-ble-plx';
 import { PermissionsAndroid, Platform } from 'react-native';
-import { Buffer } from 'buffer'; // npx expo install buffer if missing
+import { Buffer } from 'buffer';
 
 export interface MonoBitmap {
   width: number;
@@ -39,8 +27,8 @@ const CMD_FEED_PAPER = 0xa1;
 const CMD_DRAW_BITMAP = 0xa2;
 const DIRECTION_HOST_TO_PRINTER = 0x00;
 
-// FIXED: Flipped to true to fix the mirrored left-to-right letters text bug
-const MIRROR_BITS = true; 
+// FIXED: Returned to false to stop the garbled letter corruptions
+const MIRROR_BITS = false; 
 
 let _manager: BleManager | null = null;
 function getManager(): BleManager {
@@ -180,7 +168,6 @@ async function sendBitmap(deviceId: string, bmp: MonoBitmap): Promise<void> {
   }
 
  try {
-    // FIXED: Removed the `.reverse()` command layout hook here to stop lines from printing upside-down
     const orderedRows = [...bmp.rowsBase64]; 
     const rowFrames = orderedRows.map((r) => buildFrame(CMD_DRAW_BITMAP, decodeRow(r)));
     const feedFrame = buildFrame(CMD_FEED_PAPER, Uint8Array.from([80]));
@@ -216,7 +203,6 @@ async function sendBitmap(deviceId: string, bmp: MonoBitmap): Promise<void> {
   }
 }
 
-/** Matches printService.ts's expected signature. */
 export async function printMonoBitmap(
   catPrinterId: string,
   bmp: MonoBitmap,
@@ -225,7 +211,6 @@ export async function printMonoBitmap(
   return sendBitmap(catPrinterId, bmp);
 }
 
-/** Sends a simple black-band test pattern so the user can confirm the connection works. */
 export async function testPrint(deviceId: string, _darkness = 3): Promise<void> {
   const width = 384;
   const rowBytes = width / 8;
