@@ -1705,3 +1705,155 @@ export async function getLowStockBySupplier(
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([supplier_name, items]) => ({ supplier_name, items }));
 }
+// ============ Merge Sync (safe, non-destructive) ============
+// Replaces replaceFullDatabase for sync use. Never deletes tables that are
+// missing from the incoming snapshot. Per-record upsert: newest updated_at
+// (or created_at fallback) wins. Never deletes local rows not present in
+// the cloud snapshot (additive merge — safest default without tombstones).
+
+export interface MergeResult {
+  customers: { inserted: number; updated: number };
+  vehicles: { inserted: number; updated: number };
+  services: { inserted: number; updated: number };
+  inventory: { inserted: number; updated: number };
+  suppliers: { inserted: number; updated: number };
+  service_items: { inserted: number; updated: number };
+}
+
+function newer(a?: string | null, b?: string | null): boolean {
+  // true if a is strictly newer than b
+  const ta = a ? Date.parse(a) : 0;
+  const tb = b ? Date.parse(b) : 0;
+  return ta > tb;
+}
+
+export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeResult> {
+  const db = await getDb();
+  const result: MergeResult = {
+    customers: { inserted: 0, updated: 0 },
+    vehicles: { inserted: 0, updated: 0 },
+    services: { inserted: 0, updated: 0 },
+    inventory: { inserted: 0, updated: 0 },
+    suppliers: { inserted: 0, updated: 0 },
+    service_items: { inserted: 0, updated: 0 },
+  };
+
+  // ---- customers ----
+  if (Array.isArray(snap.customers)) {
+    for (const c of snap.customers) {
+      const local = await db.getFirstAsync<Customer>(`SELECT * FROM customers WHERE id = ?`, [c.id]);
+      if (!local) {
+        await db.runAsync(
+          `INSERT INTO customers (id, name, mobile_number, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+          [c.id, c.name, c.mobile_number, c.created_at, c.updated_at]
+        );
+        result.customers.inserted++;
+      } else if (newer(c.updated_at, local.updated_at)) {
+        await db.runAsync(
+          `UPDATE customers SET name = ?, mobile_number = ?, updated_at = ? WHERE id = ?`,
+          [c.name, c.mobile_number, c.updated_at, c.id]
+        );
+        result.customers.updated++;
+      }
+    }
+  }
+
+  // ---- vehicles (no updated_at column — insert if missing, otherwise leave local alone) ----
+  if (Array.isArray(snap.vehicles)) {
+    for (const v of snap.vehicles) {
+      const local = await db.getFirstAsync<Vehicle>(`SELECT * FROM vehicles WHERE id = ?`, [v.id]);
+      if (!local) {
+        await db.runAsync(
+          `INSERT INTO vehicles (id, customer_id, vin, plate_number, make, model, year, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [v.id, v.customer_id, v.vin, v.plate_number, v.make, v.model, v.year || null, v.created_at]
+        );
+        result.vehicles.inserted++;
+      }
+      // No updated_at on vehicles — never overwrite an existing local vehicle.
+    }
+  }
+
+  // ---- services ----
+  if (Array.isArray(snap.services)) {
+    for (const s of snap.services) {
+      const local = await db.getFirstAsync<any>(`SELECT * FROM services WHERE id = ?`, [s.id]);
+      if (!local) {
+        await db.runAsync(
+          `INSERT INTO services (
+             id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, partial_paid,
+             service_date, created_at,
+             dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, dash_tpms, dash_oil_leak,
+             current_mileage, next_service_date, next_service_mileage, oil_grade, oil_filter_changed,
+             battery_amp_rate, battery_install_date, battery_warranty_months, battery_parasitic_tested,
+             hvac_freon_date, hvac_leak_tested, outsource_cost, reminder_dismissed
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            s.id, s.vehicle_id, s.customer_id, s.service_description, s.additional_info || null,
+            s.cost, s.is_paid ? 1 : 0, s.partial_paid || 0, s.service_date, s.created_at,
+            s.dash_abs ? 1 : 0, s.dash_check_engine ? 1 : 0, s.dash_brake ? 1 : 0, s.dash_airbag ? 1 : 0,
+            s.dash_immobilizer ? 1 : 0, s.dash_tpms ? 1 : 0, s.dash_oil_leak ? 1 : 0,
+            s.current_mileage ?? null, s.next_service_date || null, s.next_service_mileage ?? null,
+            s.oil_grade || null, s.oil_filter_changed ? 1 : 0,
+            s.battery_amp_rate || null, s.battery_install_date || null, s.battery_warranty_months ?? null,
+            s.battery_parasitic_tested ? 1 : 0,
+            s.hvac_freon_date || null, s.hvac_leak_tested ? 1 : 0,
+            s.outsource_cost || 0, s.reminder_dismissed ? 1 : 0,
+          ]
+        );
+        result.services.inserted++;
+      }
+      // Services have no updated_at column — never overwrite an existing local service.
+    }
+  }
+
+  // ---- inventory ----
+  if (Array.isArray(snap.inventory)) {
+    for (const it of snap.inventory) {
+      const local = await db.getFirstAsync<InventoryItem>(`SELECT * FROM inventory WHERE id = ?`, [it.id]);
+      if (!local) {
+        await db.runAsync(
+          `INSERT INTO inventory (id, item_number, item_type, item_quantity, item_price, item_retail_price, item_supplier, item_code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [it.id, it.item_number, it.item_type, it.item_quantity, it.item_price, it.item_retail_price ?? 0, it.item_supplier ?? null, it.item_code ?? null, it.created_at, it.updated_at]
+        );
+        result.inventory.inserted++;
+      } else if (newer(it.updated_at, local.updated_at)) {
+        await db.runAsync(
+          `UPDATE inventory SET item_number = ?, item_type = ?, item_quantity = ?, item_price = ?, item_retail_price = ?, item_supplier = ?, item_code = ?, updated_at = ? WHERE id = ?`,
+          [it.item_number, it.item_type, it.item_quantity, it.item_price, it.item_retail_price ?? 0, it.item_supplier ?? null, it.item_code ?? null, it.updated_at, it.id]
+        );
+        result.inventory.updated++;
+      }
+    }
+  }
+
+  // ---- suppliers ----
+  if (Array.isArray(snap.suppliers)) {
+    for (const sup of snap.suppliers) {
+      const local = await db.getFirstAsync<Supplier>(`SELECT * FROM suppliers WHERE id = ?`, [sup.id]);
+      if (!local) {
+        await db.runAsync(
+          `INSERT INTO suppliers (id, name, contact_info, created_at) VALUES (?, ?, ?, ?)`,
+          [sup.id, sup.name, sup.contact_info ?? null, sup.created_at]
+        );
+        result.suppliers.inserted++;
+      }
+      // No updated_at on suppliers — never overwrite an existing local supplier.
+    }
+  }
+
+  // ---- service_items ----
+  if (Array.isArray(snap.service_items)) {
+    for (const si of snap.service_items) {
+      const local = await db.getFirstAsync<ServiceItem>(`SELECT * FROM service_items WHERE id = ?`, [si.id]);
+      if (!local) {
+        await db.runAsync(
+          `INSERT INTO service_items (id, service_id, inventory_id, item_type, quantity, unit_price, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [si.id, si.service_id, si.inventory_id, si.item_type, si.quantity, si.unit_price, si.created_at]
+        );
+        result.service_items.inserted++;
+      }
+    }
+  }
+
+  return result;
+}
