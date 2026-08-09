@@ -160,6 +160,8 @@ export function buildThermalReceiptDoc(
  * Oil-change sticker. Mirrors buildOilStickerHtml — Arial Black, tall bold
  * brand line under dashed divider, field rows, dashed divider, checkbox row.
  * All inside a 3-px outer frame.
+ * 
+ * FIX: Changed brand from 'text' with underline to 'header' for proper styling
  */
 export function buildOilStickerDoc(
   _customer: Customer,
@@ -170,10 +172,14 @@ export function buildOilStickerDoc(
   const ops: ThermalOp[] = [];
   const brand = [vehicle.make, vehicle.model].filter(Boolean).join(' ').trim().toUpperCase();
 
+  // Shop name as header
   ops.push({ t: 'header', text: (settings.garageName || 'Mass Power Auto').toUpperCase(), size: 24, letterSpacing: 1 });
   ops.push({ t: 'space', h: 4 });
-  ops.push({ t: 'text', text: brand, align: 'center', size: 32, bold: true, letterSpacing: 2, underline: 'dashed' });
+  
+  // FIX: Use 'header' instead of 'text' with underline for brand
+  ops.push({ t: 'header', text: brand, size: 28, letterSpacing: 2 });
   ops.push({ t: 'space', h: 6 });
+  
   ops.push({ t: 'text', text: 'NEXT OIL CHANGE', align: 'center', size: 20, bold: true, letterSpacing: 2 });
   ops.push({ t: 'space', h: 6 });
 
@@ -195,6 +201,8 @@ export function buildOilStickerDoc(
  * Battery-replacement sticker. Mirrors buildBatteryStickerHtml — big black
  * amp-rate band, warranty badge with border, expiry date, dashed divider,
  * parasitic-tested checkbox, plate number footer.
+ * 
+ * FIX: Changed brand from 'text' with underline to 'header' for proper styling
  */
 export function buildBatteryStickerDoc(
   _customer: Customer,
@@ -223,10 +231,14 @@ export function buildBatteryStickerDoc(
     }
   }
 
+  // Shop name as header
   ops.push({ t: 'header', text: (settings.garageName || 'Mass Power Auto').toUpperCase(), size: 24, letterSpacing: 1 });
   ops.push({ t: 'space', h: 4 });
-  ops.push({ t: 'text', text: brand, align: 'center', size: 28, bold: true, letterSpacing: 2, underline: 'dashed' });
+  
+  // FIX: Use 'header' instead of 'text' with underline for brand
+  ops.push({ t: 'header', text: brand, size: 28, letterSpacing: 2 });
   ops.push({ t: 'space', h: 6 });
+  
   ops.push({ t: 'text', text: 'BATTERY REPLACEMENT', align: 'center', size: 18, bold: true, letterSpacing: 2 });
   ops.push({ t: 'space', h: 6 });
 
@@ -256,6 +268,8 @@ export function buildBatteryStickerDoc(
  * HVAC sticker. Mirrors buildHvacStickerHtml — brand, HVAC heading, black
  * band with the description (or default text), optional DATE row, dashed
  * divider, leak-tested checkbox, plate footer.
+ * 
+ * FIX: Changed brand from 'text' with underline to 'header' for proper styling
  */
 export function buildHvacStickerDoc(
   _customer: Customer,
@@ -267,10 +281,14 @@ export function buildHvacStickerDoc(
   const brand = [vehicle.make, vehicle.model].filter(Boolean).join(' ').trim().toUpperCase();
   const desc = (service.additional_info || '').trim();
 
+  // Shop name as header
   ops.push({ t: 'header', text: (settings.garageName || 'Mass Power Auto').toUpperCase(), size: 24, letterSpacing: 1 });
   ops.push({ t: 'space', h: 4 });
-  ops.push({ t: 'text', text: brand, align: 'center', size: 28, bold: true, letterSpacing: 2, underline: 'dashed' });
+  
+  // FIX: Use 'header' instead of 'text' with underline for brand
+  ops.push({ t: 'header', text: brand, size: 28, letterSpacing: 2 });
   ops.push({ t: 'space', h: 6 });
+  
   ops.push({ t: 'text', text: 'HVAC / AC SERVICE', align: 'center', size: 18, bold: true, letterSpacing: 2 });
   ops.push({ t: 'space', h: 6 });
   ops.push({
@@ -453,5 +471,5 @@ export function buildGuaranteeStickerDoc(
   }
   ops.push({ t: 'space', h: 4 });
   ops.push({ t: 'text', text: monthLabel, align: 'center', size: 20, bold: true });
-  return { ops, frame: true, feedRows: 30 };
+  return { ops, frame: true, feedRows: 20 };
 }
