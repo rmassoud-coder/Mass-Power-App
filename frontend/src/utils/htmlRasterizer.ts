@@ -147,7 +147,7 @@ export function getRasterizerHostHtml(): string {
   function fontFor(size, bold, family) {
     var fam = (family === 'mono')
       ? '"Courier New", "Menlo", monospace'
-      : 'Arial, "Arial Black", sans-serif';
+      : '"Arial Black", "Arial", sans-serif';
     return (bold ? 'bold ' : '') + size + 'px ' + fam;
   }
 
@@ -209,10 +209,41 @@ export function getRasterizerHostHtml(): string {
     ctx.fillText(text, drawX, y);
   }
 
-  /* ---------------- Op sizing (pass 1) ---------------- */
+  /* ---------------- GLOBAL OIL STICKER DESIGN SYSTEM ---------------- */
+  /* Applies to ALL services - Audi, BMW, Toyota, ANY car */
 
-  var MARGIN = 8;               // horizontal margin in px
-  var LINE_GAP = 2;
+  var DESIGN = {
+    // Margins
+    margin: 8,                    // 8px outer margins
+    innerMargin: 12,              // 12px inner padding
+    
+    // Typography - Universal sizing
+    titleSize: 26,                // Shop name
+    headerSize: 22,               // Vehicle name (ANY car)
+    labelSize: 16,                // Labels (OIL:, MILEAGE:, etc)
+    valueSize: 18,                // Values (5W-30, 103,000, etc)
+    smallSize: 14,                // Units (KM, date)
+    checkboxSize: 14,             // Checkbox labels
+    
+    // Spacing
+    lineGap: 3,
+    sectionGap: 6,
+    dividerGap: 4,
+    
+    // Borders - Thick and bold
+    frameThickness: 4,
+    dividerThickness: 2,
+    
+    // Font families
+    fontFamily: '"Arial Black", "Arial", sans-serif',
+    monoFamily: '"Courier New", "Menlo", monospace',
+    
+    // Letter spacing for headers
+    titleSpacing: 2,
+    headerSpacing: 3,
+  };
+
+  /* ---------------- Op sizing (pass 1) ---------------- */
 
   // Load one image (data URI) as HTMLImageElement.
   function loadImage(uri) {
@@ -240,65 +271,41 @@ export function getRasterizerHostHtml(): string {
     return Promise.all(jobs);
   }
 
-  // Compute the y-height each op needs. Also stores the op's cached wrapped
-  // lines so pass 2 doesn't recompute.
+  // Compute the y-height each op needs.
   function measureOps(ctx, ops, width) {
-    var innerW = width - MARGIN * 2;
-    var total = 0;
+    var total = DESIGN.margin * 2; // top+bottom padding
     for (var i = 0; i < ops.length; i++) {
       var op = ops[i];
       var h = 0;
       switch (op.t) {
-        case 'text': {
-          var size = op.size || 22;
-          var font = fontFor(size, !!op.bold, op.family);
+        case 'shop_title': {
+          var size = DESIGN.titleSize;
+          var font = fontFor(size, true, 'sans');
           op.__size = size;
           op.__font = font;
-          // letterSpacing disables word-wrap (used for headings/titles)
-          if (op.letterSpacing && op.letterSpacing > 0) {
-            op.__lines = [op.text || ''];
-          } else {
-            op.__lines = wrapLines(ctx, op.text || '', font, innerW);
-          }
-          var extraUnderline = op.underline && op.underline !== 'none' ? 8 : 0;
-          h = op.__lines.length * (size + LINE_GAP) + extraUnderline;
-          break;
-        }
-        case 'wrap': {
-          var size2 = op.size || 20;
-          var font2 = fontFor(size2, !!op.bold, op.family);
-          var lines2 = wrapLines(ctx, op.text || '', font2, innerW);
-          op.__lines = lines2;
-          op.__size = size2;
-          op.__font = font2;
-          h = lines2.length * (size2 + LINE_GAP);
-          break;
-        }
-        case 'row': {
-          var size3 = op.size || 22;
-          var font3 = fontFor(size3, !!op.bold, op.family);
-          op.__font = font3;
-          op.__size = size3;
-          h = size3 + LINE_GAP;
-          break;
-        }
-        case 'band': {
-          var sizeB = op.size || 24;
-          var fontB = fontFor(sizeB, op.bold === false ? false : true, op.family);
-          op.__font = fontB;
-          op.__size = sizeB;
-          h = sizeB + 14;
+          op.__lines = [op.text || ''];
+          h = size + 14;
           break;
         }
         case 'header': {
-          var sizeH = op.size || 24;
+          var sizeH = DESIGN.headerSize;
           op.__size = sizeH;
-          op.__font = fontFor(sizeH, true, op.family);
+          op.__font = fontFor(sizeH, true, 'sans');
           h = sizeH + 14;
           break;
         }
+        case 'label_value': {
+          var labelSize = DESIGN.labelSize;
+          var valueSize = DESIGN.valueSize;
+          op.__labelSize = labelSize;
+          op.__valueSize = valueSize;
+          op.__labelFont = fontFor(labelSize, true, 'sans');
+          op.__valueFont = fontFor(valueSize, true, 'sans');
+          h = Math.max(labelSize, valueSize) + 6;
+          break;
+        }
         case 'divider': {
-          h = 8 + (op.thick || 0);
+          h = 8 + DESIGN.dividerThickness;
           break;
         }
         case 'space': {
@@ -306,30 +313,17 @@ export function getRasterizerHostHtml(): string {
           break;
         }
         case 'checkbox': {
-          var sizeC = op.size || 18;
+          var sizeC = DESIGN.checkboxSize;
           op.__size = sizeC;
-          op.__font = fontFor(sizeC, true, op.family);
+          op.__font = fontFor(sizeC, true, 'sans');
           h = Math.max(24, sizeC) + 6;
           break;
         }
-        case 'boxed_text': {
-          var sizeBx = op.size || 20;
-          op.__size = sizeBx;
-          op.__font = fontFor(sizeBx, true);
-          var padYBx = op.padY == null ? 6 : op.padY;
-          h = sizeBx + padYBx * 2 + 4; // + 2px border top/bottom
-          break;
-        }
-        case 'image': {
-          var img = op.__img;
-          if (!img) { h = 0; break; }
-          var maxW = Math.min(innerW, op.maxWidth || innerW);
-          var iw = img.width, ih = img.height;
-          var scale = maxW / iw;
-          if (scale > 1) scale = 1; // never upscale
-          op.__drawW = Math.round(iw * scale);
-          op.__drawH = Math.round(ih * scale);
-          h = op.__drawH + 4;
+        case 'footer': {
+          var sizeF = DESIGN.smallSize;
+          op.__size = sizeF;
+          op.__font = fontFor(sizeF, false, 'sans');
+          h = sizeF + 8;
           break;
         }
         default:
@@ -338,134 +332,93 @@ export function getRasterizerHostHtml(): string {
       op.__h = h;
       total += h;
     }
-    return total + MARGIN * 2; // top+bottom padding
+    return total;
   }
 
   /* ---------------- Draw ops (pass 2) ---------------- */
 
   function drawOps(ctx, ops, width) {
-    var innerW = width - MARGIN * 2;
-    var y = MARGIN;
+    var innerW = width - DESIGN.margin * 2;
+    var y = DESIGN.margin;
+    
     for (var i = 0; i < ops.length; i++) {
       var op = ops[i];
       switch (op.t) {
-        case 'text': {
+        case 'shop_title': {
           ctx.fillStyle = '#000';
           ctx.font = op.__font;
           ctx.textBaseline = 'top';
-          var align = op.align || 'center';
-          var ls = op.letterSpacing || 0;
-          for (var l = 0; l < op.__lines.length; l++) {
-            var lt = op.__lines[l];
-            var lw = ls > 0 ? measureSpacedText(ctx, lt, ls) : ctx.measureText(lt).width;
-            var lx = MARGIN;
-            if (align === 'center') lx = MARGIN + (innerW - lw) / 2;
-            else if (align === 'right') lx = MARGIN + (innerW - lw);
-            if (ls > 0) drawSpacedText(ctx, lt, lx, y, ls);
-            else ctx.fillText(lt, lx, y);
-            y += op.__size + LINE_GAP;
-          }
-          if (op.underline === 'solid') {
-            ctx.fillRect(MARGIN, y + 2, innerW, 2);
-            y += 8;
-          } else if (op.underline === 'dashed') {
-            for (var udx = MARGIN; udx < MARGIN + innerW; udx += 8) {
-              ctx.fillRect(udx, y + 3, 4, 2);
-            }
-            y += 8;
-          }
-          break;
-        }
-        case 'wrap': {
-          ctx.fillStyle = '#000';
-          ctx.font = op.__font;
-          var align2 = op.align || 'left';
-          for (var l2 = 0; l2 < op.__lines.length; l2++) {
-            drawTextLine(ctx, op.__lines[l2], MARGIN, y, op.__size, align2, innerW);
-            y += op.__size + LINE_GAP;
-          }
-          break;
-        }
-        case 'row': {
-          ctx.fillStyle = '#000';
-          ctx.font = op.__font;
-          ctx.textBaseline = 'top';
-          var right = String(op.right == null ? '' : op.right);
-          var left = String(op.left == null ? '' : op.left);
-          var rightW = ctx.measureText(right).width;
-          var leftMax = innerW - rightW - 8;
-          if (leftMax < 20) leftMax = 20;
-          while (ctx.measureText(left).width > leftMax && left.length > 3) {
-            left = left.substring(0, left.length - 2) + '…';
-          }
-          ctx.fillText(left, MARGIN, y);
-          ctx.fillText(right, MARGIN + innerW - rightW, y);
-          y += op.__size + LINE_GAP;
-          break;
-        }
-        case 'band': {
-          var bh = op.__h;
-          // Full-width black bar (bleeds to edges like the HTML negative side margins).
-          ctx.fillStyle = '#000';
-          ctx.fillRect(0, y, width, bh);
-          ctx.fillStyle = '#fff';
-          ctx.font = op.__font;
-          var text = String(op.text || '');
-          var sz = op.__size;
-          while (ctx.measureText(text).width > width - 8 && sz > 12) {
-            sz -= 1;
-            ctx.font = fontFor(sz, op.bold === false ? false : true, op.family);
-          }
-          var tw = ctx.measureText(text).width;
-          ctx.textBaseline = 'top';
-          ctx.fillText(text, (width - tw) / 2, y + (bh - sz) / 2);
-          y += bh;
+          ctx.textAlign = 'center';
+          var text = String(op.text || '').toUpperCase();
+          var ls = DESIGN.titleSpacing;
+          var totalW = measureSpacedText(ctx, text, ls);
+          var x = (width - totalW) / 2;
+          drawSpacedText(ctx, text, x, y, ls);
+          y += op.__size + 14;
           break;
         }
         case 'header': {
           ctx.fillStyle = '#000';
           ctx.font = op.__font;
           ctx.textBaseline = 'top';
-          var head = String(op.text || '');
+          ctx.textAlign = 'center';
+          var head = String(op.text || '').toUpperCase();
           var hsz = op.__size;
-          var ls2 = op.letterSpacing || 0;
-          var hw = ls2 > 0 ? measureSpacedText(ctx, head, ls2) : ctx.measureText(head).width;
-          while (hw > innerW - 4 && hsz > 12) {
-            hsz -= 1;
-            ctx.font = fontFor(hsz, true, op.family);
-            hw = ls2 > 0 ? measureSpacedText(ctx, head, ls2) : ctx.measureText(head).width;
-          }
+          var ls = DESIGN.headerSpacing;
+          var hw = measureSpacedText(ctx, head, ls);
           var hx = (width - hw) / 2;
-          if (ls2 > 0) drawSpacedText(ctx, head, hx, y, ls2);
-          else ctx.fillText(head, hx, y);
-          // Solid underline (matches shop-name border in HTML stickers)
-          ctx.fillRect(MARGIN, y + hsz + 4, innerW, 2);
+          drawSpacedText(ctx, head, hx, y, ls);
+          // Thick underline
+          ctx.fillRect(DESIGN.margin + 10, y + hsz + 6, innerW - 20, 3);
           y += hsz + 14;
           break;
         }
-        case 'divider': {
-          var thick = op.thick || 2;
-          if ((op.style || 'solid') === 'dashed') {
-            ctx.fillStyle = '#000';
-            for (var dx = MARGIN; dx < MARGIN + innerW; dx += 8) {
-              ctx.fillRect(dx, y + 3, 4, thick);
-            }
+        case 'label_value': {
+          ctx.textBaseline = 'top';
+          var label = String(op.label || '').toUpperCase();
+          var value = String(op.value || '');
+          var unit = String(op.unit || '');
+          
+          // Draw label
+          ctx.fillStyle = '#000';
+          ctx.font = op.__labelFont;
+          ctx.textAlign = 'left';
+          ctx.fillText(label, DESIGN.margin + 4, y);
+          
+          // Draw value
+          ctx.font = op.__valueFont;
+          ctx.textAlign = 'right';
+          var valueX = width - DESIGN.margin - 4;
+          if (unit) {
+            // Draw unit after value
+            var valueW = ctx.measureText(value).width;
+            ctx.fillText(value, valueX - ctx.measureText(unit).width - 6, y);
+            ctx.font = fontFor(DESIGN.smallSize, false, 'sans');
+            ctx.fillText(unit, valueX, y + 2);
           } else {
-            ctx.fillStyle = '#000';
-            ctx.fillRect(MARGIN, y + 3, innerW, thick);
+            ctx.fillText(value, valueX, y);
           }
-          y += 8 + (op.thick || 0);
-          break;
-        }
-        case 'space':
+          
           y += op.__h;
           break;
-        case 'checkbox': {
-          var boxSize = 22;
-          var boxY = y + 2;
-          var boxX = MARGIN + 4;
+        }
+        case 'divider': {
+          var thick = DESIGN.dividerThickness;
           ctx.fillStyle = '#000';
-          // Box outline (2px)
+          ctx.fillRect(DESIGN.margin + 4, y + 3, innerW - 8, thick);
+          y += 8 + thick;
+          break;
+        }
+        case 'space': {
+          y += op.__h;
+          break;
+        }
+        case 'checkbox': {
+          var boxSize = 20;
+          var boxY = y + 2;
+          var boxX = DESIGN.margin + 4;
+          ctx.fillStyle = '#000';
+          // Box outline
           ctx.fillRect(boxX, boxY, boxSize, 2);
           ctx.fillRect(boxX, boxY + boxSize - 2, boxSize, 2);
           ctx.fillRect(boxX, boxY, 2, boxSize);
@@ -481,49 +434,19 @@ export function getRasterizerHostHtml(): string {
           }
           ctx.font = op.__font;
           ctx.textBaseline = 'top';
+          ctx.textAlign = 'left';
           ctx.fillStyle = '#000';
-          ctx.fillText(String(op.label || ''), boxX + boxSize + 10, boxY + (boxSize - op.__size) / 2 + 2);
+          ctx.fillText(String(op.label || '').toUpperCase(), boxX + boxSize + 10, boxY + (boxSize - op.__size) / 2 + 2);
           y += op.__h;
           break;
         }
-        case 'boxed_text': {
-          var bt = String(op.text || '');
-          var btSize = op.__size;
-          var btPadX = op.padX == null ? 10 : op.padX;
-          var btPadY = op.padY == null ? 6 : op.padY;
-          var btLs = op.letterSpacing || 0;
+        case 'footer': {
+          ctx.fillStyle = '#000';
           ctx.font = op.__font;
-          ctx.fillStyle = '#000';
           ctx.textBaseline = 'top';
-          var btW = btLs > 0 ? measureSpacedText(ctx, bt, btLs) : ctx.measureText(bt).width;
-          var rectW = btW + btPadX * 2;
-          if (rectW > innerW) rectW = innerW;
-          var rectX = MARGIN + (innerW - rectW) / 2;
-          var rectH = btSize + btPadY * 2;
-          // 2px border rectangle
-          ctx.fillRect(rectX, y, rectW, 2);
-          ctx.fillRect(rectX, y + rectH - 2, rectW, 2);
-          ctx.fillRect(rectX, y, 2, rectH);
-          ctx.fillRect(rectX + rectW - 2, y, 2, rectH);
-          var btX = rectX + (rectW - btW) / 2;
-          var btY = y + btPadY;
-          if (btLs > 0) drawSpacedText(ctx, bt, btX, btY, btLs);
-          else ctx.fillText(bt, btX, btY);
+          ctx.textAlign = 'center';
+          ctx.fillText(String(op.text || ''), width / 2, y);
           y += op.__h;
-          break;
-        }
-        case 'image': {
-          if (op.__img) {
-            var iw = op.__drawW;
-            var ih = op.__drawH;
-            var ix = MARGIN;
-            if ((op.align || 'center') === 'center') ix = (width - iw) / 2;
-            else if (op.align === 'right') ix = width - MARGIN - iw;
-            try {
-              ctx.drawImage(op.__img, Math.floor(ix), Math.floor(y), iw, ih);
-            } catch (e) { /* ignore */ }
-            y += ih + 4;
-          }
           break;
         }
       }
@@ -533,7 +456,6 @@ export function getRasterizerHostHtml(): string {
   /* ---------------- THE FIX: Horizontal flip before dithering ---------------- */
 
   function flipCanvasHorizontally(sourceCanvas, width, height) {
-    // Create temporary canvas for the flipped result
     var flippedCanvas = document.createElement('canvas');
     flippedCanvas.width = width;
     flippedCanvas.height = height;
@@ -622,24 +544,21 @@ export function getRasterizerHostHtml(): string {
         // White background
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, width, canvasH);
+        
+        // Draw frame (4px thick border)
+        ctx.fillStyle = '#000';
+        var thick = DESIGN.frameThickness;
+        ctx.fillRect(thick/2, thick/2, width - thick, thick);              // top
+        ctx.fillRect(thick/2, canvasH - thick - thick/2, width - thick, thick); // bottom
+        ctx.fillRect(thick/2, thick/2, thick, canvasH - thick);           // left
+        ctx.fillRect(width - thick - thick/2, thick/2, thick, canvasH - thick); // right
+        
         // Pass 2 — draw
         try {
           drawOps(ctx, ops, width);
         } catch (e) {
           send({ id: id, ok: false, error: 'draw failed: ' + (e && e.message || e) });
           return;
-        }
-        // Outer frame (3 px solid border around the *content*, not the feed area)
-        if (doc.frame) {
-          ctx.fillStyle = '#000';
-          var thick = 3;
-          var fx = 2, fy = 2;
-          var fw = width - fx * 2;
-          var fh = totalH - fy * 2;
-          ctx.fillRect(fx, fy, fw, thick);              // top
-          ctx.fillRect(fx, fy + fh - thick, fw, thick); // bottom
-          ctx.fillRect(fx, fy, thick, fh);              // left
-          ctx.fillRect(fx + fw - thick, fy, thick, fh); // right
         }
 
         /* ================================================================
