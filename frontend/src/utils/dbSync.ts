@@ -130,9 +130,6 @@ function assertConfigured(settings: AppSettings) {
 /*              Local safety snapshot — written before every Pull            */
 /* -------------------------------------------------------------------------- */
 
-/** Writes the CURRENT local database to a local file, overwriting any
- *  previous snapshot. Called automatically right before a Pull merges
- *  anything in, so a bad merge can always be undone on-device. */
 async function saveLocalSafetySnapshot(): Promise<void> {
   const snap = await exportFullDatabase();
   await FileSystem.writeAsStringAsync(LOCAL_SNAPSHOT_FILE, JSON.stringify(snap), {
@@ -140,7 +137,6 @@ async function saveLocalSafetySnapshot(): Promise<void> {
   });
 }
 
-/** True if a local safety snapshot exists to restore. */
 export async function hasLocalSafetySnapshot(): Promise<boolean> {
   try {
     const info = await FileSystem.getInfoAsync(LOCAL_SNAPSHOT_FILE);
@@ -150,7 +146,6 @@ export async function hasLocalSafetySnapshot(): Promise<boolean> {
   }
 }
 
-/** Reads the local safety snapshot's timestamp, or null if none exists. */
 export async function getLocalSafetySnapshotTime(): Promise<string | null> {
   try {
     const info = await FileSystem.getInfoAsync(LOCAL_SNAPSHOT_FILE);
@@ -165,11 +160,6 @@ export async function getLocalSafetySnapshotTime(): Promise<string | null> {
   }
 }
 
-/**
- * Restores the local database to exactly what it was right before the last
- * Pull — an EXACT replace (not a merge), since this is your own trusted
- * on-device data, not an untrusted cloud copy. No internet required.
- */
 export async function restoreLocalSafetySnapshot(): Promise<void> {
   const info = await FileSystem.getInfoAsync(LOCAL_SNAPSHOT_FILE);
   if (!info.exists) {
@@ -183,16 +173,49 @@ export async function restoreLocalSafetySnapshot(): Promise<void> {
 }
 
 /* -------------------------------------------------------------------------- */
+/*         Versioned cloud backups — written on every Push, never pruned      */
+/* -------------------------------------------------------------------------- */
+
+/** Timestamped copy filename, safe for use as a path segment (no colons). */
+function backupFileName(iso: string): string {
+  return `backups/mass-power-db-${iso.replace(/[:.]/g, '-')}.json`;
+}
+
+/** Uploads a dated copy of the snapshot to vehicle profiles/backups/.
+ *  Failures here are logged but never block the main push — the primary
+ *  mass-power-db.json upload is what matters most and must still succeed
+ *  even if this secondary copy fails for some reason (e.g. rare rate limit). */
+async function uploadVersionedBackup(
+  settings: AppSettings,
+  json: string,
+  startedAt: string
+): Promise<void> {
+  try {
+    await uploadFileToGithub(
+      settings,
+      backupFileName(startedAt),
+      json,
+      `Backup snapshot ${startedAt}`
+    );
+  } catch (e: any) {
+    console.warn('Versioned backup upload failed (main push still succeeded):', e?.message);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
 /*                                Push / Pull                                 */
 /* -------------------------------------------------------------------------- */
 
-/** Upload-only: local → cloud. Overwrites mass-power-db.json. Never touches local data. */
+/** Upload-only: local → cloud. Overwrites mass-power-db.json AND writes a
+ *  timestamped copy to backups/ so history is never lost even if a bad
+ *  push happens later. Never touches local data. */
 export async function pushToCloud(settings: AppSettings): Promise<SyncResult> {
   assertConfigured(settings);
   const startedAt = new Date().toISOString();
   const snap = await exportFullDatabase();
   const json = JSON.stringify(snap, null, 2);
   await uploadFileToGithub(settings, SYNC_FILE_NAME, json, `Mass Power push ${startedAt}`);
+  await uploadVersionedBackup(settings, json, startedAt);
   await setLastSyncAt(startedAt);
   return {
     pulled: false,
@@ -217,7 +240,6 @@ export async function pullFromCloud(settings: AppSettings): Promise<SyncResult> 
   if (!cloud) {
     throw new Error('No cloud snapshot found yet. Push from a device first.');
   }
-  // Safety net — always snapshot local state before merging anything in.
   await saveLocalSafetySnapshot();
   const mergeResult = await mergeCloudIntoLocal(cloud);
   await setLastSyncAt(startedAt);
