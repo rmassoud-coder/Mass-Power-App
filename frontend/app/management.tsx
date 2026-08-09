@@ -17,6 +17,8 @@ import {
   pullFromCloud,
   getLastSyncAt,
   formatSyncedAt,
+  restoreLocalSafetySnapshot,
+  getLocalSafetySnapshotTime,
 } from '../src/utils/dbSync';
 
 type Tile = {
@@ -108,9 +110,11 @@ export default function ManagementScreen() {
   const router = useRouter();
   const [syncing, setSyncing] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const [snapshotAt, setSnapshotAt] = useState<string | null>(null);
 
   const refreshLast = useCallback(async () => {
     setLastSyncAt(await getLastSyncAt());
+    setSnapshotAt(await getLocalSafetySnapshotTime());
   }, []);
 
   useEffect(() => {
@@ -171,12 +175,35 @@ export default function ManagementScreen() {
   const confirmPull = () => {
     Alert.alert(
       'Pull from Cloud?',
-      'This merges the cloud copy into this device — new records are added, existing local records are kept. Nothing on this device will be deleted.',
+      'This merges the cloud copy into this device — new records are added, existing local records are kept. Nothing on this device will be deleted. A local backup is saved automatically first, so this can be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Pull & Merge',
           onPress: () => performSync('pull', false),
+        },
+      ]
+    );
+  };
+
+  const confirmRestoreSnapshot = () => {
+    Alert.alert(
+      'Undo Last Pull?',
+      'This restores this device\'s data to exactly how it was right before your last Pull — the cloud is not touched.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Restore',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await restoreLocalSafetySnapshot();
+              await refreshLast();
+              Alert.alert('Restored', 'Local data restored to its pre-Pull state.');
+            } catch (e: any) {
+              Alert.alert('Restore failed', e?.message || 'Unknown error');
+            }
+          },
         },
       ]
     );
@@ -238,6 +265,13 @@ export default function ManagementScreen() {
             copy into THIS device — additive only, nothing is ever deleted. Nothing
             syncs automatically — you control every sync.
           </Text>
+          {snapshotAt ? (
+            <TouchableOpacity onPress={confirmRestoreSnapshot} style={{ marginTop: 10 }} testID="undo-pull-button">
+              <Text style={styles.undoLink}>
+                Undo last Pull (restore local backup from {formatSyncedAt(snapshotAt)})
+              </Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         <View style={styles.grid}>
@@ -356,5 +390,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 10,
     lineHeight: 15,
+  },
+  undoLink: {
+    color: '#fca5a5',
+    fontSize: 11,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
 });
