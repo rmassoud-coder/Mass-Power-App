@@ -13,7 +13,6 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { loadSettings } from '../src/utils/settings';
 import {
-  runSync,
   pushToCloud,
   pullFromCloud,
   getLastSyncAt,
@@ -118,9 +117,11 @@ export default function ManagementScreen() {
     refreshLast();
   }, [refreshLast]);
 
+  // Sync only ever runs when the user taps Push or Pull below.
+  // There is no automatic/background/startup sync anywhere in the app.
   const performSync = useCallback(
     async (
-      op: 'auto' | 'push' | 'pull',
+      op: 'push' | 'pull',
       silent: boolean
     ) => {
       if (syncing) return;
@@ -140,27 +141,25 @@ export default function ManagementScreen() {
         if (op === 'push') {
           const res = await pushToCloud(settings);
           msg = `Local database uploaded to cloud (${res.localExportedAt.slice(0, 19)}Z).`;
-        } else if (op === 'pull') {
-          const res = await pullFromCloud(settings);
-          msg = `Cloud snapshot pulled to this device (${(res.cloudExportedAt || '').slice(0, 19)}Z).`;
         } else {
-          const res = await runSync(settings);
-          msg = res.pulled
-            ? 'Pulled newer data from cloud and pushed local changes.'
-            : 'Local changes pushed to cloud.';
+          const res = await pullFromCloud(settings);
+          const mr = res.mergeResult;
+          msg = mr
+            ? `Merged from cloud: +${mr.customers.inserted} customers, +${mr.vehicles.inserted} vehicles, +${mr.services.inserted} services, +${mr.inventory.inserted} inventory items. Nothing was deleted.`
+            : `Cloud snapshot merged into this device (${(res.cloudExportedAt || '').slice(0, 19)}Z).`;
         }
         await refreshLast();
         if (!silent) {
-          Alert.alert(op === 'push' ? 'Push complete' : op === 'pull' ? 'Pull complete' : 'Sync complete', msg);
+          Alert.alert(op === 'push' ? 'Push complete' : 'Pull complete', msg);
         }
       } catch (e: any) {
         if (!silent) {
           Alert.alert(
-            op === 'push' ? 'Push failed' : op === 'pull' ? 'Pull failed' : 'Sync failed',
+            op === 'push' ? 'Push failed' : 'Pull failed',
             e?.message || 'Unknown error'
           );
         } else {
-          console.warn('Auto-sync failed:', e?.message);
+          console.warn('Sync failed:', e?.message);
         }
       } finally {
         setSyncing(false);
@@ -169,18 +168,14 @@ export default function ManagementScreen() {
     [refreshLast, syncing]
   );
 
-  // Auto-sync on launch has been intentionally REMOVED.
-  // Cloud sync now runs ONLY when the user taps Push or Pull explicitly.
-
   const confirmPull = () => {
     Alert.alert(
       'Pull from Cloud?',
-      'This will REPLACE the local database with the online copy. Any local changes not yet pushed will be lost.',
+      'This merges the cloud copy into this device — new records are added, existing local records are kept. Nothing on this device will be deleted.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Pull & Overwrite',
-          style: 'destructive',
+          text: 'Pull & Merge',
           onPress: () => performSync('pull', false),
         },
       ]
@@ -198,7 +193,7 @@ export default function ManagementScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Cloud sync — two explicit buttons */}
+        {/* Cloud sync — two explicit buttons, nothing automatic */}
         <View style={styles.syncCard}>
           <Text style={styles.syncCardTitle}>Cloud Sync</Text>
           <Text style={styles.syncCardSub}>
@@ -239,8 +234,9 @@ export default function ManagementScreen() {
             </TouchableOpacity>
           </View>
           <Text style={styles.syncHint}>
-            Push uploads THIS device&apos;s data to the cloud. Pull replaces THIS device&apos;s data
-            with the cloud copy. Nothing syncs automatically — you control every sync.
+            Push uploads THIS device&apos;s data to the cloud. Pull merges the cloud
+            copy into THIS device — additive only, nothing is ever deleted. Nothing
+            syncs automatically — you control every sync.
           </Text>
         </View>
 
