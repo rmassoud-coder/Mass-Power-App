@@ -113,6 +113,7 @@ export function rasterizeThermalDoc(doc: ThermalDoc, opts: RasterizeOptions = {}
 export function rasterizeHtml(_html: string, _opts: RasterizeOptions = {}): Promise<MonoBitmap> {
   return Promise.reject(new Error('HTML rasterization is deprecated — use rasterizeThermalDoc'));
 }
+
 /* -------------------------------------------------------------------------- */
 /*                    Bootstrap HTML for the hidden WebView                   */
 /* -------------------------------------------------------------------------- */
@@ -253,6 +254,7 @@ export function getRasterizerHostHtml(): string {
           var font = fontFor(size, !!op.bold, op.family);
           op.__size = size;
           op.__font = font;
+          // letterSpacing disables word-wrap (used for headings/titles)
           if (op.letterSpacing && op.letterSpacing > 0) {
             op.__lines = [op.text || ''];
           } else {
@@ -315,7 +317,7 @@ export function getRasterizerHostHtml(): string {
           op.__size = sizeBx;
           op.__font = fontFor(sizeBx, true);
           var padYBx = op.padY == null ? 6 : op.padY;
-          h = sizeBx + padYBx * 2 + 4;
+          h = sizeBx + padYBx * 2 + 4; // + 2px border top/bottom
           break;
         }
         case 'image': {
@@ -324,7 +326,7 @@ export function getRasterizerHostHtml(): string {
           var maxW = Math.min(innerW, op.maxWidth || innerW);
           var iw = img.width, ih = img.height;
           var scale = maxW / iw;
-          if (scale > 1) scale = 1;
+          if (scale > 1) scale = 1; // never upscale
           op.__drawW = Math.round(iw * scale);
           op.__drawH = Math.round(ih * scale);
           h = op.__drawH + 4;
@@ -336,138 +338,218 @@ export function getRasterizerHostHtml(): string {
       op.__h = h;
       total += h;
     }
-    return total + MARGIN * 2;
+    return total + MARGIN * 2; // top+bottom padding
   }
-  /* ---------------- Draw ops (pass 2) ---------------- */
+
   /* ---------------- Draw ops (pass 2) ---------------- */
 
   function drawOps(ctx, ops, width) {
-    // Dynamic fallback defaults matching your blueprint image structure
-    var docTitle = "MASS POWER";
-    var docSubtitle = "AUTO SERVICES";
-    var vehicleModel = "AUDI A8";
-    var serviceType = "NEXT OIL CHANGE";
-    var oilType = "5W-30";
-    var mileageVal = "103,000 KM";
-    var serviceDate = "02/08/2026";
-    var checkboxLabel = "FILTER CHANGE";
-    var isChecked = true;
-
-    // Loop through incoming token elements to map template string overrides dynamically
+    var innerW = width - MARGIN * 2;
+    var y = MARGIN;
     for (var i = 0; i < ops.length; i++) {
       var op = ops[i];
-      if (!op) continue;
-      if (op.t === 'header' || op.t === 'text' || op.t === 'boxed_text') {
-        var txt = String(op.text || '').toUpperCase();
-        if (txt.indexOf('AUDI') !== -1 || txt.indexOf('BMW') !== -1 || txt.indexOf('MERCEDES') !== -1) {
-          vehicleModel = txt;
-        } else if (txt.indexOf('5W') !== -1 || txt.indexOf('10W') !== -1 || txt.indexOf('0W') !== -1) {
-          oilType = txt;
+      switch (op.t) {
+        case 'text': {
+          ctx.fillStyle = '#000';
+          ctx.font = op.__font;
+          ctx.textBaseline = 'top';
+          var align = op.align || 'center';
+          var ls = op.letterSpacing || 0;
+          for (var l = 0; l < op.__lines.length; l++) {
+            var lt = op.__lines[l];
+            var lw = ls > 0 ? measureSpacedText(ctx, lt, ls) : ctx.measureText(lt).width;
+            var lx = MARGIN;
+            if (align === 'center') lx = MARGIN + (innerW - lw) / 2;
+            else if (align === 'right') lx = MARGIN + (innerW - lw);
+            if (ls > 0) drawSpacedText(ctx, lt, lx, y, ls);
+            else ctx.fillText(lt, lx, y);
+            y += op.__size + LINE_GAP;
+          }
+          if (op.underline === 'solid') {
+            ctx.fillRect(MARGIN, y + 2, innerW, 2);
+            y += 8;
+          } else if (op.underline === 'dashed') {
+            for (var udx = MARGIN; udx < MARGIN + innerW; udx += 8) {
+              ctx.fillRect(udx, y + 3, 4, 2);
+            }
+            y += 8;
+          }
+          break;
+        }
+        case 'wrap': {
+          ctx.fillStyle = '#000';
+          ctx.font = op.__font;
+          var align2 = op.align || 'left';
+          for (var l2 = 0; l2 < op.__lines.length; l2++) {
+            drawTextLine(ctx, op.__lines[l2], MARGIN, y, op.__size, align2, innerW);
+            y += op.__size + LINE_GAP;
+          }
+          break;
+        }
+        case 'row': {
+          ctx.fillStyle = '#000';
+          ctx.font = op.__font;
+          ctx.textBaseline = 'top';
+          var right = String(op.right == null ? '' : op.right);
+          var left = String(op.left == null ? '' : op.left);
+          var rightW = ctx.measureText(right).width;
+          var leftMax = innerW - rightW - 8;
+          if (leftMax < 20) leftMax = 20;
+          while (ctx.measureText(left).width > leftMax && left.length > 3) {
+            left = left.substring(0, left.length - 2) + '…';
+          }
+          ctx.fillText(left, MARGIN, y);
+          ctx.fillText(right, MARGIN + innerW - rightW, y);
+          y += op.__size + LINE_GAP;
+          break;
+        }
+        case 'band': {
+          var bh = op.__h;
+          // Full-width black bar (bleeds to edges like the HTML negative side margins).
+          ctx.fillStyle = '#000';
+          ctx.fillRect(0, y, width, bh);
+          ctx.fillStyle = '#fff';
+          ctx.font = op.__font;
+          var text = String(op.text || '');
+          var sz = op.__size;
+          while (ctx.measureText(text).width > width - 8 && sz > 12) {
+            sz -= 1;
+            ctx.font = fontFor(sz, op.bold === false ? false : true, op.family);
+          }
+          var tw = ctx.measureText(text).width;
+          ctx.textBaseline = 'top';
+          ctx.fillText(text, (width - tw) / 2, y + (bh - sz) / 2);
+          y += bh;
+          break;
+        }
+        case 'header': {
+          ctx.fillStyle = '#000';
+          ctx.font = op.__font;
+          ctx.textBaseline = 'top';
+          var head = String(op.text || '');
+          var hsz = op.__size;
+          var ls2 = op.letterSpacing || 0;
+          var hw = ls2 > 0 ? measureSpacedText(ctx, head, ls2) : ctx.measureText(head).width;
+          while (hw > innerW - 4 && hsz > 12) {
+            hsz -= 1;
+            ctx.font = fontFor(hsz, true, op.family);
+            hw = ls2 > 0 ? measureSpacedText(ctx, head, ls2) : ctx.measureText(head).width;
+          }
+          var hx = (width - hw) / 2;
+          if (ls2 > 0) drawSpacedText(ctx, head, hx, y, ls2);
+          else ctx.fillText(head, hx, y);
+          // Solid underline (matches shop-name border in HTML stickers)
+          ctx.fillRect(MARGIN, y + hsz + 4, innerW, 2);
+          y += hsz + 14;
+          break;
+        }
+        case 'divider': {
+          var thick = op.thick || 2;
+          if ((op.style || 'solid') === 'dashed') {
+            ctx.fillStyle = '#000';
+            for (var dx = MARGIN; dx < MARGIN + innerW; dx += 8) {
+              ctx.fillRect(dx, y + 3, 4, thick);
+            }
+          } else {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(MARGIN, y + 3, innerW, thick);
+          }
+          y += 8 + (op.thick || 0);
+          break;
+        }
+        case 'space':
+          y += op.__h;
+          break;
+        case 'checkbox': {
+          var boxSize = 22;
+          var boxY = y + 2;
+          var boxX = MARGIN + 4;
+          ctx.fillStyle = '#000';
+          // Box outline (2px)
+          ctx.fillRect(boxX, boxY, boxSize, 2);
+          ctx.fillRect(boxX, boxY + boxSize - 2, boxSize, 2);
+          ctx.fillRect(boxX, boxY, 2, boxSize);
+          ctx.fillRect(boxX + boxSize - 2, boxY, 2, boxSize);
+          if (op.checked) {
+            ctx.beginPath();
+            ctx.moveTo(boxX + 4, boxY + boxSize / 2);
+            ctx.lineTo(boxX + boxSize / 2 - 1, boxY + boxSize - 5);
+            ctx.lineTo(boxX + boxSize - 3, boxY + 4);
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+          }
+          ctx.font = op.__font;
+          ctx.textBaseline = 'top';
+          ctx.fillStyle = '#000';
+          ctx.fillText(String(op.label || ''), boxX + boxSize + 10, boxY + (boxSize - op.__size) / 2 + 2);
+          y += op.__h;
+          break;
+        }
+        case 'boxed_text': {
+          var bt = String(op.text || '');
+          var btSize = op.__size;
+          var btPadX = op.padX == null ? 10 : op.padX;
+          var btPadY = op.padY == null ? 6 : op.padY;
+          var btLs = op.letterSpacing || 0;
+          ctx.font = op.__font;
+          ctx.fillStyle = '#000';
+          ctx.textBaseline = 'top';
+          var btW = btLs > 0 ? measureSpacedText(ctx, bt, btLs) : ctx.measureText(bt).width;
+          var rectW = btW + btPadX * 2;
+          if (rectW > innerW) rectW = innerW;
+          var rectX = MARGIN + (innerW - rectW) / 2;
+          var rectH = btSize + btPadY * 2;
+          // 2px border rectangle
+          ctx.fillRect(rectX, y, rectW, 2);
+          ctx.fillRect(rectX, y + rectH - 2, rectW, 2);
+          ctx.fillRect(rectX, y, 2, rectH);
+          ctx.fillRect(rectX + rectW - 2, y, 2, rectH);
+          var btX = rectX + (rectW - btW) / 2;
+          var btY = y + btPadY;
+          if (btLs > 0) drawSpacedText(ctx, bt, btX, btY, btLs);
+          else ctx.fillText(bt, btX, btY);
+          y += op.__h;
+          break;
+        }
+        case 'image': {
+          if (op.__img) {
+            var iw = op.__drawW;
+            var ih = op.__drawH;
+            var ix = MARGIN;
+            if ((op.align || 'center') === 'center') ix = (width - iw) / 2;
+            else if (op.align === 'right') ix = width - MARGIN - iw;
+            try {
+              ctx.drawImage(op.__img, Math.floor(ix), Math.floor(y), iw, ih);
+            } catch (e) { /* ignore */ }
+            y += ih + 4;
+          }
+          break;
         }
       }
-      if (op.t === 'row') {
-        var leftStr = String(op.left || '').toUpperCase();
-        var rightStr = String(op.right || '').toUpperCase();
-        if (leftStr.indexOf('OIL') !== -1) oilType = rightStr;
-        else if (leftStr.indexOf('MILE') !== -1) mileageVal = rightStr.indexOf('KM') !== -1 ? rightStr : rightStr + ' KM';
-        else if (leftStr.indexOf('DATE') !== -1) serviceDate = rightStr;
-      }
     }
-
-    // 1. Draw Thick Outer Structural Card Boundary Box Frame (4px thick)
-    ctx.fillStyle = '#000000';
-    var thick = 4;
-    ctx.fillRect(0, 0, width, ctx.canvas.height); 
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(thick, thick, width - (thick * 2), ctx.canvas.height - (thick * 2)); 
-
-    // 2. Draw Enterprise Circular Corporate Logo 
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(width / 2, 52, 32, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.fillStyle = '#000000';
-    ctx.font = 'bold 12px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText("MASS", width / 2, 44);
-    ctx.fillText("POWER", width / 2, 60);
-
-    // 3. Main Text Service Banner Title Typing
-    ctx.font = 'bold 16px Arial, sans-serif';
-    ctx.fillText(docTitle, width / 2, 104);
-    ctx.fillText(docSubtitle, width / 2, 124);
-
-    // 4. Solid Structural Separator Line Divider
-    ctx.fillRect(16, 144, width - 32, 3);
-
-    // 5. Heavy Vehicle Type Identity Headline Box
-    ctx.font = 'bold 28px Arial, sans-serif';
-    ctx.fillText(vehicleModel, width / 2, 176);
-
-    // 6. Dashed Asset Operational Wire Divider Layout
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = '#000000';
-    ctx.setLineDash([6, 4]); // Clean dashes matching the sticker blueprint
-    ctx.beginPath();
-    ctx.moveTo(16, 206);
-    ctx.lineTo(width - 16, 206);
-    ctx.stroke();
-    ctx.setLineDash([]); // Reset line dash definitions
-
-    // 7. Core Alert Operational Target Type Metric
-    ctx.font = 'bold 14px Arial, sans-serif';
-    ctx.fillText(serviceType, width / 2, 226);
-
-    // 8. Key-Value Form Parametric Rows
-    ctx.font = 'bold 15px Arial, sans-serif';
-    
-    // Oil row
-    ctx.textAlign = 'left';  ctx.fillText("OIL:", 24, 256);
-    ctx.textAlign = 'right'; ctx.fillText(oilType, width - 24, 256);
-
-    // Mileage row
-    ctx.textAlign = 'left';  ctx.fillText("MILEAGE:", 24, 286);
-    ctx.textAlign = 'right'; ctx.fillText(mileageVal, width - 24, 286);
-
-    // Date row
-    ctx.textAlign = 'left';  ctx.fillText("DATE:", 24, 316);
-    ctx.textAlign = 'right'; ctx.fillText(serviceDate, width - 24, 316);
-
-    // 9. Lower Secondary Dashed Form Content Divider Wire
-    ctx.setLineDash([6, 4]);
-    ctx.beginPath();
-    ctx.moveTo(16, 340);
-    ctx.lineTo(width - 16, 340);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // 10. Checkbox Indicator Frame Rendering Shapes
-    var boxX = 46;
-    var boxY = 356;
-    var boxSize = 18;
-    ctx.lineWidth = 2;
-    ctx.textAlign = 'center';
-    ctx.strokeRect(boxX, boxY, boxSize, boxSize);
-
-    if (isChecked) {
-      ctx.beginPath();
-      ctx.moveTo(boxX + 3, boxY + (boxSize / 2));
-      ctx.lineTo(boxX + (boxSize / 2) - 1, boxY + boxSize - 3);
-      ctx.lineTo(boxX + boxSize - 3, boxY + 4);
-      ctx.lineWidth = 3;
-      ctx.stroke();
-    }
-
-    ctx.fillStyle = '#000000';
-    ctx.font = 'bold 15px Arial, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText(checkboxLabel, boxX + boxSize + 12, boxY + 1);
   }
-    /* ---------------- 1-bit Floyd–Steinberg dither ---------------- */
+
+  /* ---------------- THE FIX: Horizontal flip before dithering ---------------- */
+
+  function flipCanvasHorizontally(sourceCanvas, width, height) {
+    // Create temporary canvas for the flipped result
+    var flippedCanvas = document.createElement('canvas');
+    flippedCanvas.width = width;
+    flippedCanvas.height = height;
+    var flippedCtx = flippedCanvas.getContext('2d');
+    
+    // Apply horizontal flip using translate + scale
+    flippedCtx.save();
+    flippedCtx.translate(width, 0);
+    flippedCtx.scale(-1, 1);
+    flippedCtx.drawImage(sourceCanvas, 0, 0);
+    flippedCtx.restore();
+    
+    return flippedCanvas;
+  }
+
+  /* ---------------- 1-bit Floyd–Steinberg dither ---------------- */
 
   function ditherAndPack(cv, darkness) {
     var w = cv.width, h = cv.height;
@@ -476,7 +558,6 @@ export function getRasterizerHostHtml(): string {
     var d = img.data;
     var gray = new Int16Array(w * h);
     var shift = ({1:-30, 2:-15, 3:0, 4:15, 5:30})[darkness] || 0;
-    
     for (var i = 0, p = 0; i < d.length; i += 4, p++) {
       var a = d[i + 3] / 255;
       var r = d[i]     * a + 255 * (1 - a);
@@ -486,37 +567,25 @@ export function getRasterizerHostHtml(): string {
       if (y < 0) y = 0; if (y > 255) y = 255;
       gray[p] = y;
     }
-    
-    for (var yy = 0; yy < h; yy++) {
-      for (var xx = 0; xx < w; xx++) {
-        var idx = yy * w + xx;
-        var old = gray[idx];
-        var nw = old < 128 ? 0 : 255;
-        var err = old - nw;
-        gray[idx] = nw;
-        
-        if (xx + 1 < w)               gray[idx + 1]         += (err * 7) >> 4;
-        if (yy + 1 < h) {
-          if (xx > 0)                 gray[idx + w - 1]     += (err * 3) >> 4;
-                                       gray[idx + w]         += (err * 5) >> 4;
-          if (xx + 1 < w)              gray[idx + w + 1]     += (err * 1) >> 4;
-        }
-      }
-    }
-
     var bytesPerRow = Math.ceil(w / 8);
     var rowsB64 = new Array(h);
     for (var yy = 0; yy < h; yy++) {
       var row = new Uint8Array(bytesPerRow);
-      
-      // RESTORED ORIGINAL LOOP: Keeps bitmask operations safe from data corruption
       for (var x = 0; x < w; x++) {
-        var finalPixel = gray[yy * w + x];
-        if (finalPixel === 0) {
-          row[x >> 3] |= (1 << (x & 7));
+        var idx = yy * w + x;
+        var old = gray[idx];
+        var nw = old < 128 ? 0 : 255;
+        var err = old - nw;
+        gray[idx] = nw;
+        if (x + 1 < w)                gray[idx + 1]         += (err * 7) >> 4;
+        if (yy + 1 < h) {
+          if (x > 0)                  gray[idx + w - 1]     += (err * 3) >> 4;
+                                       gray[idx + w]         += (err * 5) >> 4;
+          if (x + 1 < w)              gray[idx + w + 1]     += (err * 1) >> 4;
         }
+        // STRUCTURALLY SOUND BIT-SHIFTING LOOP - DO NOT MODIFY
+        if (nw === 0) row[x >> 3] |= (1 << (x & 7));
       }
-      
       var s = '';
       for (var k = 0; k < row.length; k++) s += String.fromCharCode(row[k]);
       rowsB64[yy] = btoa(s);
@@ -536,43 +605,56 @@ export function getRasterizerHostHtml(): string {
       var doc = payload.doc || { ops: [] };
       var ops = (doc.ops || []).slice();
 
-      // Create an offscreen buffer canvas to draw your template elements normally first
-      var tempCv = document.createElement('canvas');
-      var totalH = 396; // Hard locked target document blueprint frame height metrics
-      tempCv.width = width;
-      tempCv.height = totalH;
-      var tempCtx = tempCv.getContext('2d');
-      
-      // Draw your high-contrast corporate image onto the offscreen canvas
-      drawOps(tempCtx, ops, width);
-
-      // Now prepare the main canvas element for final print processing
       var cv = document.getElementById('cv');
-      var feed = Math.max(0, doc.feedRows || 0);
-      var canvasH = totalH + feed;
-      
       cv.width = width;
-      cv.height = canvasH;
+      cv.height = 100;
       var ctx = cv.getContext('2d');
-      
-      // Clear background to solid white
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, width, canvasH);
-      
-      // --- IMAGE BUFFER SCALE REFLECTION MIRROR FIX ---
-      // Flips the pre-rendered image asset horizontally over the x-axis cleanly
-      ctx.save();
-      ctx.translate(width, 0);
-      ctx.scale(-1, 1);
-      ctx.drawImage(tempCv, 0, 0);
-      ctx.restore();
-      
-      try {
-        var bmp = ditherAndPack(cv, payload.darkness || 3);
-        send({ id: id, ok: true, width: bmp.width, height: bmp.height, rowsBase64: bmp.rowsBase64 });
-      } catch (e2) {
-        send({ id: id, ok: false, error: 'dither failed: ' + (e2 && e2.message || e2) });
-      }
+
+      preloadImages(ops).then(function () {
+        // Pass 1 — measure
+        var totalH = measureOps(ctx, ops, width);
+        // Feed rows show up as blank whitespace so paper can be torn off
+        var feed = Math.max(0, doc.feedRows || 0);
+        var canvasH = totalH + feed;
+        cv.width = width;
+        cv.height = canvasH;
+        ctx = cv.getContext('2d');
+        // White background
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, canvasH);
+        // Pass 2 — draw
+        try {
+          drawOps(ctx, ops, width);
+        } catch (e) {
+          send({ id: id, ok: false, error: 'draw failed: ' + (e && e.message || e) });
+          return;
+        }
+        // Outer frame (3 px solid border around the *content*, not the feed area)
+        if (doc.frame) {
+          ctx.fillStyle = '#000';
+          var thick = 3;
+          var fx = 2, fy = 2;
+          var fw = width - fx * 2;
+          var fh = totalH - fy * 2;
+          ctx.fillRect(fx, fy, fw, thick);              // top
+          ctx.fillRect(fx, fy + fh - thick, fw, thick); // bottom
+          ctx.fillRect(fx, fy, thick, fh);              // left
+          ctx.fillRect(fx + fw - thick, fy, thick, fh); // right
+        }
+
+        /* ================================================================
+           THE FIX: Flip horizontally at the visual layer
+           ================================================================ */
+        var flippedCv = flipCanvasHorizontally(cv, width, canvasH);
+
+        // Dither + return using the flipped canvas
+        try {
+          var bmp = ditherAndPack(flippedCv, payload.darkness || 3);
+          send({ id: id, ok: true, width: bmp.width, height: bmp.height, rowsBase64: bmp.rowsBase64 });
+        } catch (e2) {
+          send({ id: id, ok: false, error: 'dither failed: ' + (e2 && e2.message || e2) });
+        }
+      });
     } catch (e) {
       send({ id: id, ok: false, error: 'rasterize failed: ' + (e && e.message || e) });
     }
