@@ -113,7 +113,6 @@ export function rasterizeThermalDoc(doc: ThermalDoc, opts: RasterizeOptions = {}
 export function rasterizeHtml(_html: string, _opts: RasterizeOptions = {}): Promise<MonoBitmap> {
   return Promise.reject(new Error('HTML rasterization is deprecated — use rasterizeThermalDoc'));
 }
-
 /* -------------------------------------------------------------------------- */
 /*                    Bootstrap HTML for the hidden WebView                   */
 /* -------------------------------------------------------------------------- */
@@ -254,7 +253,6 @@ export function getRasterizerHostHtml(): string {
           var font = fontFor(size, !!op.bold, op.family);
           op.__size = size;
           op.__font = font;
-          // letterSpacing disables word-wrap (used for headings/titles)
           if (op.letterSpacing && op.letterSpacing > 0) {
             op.__lines = [op.text || ''];
           } else {
@@ -317,7 +315,7 @@ export function getRasterizerHostHtml(): string {
           op.__size = sizeBx;
           op.__font = fontFor(sizeBx, true);
           var padYBx = op.padY == null ? 6 : op.padY;
-          h = sizeBx + padYBx * 2 + 4; // + 2px border top/bottom
+          h = sizeBx + padYBx * 2 + 4;
           break;
         }
         case 'image': {
@@ -326,7 +324,7 @@ export function getRasterizerHostHtml(): string {
           var maxW = Math.min(innerW, op.maxWidth || innerW);
           var iw = img.width, ih = img.height;
           var scale = maxW / iw;
-          if (scale > 1) scale = 1; // never upscale
+          if (scale > 1) scale = 1;
           op.__drawW = Math.round(iw * scale);
           op.__drawH = Math.round(ih * scale);
           h = op.__drawH + 4;
@@ -338,9 +336,8 @@ export function getRasterizerHostHtml(): string {
       op.__h = h;
       total += h;
     }
-    return total + MARGIN * 2; // top+bottom padding
+    return total + MARGIN * 2;
   }
-
   /* ---------------- Draw ops (pass 2) ---------------- */
 
   function drawOps(ctx, ops, width) {
@@ -405,7 +402,6 @@ export function getRasterizerHostHtml(): string {
         }
         case 'band': {
           var bh = op.__h;
-          // Full-width black bar (bleeds to edges like the HTML negative side margins).
           ctx.fillStyle = '#000';
           ctx.fillRect(0, y, width, bh);
           ctx.fillStyle = '#fff';
@@ -438,7 +434,6 @@ export function getRasterizerHostHtml(): string {
           var hx = (width - hw) / 2;
           if (ls2 > 0) drawSpacedText(ctx, head, hx, y, ls2);
           else ctx.fillText(head, hx, y);
-          // Solid underline (matches shop-name border in HTML stickers)
           ctx.fillRect(MARGIN, y + hsz + 4, innerW, 2);
           y += hsz + 14;
           break;
@@ -465,7 +460,6 @@ export function getRasterizerHostHtml(): string {
           var boxY = y + 2;
           var boxX = MARGIN + 4;
           ctx.fillStyle = '#000';
-          // Box outline (2px)
           ctx.fillRect(boxX, boxY, boxSize, 2);
           ctx.fillRect(boxX, boxY + boxSize - 2, boxSize, 2);
           ctx.fillRect(boxX, boxY, 2, boxSize);
@@ -500,7 +494,6 @@ export function getRasterizerHostHtml(): string {
           if (rectW > innerW) rectW = innerW;
           var rectX = MARGIN + (innerW - rectW) / 2;
           var rectH = btSize + btPadY * 2;
-          // 2px border rectangle
           ctx.fillRect(rectX, y, rectW, 2);
           ctx.fillRect(rectX, y + rectH - 2, rectW, 2);
           ctx.fillRect(rectX, y, 2, rectH);
@@ -553,17 +546,22 @@ export function getRasterizerHostHtml(): string {
     for (var yy = 0; yy < h; yy++) {
       var row = new Uint8Array(bytesPerRow);
       for (var x = 0; x < w; x++) {
-        var idx = yy * w + x;
+        // --- SPATIAL MIRROR FIX ---
+        var targetX = w - 1 - x;
+        var idx = yy * w + targetX;
+        
         var old = gray[idx];
         var nw = old < 128 ? 0 : 255;
         var err = old - nw;
         gray[idx] = nw;
-        if (x + 1 < w)                gray[idx + 1]         += (err * 7) >> 4;
+        
+        if (targetX - 1 >= 0)         gray[idx - 1]         += (err * 7) >> 4;
         if (yy + 1 < h) {
-          if (x > 0)                  gray[idx + w - 1]     += (err * 3) >> 4;
-                                       gray[idx + w]         += (err * 5) >> 4;
-          if (x + 1 < w)              gray[idx + w + 1]     += (err * 1) >> 4;
+          if (targetX + 1 < w)       gray[idx + w + 1]     += (err * 3) >> 4;
+                                     gray[idx + w]         += (err * 5) >> 4;
+          if (targetX - 1 >= 0)       gray[idx + w - 1]     += (err * 1) >> 4;
         }
+        
         if (nw === 0) row[x >> 3] |= (1 << (x & 7));
       }
       var s = '';
@@ -591,37 +589,31 @@ export function getRasterizerHostHtml(): string {
       var ctx = cv.getContext('2d');
 
       preloadImages(ops).then(function () {
-        // Pass 1 — measure
         var totalH = measureOps(ctx, ops, width);
-        // Feed rows show up as blank whitespace so paper can be torn off
         var feed = Math.max(0, doc.feedRows || 0);
         var canvasH = totalH + feed;
         cv.width = width;
         cv.height = canvasH;
         ctx = cv.getContext('2d');
-        // White background
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, width, canvasH);
-        // Pass 2 — draw
         try {
           drawOps(ctx, ops, width);
         } catch (e) {
           send({ id: id, ok: false, error: 'draw failed: ' + (e && e.message || e) });
           return;
         }
-        // Outer frame (3 px solid border around the *content*, not the feed area)
         if (doc.frame) {
           ctx.fillStyle = '#000';
           var thick = 3;
           var fx = 2, fy = 2;
           var fw = width - fx * 2;
           var fh = totalH - fy * 2;
-          ctx.fillRect(fx, fy, fw, thick);              // top
-          ctx.fillRect(fx, fy + fh - thick, fw, thick); // bottom
-          ctx.fillRect(fx, fy, thick, fh);              // left
-          ctx.fillRect(fx + fw - thick, fy, thick, fh); // right
+          ctx.fillRect(fx, fy, fw, thick);
+          ctx.fillRect(fx, fy + fh - thick, fw, thick);
+          ctx.fillRect(fx, fy, thick, fh);
+          ctx.fillRect(fx + fw - thick, fy, thick, fh);
         }
-        // Dither + return
         try {
           var bmp = ditherAndPack(cv, payload.darkness || 3);
           send({ id: id, ok: true, width: bmp.width, height: bmp.height, rowsBase64: bmp.rowsBase64 });
