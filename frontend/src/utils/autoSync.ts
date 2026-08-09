@@ -1,30 +1,24 @@
 /**
- * autoSync — fire-and-forget cloud sync driven by local mutations.
+ * autoSync — automatic push + automatic MERGE-pull.
  *
- * Design:
- *   • `runStartupPull()`   → called once during app init. Pulls the cloud
- *                            snapshot if it's newer than our last-sync marker.
- *                            Never pushes, so a stale local copy on the first
- *                            device coming online can't overwrite a fresher
- *                            cloud snapshot.
- *   • `triggerAutoPush()`  → called after every add / edit / delete. Debounces
- *                            (~1200 ms) so a burst of rapid mutations coalesces
- *                            into a single upload. Push-only — pull happens on
- *                            startup — so a mutation we just made can never be
- *                            clobbered by an incoming pull.
- *   • Status is exposed as a tiny FSM ('idle' | 'syncing' | 'ok' | 'error')
- *     via `subscribeAutoSyncStatus()` so the home screen can render a badge.
+ * *** History note (2026-08-08) ***
+ * An earlier version silently pulled on every app open using a destructive
+ * REPLACE — that overwrote real local data with a stale cloud snapshot and
+ * caused real data loss. It was disabled entirely afterward.
  *
- * If GitHub isn't configured (no token / owner / repo) every call is a silent
- * no-op — the app continues to work purely offline.
+ * Auto-pull is reintroduced here, but it is now safe by construction:
+ * dbSync.ts's pullFromCloud() uses mergeCloudIntoLocal(), which only ever
+ * ADDS or UPDATES records (newer updated_at wins) and NEVER deletes local
+ * rows or wipes a table missing from the cloud payload. A local safety
+ * snapshot is also saved automatically before every merge (see dbSync.ts),
+ * so even an unwanted merge can be undone on-device.
  *
- * *** runStartupPull() TEMPORARILY DISABLED (2026-08-08) ***
- * A silent startup pull overwrote real local data on a device with a stale
- * cloud snapshot, with no confirmation step. Disabled until a safer version
- * (confirm before overwrite, or a real merge instead of last-write-wins) is
- * built. triggerAutoPush() (push-only) is untouched and still runs normally.
+ * Limitation to know: vehicles/services/suppliers have no updated_at
+ * column, so an EDIT to an already-synced record on one device will not
+ * auto-propagate to the other — only brand-new records sync automatically.
+ * Use the manual Push/Pull buttons in Backend Management for edits.
  */
-import { pushToCloud, pullFromCloud, getLastSyncAt, applyCloudIfNewer } from './dbSync';
+import { pushToCloud, pullFromCloud } from './dbSync';
 import { loadSettings, isGithubConfigured } from './settings';
 
 export type AutoSyncStatus = 'idle' | 'syncing' | 'ok' | 'error';
@@ -55,10 +49,8 @@ function _setState(patch: Partial<AutoSyncState>) {
   _emit();
 }
 
-/** Subscribe to sync status changes. Returns unsubscribe. */
 export function subscribeAutoSyncStatus(cb: (s: AutoSyncState) => void): () => void {
   _listeners.add(cb);
-  // Fire once immediately so subscribers pick up current state
   cb({ ..._state });
   return () => { _listeners.delete(cb); };
 }
@@ -68,48 +60,43 @@ export function getAutoSyncState(): AutoSyncState {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                              Startup pull                                  */
+/*                    Automatic MERGE-pull (safe, additive-only)              */
 /* -------------------------------------------------------------------------- */
 
-let _startupPullDone = false;
+const AUTO_PULL_MIN_INTERVAL_MS = 2 * 60 * 1000; // don't hammer the API
+let _lastAutoPullAt = 0;
+let _autoPullInFlight: Promise<void> | null = null;
 
 /**
- * TEMPORARILY DISABLED — see file header. Returns immediately and does
- * nothing. Re-enable only after adding a confirmation step / smarter merge
- * logic than plain last-write-wins-by-timestamp.
+ * Safe to call as often as you like — throttled internally, and merges
+ * only ever add/update, never delete. Call on app launch and on every
+ * foreground transition for near-real-time visibility across devices.
  */
-export async function runStartupPull(): Promise<void> {
-  return;
+export async function runAutoPull(): Promise<void> {
+  if (_autoPullInFlight) return _autoPullInFlight;
+  const now = Date.now();
+  if (now - _lastAutoPullAt < AUTO_PULL_MIN_INTERVAL_MS) return;
+  _lastAutoPullAt = now;
 
-  // --- Original implementation, kept for reference, currently unreachable ---
-  // eslint-disable-next-line no-unreachable
-  if (_startupPullDone) return;
-  _startupPullDone = true;
-
-  try {
-    const settings = await loadSettings();
-    if (!isGithubConfigured(settings)) return;
-
-    _setState({ status: 'syncing', lastError: null });
-    const lastLocal = await getLastSyncAt();
-    if (!lastLocal) {
-      try {
-        await pullFromCloud(settings);
-      } catch {
-        // "No cloud snapshot found yet" is fine — nothing to seed.
+  _autoPullInFlight = (async () => {
+    try {
+      const settings = await loadSettings();
+      if (!isGithubConfigured(settings)) return;
+      _setState({ status: 'syncing', lastError: null });
+      const res = await pullFromCloud(settings);
+      _setState({ status: 'ok', lastSyncedAt: res.syncedAt, lastError: null });
+    } catch (e: any) {
+      // "No cloud snapshot found yet" just means nothing to pull — not an error.
+      if (String(e?.message || '').includes('No cloud snapshot')) {
+        _setState({ status: 'idle' });
+      } else {
+        _setState({ status: 'error', lastError: e?.message || 'Auto-pull failed' });
       }
-      _setState({ status: 'ok', lastSyncedAt: new Date().toISOString() });
-      return;
+    } finally {
+      _autoPullInFlight = null;
     }
-
-    const applied = await applyCloudIfNewer(settings, lastLocal);
-    _setState({
-      status: applied ? 'ok' : 'idle',
-      lastSyncedAt: applied ? new Date().toISOString() : _state.lastSyncedAt,
-    });
-  } catch (e: any) {
-    _setState({ status: 'error', lastError: e?.message || 'Startup pull failed' });
-  }
+  })();
+  return _autoPullInFlight;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -122,15 +109,10 @@ let _pendingWhileRunning = false;
 
 const PUSH_DEBOUNCE_MS = 1200;
 
-/**
- * Schedule a push to cloud after a short quiet period. Multiple calls within
- * the debounce window collapse into a single upload. If a push is already
- * running, one more is queued and fires as soon as the current one finishes
- * so the very-latest state always makes it up.
- */
+/** Call this after every add/edit/delete so changes reach the cloud
+ *  (and from there, the other device's next auto-pull) automatically. */
 export function triggerAutoPush(): void {
   if (_pushInFlight) {
-    // Another push is running — mark that we need one more after it settles.
     _pendingWhileRunning = true;
     return;
   }
@@ -141,8 +123,6 @@ export function triggerAutoPush(): void {
       _pushInFlight = null;
       if (_pendingWhileRunning) {
         _pendingWhileRunning = false;
-        // Chain another debounced push for any mutations that arrived while
-        // the previous push was in-flight.
         triggerAutoPush();
       }
     });
@@ -152,23 +132,15 @@ export function triggerAutoPush(): void {
 async function _runPushNow(): Promise<void> {
   try {
     const settings = await loadSettings();
-    if (!isGithubConfigured(settings)) return; // silent no-op
+    if (!isGithubConfigured(settings)) return;
     _setState({ status: 'syncing', lastError: null });
     const res = await pushToCloud(settings);
-    _setState({
-      status: 'ok',
-      lastSyncedAt: res.syncedAt,
-      lastError: null,
-    });
+    _setState({ status: 'ok', lastSyncedAt: res.syncedAt, lastError: null });
   } catch (e: any) {
-    _setState({
-      status: 'error',
-      lastError: e?.message || 'Auto-sync failed',
-    });
+    _setState({ status: 'error', lastError: e?.message || 'Auto-push failed' });
   }
 }
 
-/** For tests / imperative flows — flush any pending debounced push right now. */
 export async function flushAutoPush(): Promise<void> {
   if (_pushTimer) {
     clearTimeout(_pushTimer);
