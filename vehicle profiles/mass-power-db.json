@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "exported_at": "2026-08-09T11:58:57.365Z",
+  "exported_at": "2026-08-09T12:03:51.036Z",
   "customers": [
     {
       "id": "6a1dcd13d860efc6bc5dc11e",
@@ -211,6 +211,18 @@
       "name": "Berro",
       "contact_info": "+961 3 248 501",
       "created_at": "2026-08-09T11:58:56.103Z"
+    },
+    {
+      "id": "mslr3058xo2icvul",
+      "name": "Amiouni Liqui Mollu",
+      "contact_info": "+961 81 693 500",
+      "created_at": "2026-08-09T11:59:55.004Z"
+    },
+    {
+      "id": "mslr81alc5fub3k0",
+      "name": "Zeineddine Addinol",
+      "contact_info": "03 812 866",
+      "created_at": "2026-08-09T12:03:49.773Z"
     }
   ]
 }
