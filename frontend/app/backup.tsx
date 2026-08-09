@@ -15,25 +15,33 @@ import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
-import { exportAllData, importData } from '../src/db/database';
+import {
+  exportFullDatabase,
+  mergeCloudIntoLocal,
+  replaceFullDatabase,
+  type FullDbSnapshot,
+} from '../src/db/database';
 import ConfirmDialog from '../src/components/ConfirmDialog';
 
 export default function BackupScreen() {
   const router = useRouter();
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [pendingImport, setPendingImport] = useState<string | null>(null);
+  const [pendingImport, setPendingImport] = useState<FullDbSnapshot | null>(null);
   const [importMode, setImportMode] = useState<'merge' | 'replace' | null>(null);
 
   const handleExport = async () => {
     setExporting(true);
     try {
-      const jsonData = await exportAllData();
+      // Full snapshot — includes customers, vehicles, services, inventory,
+      // suppliers, and service_items (fixes an earlier bug where manual
+      // backups silently dropped inventory/suppliers).
+      const snap = await exportFullDatabase();
+      const jsonData = JSON.stringify(snap, null, 2);
       const timestamp = new Date().toISOString().split('T')[0];
       const fileName = `mass-power-backup-${timestamp}.json`;
 
       if (Platform.OS === 'web') {
-        // On web, trigger a download
         const blob = new Blob([jsonData], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -45,7 +53,6 @@ export default function BackupScreen() {
         URL.revokeObjectURL(url);
         Alert.alert('Success', `Backup downloaded as ${fileName}`);
       } else {
-        // On native, write to file and share
         const fileUri = `${FileSystem.documentDirectory}${fileName}`;
         await FileSystem.writeAsStringAsync(fileUri, jsonData, {
           encoding: FileSystem.EncodingType.UTF8,
@@ -84,7 +91,6 @@ export default function BackupScreen() {
       let jsonContent: string;
 
       if (Platform.OS === 'web') {
-        // On web, the asset.file is a File object
         const file = (asset as any).file;
         if (file) {
           jsonContent = await file.text();
@@ -97,13 +103,12 @@ export default function BackupScreen() {
         });
       }
 
-      // Validate JSON
       const parsed = JSON.parse(jsonContent);
       if (!parsed.customers || !parsed.vehicles || !parsed.services) {
         throw new Error('Invalid backup file format');
       }
 
-      setPendingImport(jsonContent);
+      setPendingImport(parsed as FullDbSnapshot);
     } catch (error: any) {
       Alert.alert('Import Failed', error?.message || 'Could not read file');
     }
@@ -113,13 +118,25 @@ export default function BackupScreen() {
     if (!pendingImport || !importMode) return;
     setImporting(true);
     try {
-      const result = await importData(pendingImport, importMode === 'merge');
-      setPendingImport(null);
-      setImportMode(null);
-      Alert.alert(
-        'Import Complete',
-        `Added: ${result.customers} customers, ${result.vehicles} vehicles, ${result.services} services`
-      );
+      if (importMode === 'merge') {
+        // Additive — adds/updates records, never deletes anything, never
+        // touches a table missing from the backup file.
+        const result = await mergeCloudIntoLocal(pendingImport);
+        setPendingImport(null);
+        setImportMode(null);
+        Alert.alert(
+          'Import Complete',
+          `Added: ${result.customers.inserted} customers, ${result.vehicles.inserted} vehicles, ` +
+          `${result.services.inserted} services, ${result.inventory.inserted} inventory items.`
+        );
+      } else {
+        // Exact replace — wipes every table and reinserts exactly what's
+        // in the backup file. Only offered as an explicit, confirmed choice.
+        await replaceFullDatabase(pendingImport);
+        setPendingImport(null);
+        setImportMode(null);
+        Alert.alert('Import Complete', 'Local database fully replaced with the backup file.');
+      }
     } catch (error: any) {
       Alert.alert('Import Failed', error?.message || 'Could not import data');
     } finally {
@@ -145,7 +162,7 @@ export default function BackupScreen() {
           </View>
           <Text style={styles.sectionTitle}>Export Data</Text>
           <Text style={styles.sectionDescription}>
-            Save all your customers, vehicles, and service records to a backup file. You can use this file to restore your data or transfer it to another device.
+            Save all your customers, vehicles, services, and inventory to a backup file. You can use this file to restore your data or transfer it to another device.
           </Text>
           <TouchableOpacity
             style={[styles.actionButton, styles.exportButton, exporting && styles.buttonDisabled]}
@@ -210,8 +227,8 @@ export default function BackupScreen() {
         title={importMode === 'replace' ? 'Replace All Data?' : 'Merge Backup?'}
         message={
           importMode === 'replace'
-            ? 'This will DELETE all current data and replace it with the backup. This cannot be undone.'
-            : 'This will add records from the backup file. Existing records with the same ID will not be changed.'
+            ? 'This will DELETE all current data (including inventory) and replace it with the backup. This cannot be undone.'
+            : 'This will add records from the backup file. Existing records will not be changed or deleted.'
         }
         confirmText={importing ? 'Importing...' : 'Continue'}
         cancelText="Cancel"
