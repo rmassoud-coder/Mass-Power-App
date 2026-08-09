@@ -1,25 +1,26 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   exportFullDatabase,
-  replaceFullDatabase,
+  mergeCloudIntoLocal,
   type FullDbSnapshot,
+  type MergeResult,
 } from '../db/database';
 import { uploadFileToGithub } from './githubUploader';
 import type { AppSettings } from './settings';
 
 const GITHUB_API = 'https://api.github.com';
 const SYNC_FILE_NAME = 'mass-power-db.json';
-const KEY_LAST_SYNC = 'mp_last_sync_at'; // ISO timestamp of last successful sync
+const KEY_LAST_SYNC = 'mp_last_sync_at';
 
 export interface SyncResult {
-  pulled: boolean;   // true when cloud snapshot replaced local
-  pushed: boolean;   // true when local was uploaded to cloud
+  pulled: boolean;
+  pushed: boolean;
   cloudExportedAt: string | null;
   localExportedAt: string;
-  syncedAt: string;  // ISO timestamp of THIS sync operation
+  syncedAt: string;
+  mergeResult?: MergeResult;
 }
 
-/** Read the ISO timestamp of the last successful sync, or null if none. */
 export async function getLastSyncAt(): Promise<string | null> {
   try {
     return await AsyncStorage.getItem(KEY_LAST_SYNC);
@@ -44,7 +45,6 @@ function authHeaders(token: string) {
   };
 }
 
-/** URL-encode a path segment preserving slashes. */
 function encodePath(path: string): string {
   return path
     .split('/')
@@ -60,10 +60,6 @@ function buildContentsUrl(settings: AppSettings): string {
   return `${GITHUB_API}/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
 }
 
-/**
- * Fetch the JSON snapshot from GitHub. Returns null if the file doesn't exist
- * yet (first-time sync).
- */
 async function fetchCloudSnapshot(settings: AppSettings): Promise<FullDbSnapshot | null> {
   const url = buildContentsUrl(settings);
   const res = await fetch(url, {
@@ -75,17 +71,14 @@ async function fetchCloudSnapshot(settings: AppSettings): Promise<FullDbSnapshot
     const body = await res.text().catch(() => '');
     throw new Error(`Sync fetch failed (${res.status}): ${body.slice(0, 200)}`);
   }
-  // With Accept: application/vnd.github.raw+json we get the raw file body.
   const text = await res.text();
   try {
     return JSON.parse(text) as FullDbSnapshot;
   } catch (e: any) {
-    // Fallback: some GitHub setups still return the JSON envelope with base64 content
     try {
       const wrapper = JSON.parse(text);
       if (wrapper?.content && typeof wrapper.content === 'string') {
         const clean = wrapper.content.replace(/\s+/g, '');
-        // Decode base64 → UTF-8 string
         const bin = (globalThis as any).atob
           ? (globalThis as any).atob(clean)
           : Buffer.from(clean, 'base64').toString('binary');
@@ -115,121 +108,10 @@ export function formatSyncedAt(iso: string | null): string {
     if (min < 60) return `${min} min ago`;
     const hr = Math.round(min / 60);
     if (hr < 24) return `${hr} h ago`;
-    return d.toLocaleString(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    });
+    return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   } catch {
     return iso;
   }
-}
-
-/* -------------------------------------------------------------------------- */
-/*                        Helpers used by autoSync                            */
-/* -------------------------------------------------------------------------- */
-
-/** Fetch cloud snapshot without applying it. Returns null if the file
- *  doesn't exist yet. Bubbles up 401/403 so autoSync can surface bad tokens. */
-export async function fetchCloudSnapshotForCheck(
-  settings: AppSettings
-): Promise<FullDbSnapshot | null> {
-  assertConfigured(settings);
-  return fetchCloudSnapshot(settings);
-}
-
-/**
- * Read cloud snapshot; if its `exported_at` is strictly newer than the caller's
- * `lastLocalIso` marker, replace the local DB with it and return true. Returns
- * false otherwise (cloud missing / same-or-older). Never pushes.
- */
-export async function applyCloudIfNewer(
-  settings: AppSettings,
-  lastLocalIso: string,
-  _fetch?: (s: AppSettings) => Promise<FullDbSnapshot | null>
-): Promise<boolean> {
-  const cloud = await (_fetch || fetchCloudSnapshotForCheck)(settings);
-  if (!cloud) return false;
-  const cloudTs = cloud.exported_at ? Date.parse(cloud.exported_at) : 0;
-  const localTs = lastLocalIso ? Date.parse(lastLocalIso) : 0;
-  if (cloudTs > 0 && cloudTs > localTs) {
-    await replaceFullDatabase(cloud);
-    await setLastSyncAt(new Date().toISOString());
-    return true;
-  }
-  return false;
-}
-
-/* -------------------------------------------------------------------------- */
-/*                                  runSync                                   */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Runs a full sync cycle:
- *   1. PULL: fetch cloud snapshot. If it exists AND its `exported_at` is newer
- *      than the local last-sync marker, replace local DB with cloud (cloud wins).
- *   2. PUSH: export local DB (which may have been replaced by cloud in step 1
- *      or may contain uncommitted local edits) and upload to GitHub.
- *   3. Update `lastSyncAt` marker.
- *
- * Design note: The user asked for "cloud wins". By pushing AFTER a pull, the
- * cloud is always kept up-to-date with the most recently-synced device. When
- * two devices both hold unsynced edits, whichever syncs LAST becomes the truth
- * — which matches the "cloud wins" semantics they chose.
- */
-export async function runSync(settings: AppSettings): Promise<SyncResult> {
-  if (!settings.githubToken) {
-    throw new Error('GitHub token is missing. Add it in Settings → Cloud Backup.');
-  }
-  if (!settings.githubOwner || !settings.githubRepo) {
-    throw new Error('GitHub owner/repo not configured. Update Settings.');
-  }
-
-  const startedAt = new Date().toISOString();
-  const lastLocal = (await getLastSyncAt()) || '';
-  let pulled = false;
-  let cloudExportedAt: string | null = null;
-
-  // 1) Pull
-  try {
-    const cloud = await fetchCloudSnapshot(settings);
-    if (cloud) {
-      cloudExportedAt = cloud.exported_at || null;
-      // Only replace local if cloud is newer than our last known sync
-      const cloudTs = cloudExportedAt ? Date.parse(cloudExportedAt) : 0;
-      const localTs = lastLocal ? Date.parse(lastLocal) : 0;
-      if (cloudTs > 0 && cloudTs > localTs) {
-        await replaceFullDatabase(cloud);
-        pulled = true;
-      }
-    }
-  } catch (e: any) {
-    // If pull fails but token is valid, we still try to push so at least the
-    // first device seeds the cloud file.
-    if (String(e?.message || '').startsWith('Authorisation') || String(e?.message || '').includes('401')) {
-      throw e; // fatal — bad token
-    }
-  }
-
-  // 2) Push local snapshot up (this becomes the new cloud master)
-  const snap = await exportFullDatabase();
-  const json = JSON.stringify(snap, null, 2);
-  await uploadFileToGithub(
-    settings,
-    SYNC_FILE_NAME,
-    json,
-    `Mass Power sync ${startedAt}`
-  );
-
-  // 3) Record
-  await setLastSyncAt(startedAt);
-
-  return {
-    pulled,
-    pushed: true,
-    cloudExportedAt,
-    localExportedAt: snap.exported_at,
-    syncedAt: startedAt,
-  };
 }
 
 function assertConfigured(settings: AppSettings) {
@@ -241,18 +123,13 @@ function assertConfigured(settings: AppSettings) {
   }
 }
 
-/** Upload-only: local → cloud. Overwrites `mass-power-db.json` in the configured repo. */
+/** Upload-only: local → cloud. Overwrites mass-power-db.json. Never touches local data. */
 export async function pushToCloud(settings: AppSettings): Promise<SyncResult> {
   assertConfigured(settings);
   const startedAt = new Date().toISOString();
   const snap = await exportFullDatabase();
   const json = JSON.stringify(snap, null, 2);
-  await uploadFileToGithub(
-    settings,
-    SYNC_FILE_NAME,
-    json,
-    `Mass Power push ${startedAt}`
-  );
+  await uploadFileToGithub(settings, SYNC_FILE_NAME, json, `Mass Power push ${startedAt}`);
   await setLastSyncAt(startedAt);
   return {
     pulled: false,
@@ -264,9 +141,9 @@ export async function pushToCloud(settings: AppSettings): Promise<SyncResult> {
 }
 
 /**
- * Download-only: cloud → local. **Unconditionally overwrites the local DB** with
- * the cloud snapshot. Throws if no cloud file exists yet. Caller should confirm
- * with the user before invoking — this is destructive to any unpushed local edits.
+ * Download + MERGE: cloud → local. Non-destructive — adds/updates records,
+ * never deletes local rows, never wipes a table missing from the cloud
+ * snapshot. Safe to call even if the cloud copy is stale or incomplete.
  */
 export async function pullFromCloud(settings: AppSettings): Promise<SyncResult> {
   assertConfigured(settings);
@@ -275,7 +152,7 @@ export async function pullFromCloud(settings: AppSettings): Promise<SyncResult> 
   if (!cloud) {
     throw new Error('No cloud snapshot found yet. Push from a device first.');
   }
-  await replaceFullDatabase(cloud);
+  const mergeResult = await mergeCloudIntoLocal(cloud);
   await setLastSyncAt(startedAt);
   return {
     pulled: true,
@@ -283,6 +160,7 @@ export async function pullFromCloud(settings: AppSettings): Promise<SyncResult> 
     cloudExportedAt: cloud.exported_at || null,
     localExportedAt: cloud.exported_at || startedAt,
     syncedAt: startedAt,
+    mergeResult,
   };
 }
 
