@@ -339,6 +339,7 @@ export function getRasterizerHostHtml(): string {
     return total + MARGIN * 2;
   }
   /* ---------------- Draw ops (pass 2) ---------------- */
+  /* ---------------- Draw ops (pass 2) ---------------- */
 
   function drawOps(ctx, ops, width) {
     var innerW = width - MARGIN * 2;
@@ -480,7 +481,7 @@ export function getRasterizerHostHtml(): string {
           y += op.__h;
           break;
         }
-        case 'boxed_text': {
+              case 'boxed_text': {
           var bt = String(op.text || '');
           var btSize = op.__size;
           var btPadX = op.padX == null ? 10 : op.padX;
@@ -546,23 +547,21 @@ export function getRasterizerHostHtml(): string {
     for (var yy = 0; yy < h; yy++) {
       var row = new Uint8Array(bytesPerRow);
       for (var x = 0; x < w; x++) {
-        // --- SPATIAL MIRROR FIX ---
-        var targetX = w - 1 - x;
-        var idx = yy * w + targetX;
-        
+        var idx = yy * w + x;
         var old = gray[idx];
         var nw = old < 128 ? 0 : 255;
         var err = old - nw;
         gray[idx] = nw;
         
-        if (targetX - 1 >= 0)         gray[idx - 1]         += (err * 7) >> 4;
+        if (x + 1 < w)                gray[idx + 1]         += (err * 7) >> 4;
         if (yy + 1 < h) {
-          if (targetX + 1 < w)       gray[idx + w + 1]     += (err * 3) >> 4;
-                                     gray[idx + w]         += (err * 5) >> 4;
-          if (targetX - 1 >= 0)       gray[idx + w - 1]     += (err * 1) >> 4;
+          if (x > 0)                  gray[idx + w - 1]     += (err * 3) >> 4;
+                                       gray[idx + w]         += (err * 5) >> 4;
+          if (x + 1 < w)              gray[idx + w + 1]     += (err * 1) >> 4;
         }
         
-        if (nw === 0) row[x >> 3] |= (1 << (x & 7));
+        // --- THE BIT-MASK MIRROR REVERSAL FIX ---
+        if (nw === 0) row[x >> 3] |= (1 << (7 - (x & 7)));
       }
       var s = '';
       for (var k = 0; k < row.length; k++) s += String.fromCharCode(row[k]);
@@ -603,16 +602,18 @@ export function getRasterizerHostHtml(): string {
           send({ id: id, ok: false, error: 'draw failed: ' + (e && e.message || e) });
           return;
         }
+        
+        // --- MASTER CARD STICKER BOUNDARY FRAME ---
         if (doc.frame) {
           ctx.fillStyle = '#000';
-          var thick = 3;
-          var fx = 2, fy = 2;
-          var fw = width - fx * 2;
-          var fh = totalH - fy * 2;
-          ctx.fillRect(fx, fy, fw, thick);
-          ctx.fillRect(fx, fy + fh - thick, fw, thick);
-          ctx.fillRect(fx, fy, thick, fh);
-          ctx.fillRect(fx + fw - thick, fy, thick, fh);
+          var thick = 4; 
+          var fx = 0, fy = 0;
+          var fw = width;
+          var fh = totalH;
+          ctx.fillRect(fx, fy, fw, thick);              // Top
+          ctx.fillRect(fx, fy + fh - thick, fw, thick); // Bottom
+          ctx.fillRect(fx, fy, thick, fh);              // Left
+          ctx.fillRect(fx + fw - thick, fy, thick, fh); // Right
         }
         try {
           var bmp = ditherAndPack(cv, payload.darkness || 3);
