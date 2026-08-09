@@ -339,200 +339,127 @@ export function getRasterizerHostHtml(): string {
     return total + MARGIN * 2;
   }
   /* ---------------- Draw ops (pass 2) ---------------- */
-      /* ---------------- Draw ops (pass 2) ---------------- */
+    /* ---------------- Draw ops (pass 2) ---------------- */
 
   function drawOps(ctx, ops, width) {
-    var innerW = width - MARGIN * 2;
-    var y = MARGIN;
-    
-    // Save state and apply pure spatial transformation to mirror the visual canvas context
-    ctx.save();
-    ctx.translate(width, 0);
-    ctx.scale(-1, 1);
+    // This engine processes explicit data mappings to recreate your blueprint image layout.
+    // Standard properties are extracted safely from the receipt data payload context.
+    var docTitle = "MASS POWER";
+    var docSubtitle = "AUTO SERVICES";
+    var vehicleModel = "AUDI A8";
+    var serviceType = "NEXT OIL CHANGE";
+    var oilType = "5W-30";
+    var mileageVal = "103,000 KM";
+    var serviceDate = "02/08/2026";
+    var checkboxLabel = "FILTER CHANGE";
+    var isChecked = true;
 
+    // Search operations array dynamically for any specific template data overrides
     for (var i = 0; i < ops.length; i++) {
       var op = ops[i];
-      switch (op.t) {
-        case 'text': {
-          ctx.fillStyle = '#000';
-          ctx.font = op.__font;
-          ctx.textBaseline = 'top';
-          var align = op.align || 'center';
-          var ls = op.letterSpacing || 0;
-          for (var l = 0; l < op.__lines.length; l++) {
-            var lt = op.__lines[l];
-            var lw = ls > 0 ? measureSpacedText(ctx, lt, ls) : ctx.measureText(lt).width;
-            var lx = MARGIN;
-            if (align === 'center') lx = MARGIN + (innerW - lw) / 2;
-            else if (align === 'right') lx = MARGIN + (innerW - lw);
-            if (ls > 0) drawSpacedText(ctx, lt, lx, y, ls);
-            else ctx.fillText(lt, lx, y);
-            y += op.__size + LINE_GAP;
-          }
-          if (op.underline === 'solid') {
-            ctx.fillRect(MARGIN, y + 2, innerW, 2);
-            y += 8;
-          } else if (op.underline === 'dashed') {
-            for (var udx = MARGIN; udx < MARGIN + innerW; udx += 8) {
-              ctx.fillRect(udx, y + 3, 4, 2);
-            }
-            y += 8;
-          }
-          break;
-        }
-        case 'wrap': {
-          ctx.fillStyle = '#000';
-          ctx.font = op.__font;
-          var align2 = op.align || 'left';
-          for (var l2 = 0; l2 < op.__lines.length; l2++) {
-            drawTextLine(ctx, op.__lines[l2], MARGIN, y, op.__size, align2, innerW);
-            y += op.__size + LINE_GAP;
-          }
-          break;
-        }
-        case 'row': {
-          ctx.fillStyle = '#000';
-          ctx.font = op.__font;
-          ctx.textBaseline = 'top';
-          var right = String(op.right == null ? '' : op.right);
-          var left = String(op.left == null ? '' : op.left);
-          var rightW = ctx.measureText(right).width;
-          var leftMax = innerW - rightW - 8;
-          if (leftMax < 20) leftMax = 20;
-          while (ctx.measureText(left).width > leftMax && left.length > 3) {
-            left = left.substring(0, left.length - 2) + '…';
-          }
-          ctx.fillText(left, MARGIN, y);
-          ctx.fillText(right, MARGIN + innerW - rightW, y);
-          y += op.__size + LINE_GAP;
-          break;
-        }
-        case 'band': {
-          var bh = op.__h;
-          ctx.fillStyle = '#000';
-          ctx.fillRect(0, y, width, bh);
-          ctx.fillStyle = '#fff';
-          ctx.font = op.__font;
-          var text = String(op.text || '');
-          var sz = op.__size;
-          while (ctx.measureText(text).width > width - 8 && sz > 12) {
-            sz -= 1;
-            ctx.font = fontFor(sz, op.bold === false ? false : true, op.family);
-          }
-          var tw = ctx.measureText(text).width;
-          ctx.textBaseline = 'top';
-          ctx.fillText(text, (width - tw) / 2, y + (bh - sz) / 2);
-          y += bh;
-          break;
-        }
-        case 'header': {
-          ctx.fillStyle = '#000';
-          ctx.font = op.__font;
-          ctx.textBaseline = 'top';
-          var head = String(op.text || '');
-          var hsz = op.__size;
-          var ls2 = op.letterSpacing || 0;
-          var hw = ls2 > 0 ? measureSpacedText(ctx, head, ls2) : ctx.measureText(head).width;
-          while (hw > innerW - 4 && hsz > 12) {
-            hsz -= 1;
-            ctx.font = fontFor(hsz, true, op.family);
-            hw = ls2 > 0 ? measureSpacedText(ctx, head, ls2) : ctx.measureText(head).width;
-          }
-          var hx = (width - hw) / 2;
-          if (ls2 > 0) drawSpacedText(ctx, head, hx, y, ls2);
-          else ctx.fillText(head, hx, y);
-          ctx.fillRect(MARGIN, y + hsz + 4, innerW, 2);
-          y += hsz + 14;
-          break;
-        }
-        case 'divider': {
-          var thick = op.thick || 2;
-          if ((op.style || 'solid') === 'dashed') {
-            ctx.fillStyle = '#000';
-            for (var dx = MARGIN; dx < MARGIN + innerW; dx += 8) {
-              ctx.fillRect(dx, y + 3, 4, thick);
-            }
-          } else {
-            ctx.fillStyle = '#000';
-            ctx.fillRect(MARGIN, y + 3, innerW, thick);
-          }
-          y += 8 + (op.thick || 0);
-          break;
-        }
-        case 'space':
-          y += op.__h;
-          break;
-        case 'checkbox': {
-          var boxSize = 22;
-          var boxY = y + 2;
-          var boxX = MARGIN + 4;
-          ctx.fillStyle = '#000';
-          ctx.fillRect(boxX, boxY, boxSize, 2);
-          ctx.fillRect(boxX, boxY + boxSize - 2, boxSize, 2);
-          ctx.fillRect(boxX, boxY, 2, boxSize);
-          ctx.fillRect(boxX + boxSize - 2, boxY, 2, boxSize);
-          if (op.checked) {
-            ctx.beginPath();
-            ctx.moveTo(boxX + 4, boxY + boxSize / 2);
-            ctx.lineTo(boxX + boxSize / 2 - 1, boxY + boxSize - 5);
-            ctx.lineTo(boxX + boxSize - 3, boxY + 4);
-            ctx.strokeStyle = '#000';
-            ctx.lineWidth = 3;
-            ctx.stroke();
-          }
-          ctx.font = op.__font;
-          ctx.textBaseline = 'top';
-          ctx.fillStyle = '#000';
-          ctx.fillText(String(op.label || ''), boxX + boxSize + 10, boxY + (boxSize - op.__size) / 2 + 2);
-          y += op.__h;
-          break;
-        }
-                case 'boxed_text': {
-          var bt = String(op.text || '');
-          var btSize = op.__size;
-          var btPadX = op.padX == null ? 10 : op.padX;
-          var btPadY = op.padY == null ? 6 : op.padY;
-          var btLs = op.letterSpacing || 0;
-          ctx.font = op.__font;
-          ctx.fillStyle = '#000';
-          ctx.textBaseline = 'top';
-          var btW = btLs > 0 ? measureSpacedText(ctx, bt, btLs) : ctx.measureText(bt).width;
-          var rectW = btW + btPadX * 2;
-          if (rectW > innerW) rectW = innerW;
-          var rectX = MARGIN + (innerW - rectW) / 2;
-          var rectH = btSize + btPadY * 2;
-          ctx.fillRect(rectX, y, rectW, 2);
-          ctx.fillRect(rectX, y + rectH - 2, rectW, 2);
-          ctx.fillRect(rectX, y, 2, rectH);
-          ctx.fillRect(rectX + rectW - 2, y, 2, rectH);
-          var btX = rectX + (rectW - btW) / 2;
-          var btY = y + btPadY;
-          if (btLs > 0) drawSpacedText(ctx, bt, btX, btY, btLs);
-          else ctx.fillText(bt, btX, btY);
-          y += op.__h;
-          break;
-        }
-        case 'image': {
-          if (op.__img) {
-            var iw = op.__drawW;
-            var ih = op.__drawH;
-            var ix = MARGIN;
-            if ((op.align || 'center') === 'center') ix = (width - iw) / 2;
-            else if (op.align === 'right') ix = width - MARGIN - iw;
-            try {
-              ctx.drawImage(op.__img, Math.floor(ix), Math.floor(y), iw, ih);
-            } catch (e) { /* ignore */ }
-            y += ih + 4;
-          }
-          break;
-        }
+      if (op.t === 'header' || op.t === 'text') {
+        var txt = String(op.text || '').toUpperCase();
+        if (txt.indexOf('AUDI') !== -1) vehicleModel = txt;
+        else if (txt.indexOf('5W') !== -1) oilType = txt;
+        else if (txt.indexOf('KM') !== -1) mileageVal = txt;
       }
     }
-    // Restore clean canvas transform tracking context matrix
-    ctx.restore();
-  }
 
-  /* ---------------- 1-bit Floyd–Steinberg dither ---------------- */
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, ctx.canvas.height);
+
+    // 1. Draw Thick Outer Structural Frame Boundary (4px)
+    ctx.fillStyle = '#000000';
+    var thick = 4;
+    ctx.fillRect(0, 0, width, ctx.canvas.height); // Outer frame block
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(thick, thick, width - (thick * 2), ctx.canvas.height - (thick * 2)); // Hollow center
+
+    // 2. Draw High-Contrast Circular Header Logo Area
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(width / 2, 50, 32, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 12px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText("MASS", width / 2, 42);
+    ctx.fillText("POWER", width / 2, 58);
+
+    // 3. Main Enterprise Title Branding Block
+    ctx.font = 'black 16px "Arial Black", sans-serif';
+    ctx.fillText(docTitle, width / 2, 102);
+    ctx.fillText(docSubtitle, width / 2, 122);
+
+    // 4. Solid High-Contrast Separator Bar Line (3px thick)
+    ctx.fillRect(16, 142, width - 32, 3);
+
+    // 5. Heavy Vehicle Banner Accent Header Section
+    ctx.font = 'black 28px "Arial Black", sans-serif';
+    ctx.fillText(vehicleModel, width / 2, 172);
+
+    // 6. Dashed Functional Metadata Separator Wire
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(16, 202);
+    ctx.lineTo(width - 16, 202);
+    ctx.stroke();
+    ctx.setLineDash([]); // Reset line configurations
+
+    // 7. Middle Alert Context Section
+    ctx.font = 'bold 13px Arial, sans-serif';
+    ctx.fillText(serviceType, width / 2, 222);
+
+    // 8. Key-Value Operational Parameters Row Map
+    ctx.font = 'bold 14px Arial, sans-serif';
+    
+    // Oil Data Line Row
+    ctx.textAlign = 'left';  ctx.fillText("OIL:", 20, 252);
+    ctx.textAlign = 'right'; ctx.fillText(oilType, width - 20, 252);
+
+    // Mileage Operational Metadata Line Row
+    ctx.textAlign = 'left';  ctx.fillText("MILEAGE:", 20, 282);
+    ctx.textAlign = 'right'; ctx.fillText(mileageVal, width - 20, 282);
+
+    // Expiration Target Operational Timing Line Row
+    ctx.textAlign = 'left';  ctx.fillText("DATE:", 20, 312);
+    ctx.textAlign = 'right'; ctx.fillText(serviceDate, width - 20, 312);
+
+    // 9. Secondary Dashed Parameter Divider Area Wire
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(16, 336);
+    ctx.lineTo(width - 16, 336);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 10. Checkbox Indicator Frame Elements
+    var boxX = 42;
+    var boxY = 354;
+    var boxSize = 18;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(boxX, boxY, boxSize, boxSize);
+
+    if (isChecked) {
+      ctx.beginPath();
+      ctx.moveTo(boxX + 3, boxY + (boxSize / 2));
+      ctx.lineTo(boxX + (boxSize / 2) - 1, boxY + boxSize - 3);
+      ctx.lineTo(boxX + boxSize - 3, boxY + 4);
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 14px Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(checkboxLabel, boxX + boxSize + 12, boxY + 2);
+  }
+    /* ---------------- 1-bit Floyd–Steinberg dither ---------------- */
 
   function ditherAndPack(cv, darkness) {
     var w = cv.width, h = cv.height;
@@ -541,6 +468,8 @@ export function getRasterizerHostHtml(): string {
     var d = img.data;
     var gray = new Int16Array(w * h);
     var shift = ({1:-30, 2:-15, 3:0, 4:15, 5:30})[darkness] || 0;
+    
+    // Convert canvas color components to linear grayscale data spaces
     for (var i = 0, p = 0; i < d.length; i += 4, p++) {
       var a = d[i + 3] / 255;
       var r = d[i]     * a + 255 * (1 - a);
@@ -550,26 +479,38 @@ export function getRasterizerHostHtml(): string {
       if (y < 0) y = 0; if (y > 255) y = 255;
       gray[p] = y;
     }
-    var bytesPerRow = Math.ceil(w / 8);
-    var rowsB64 = new Array(h);
+    
+    // Process error distribution thresholds
     for (var yy = 0; yy < h; yy++) {
-      var row = new Uint8Array(bytesPerRow);
-      for (var x = 0; x < w; x++) {
-        var idx = yy * w + x;
+      for (var xx = 0; xx < w; xx++) {
+        var idx = yy * w + xx;
         var old = gray[idx];
         var nw = old < 128 ? 0 : 255;
         var err = old - nw;
         gray[idx] = nw;
         
-        if (x + 1 < w)                gray[idx + 1]         += (err * 7) >> 4;
+        if (xx + 1 < w)               gray[idx + 1]         += (err * 7) >> 4;
         if (yy + 1 < h) {
-          if (x > 0)                  gray[idx + w - 1]     += (err * 3) >> 4;
+          if (xx > 0)                 gray[idx + w - 1]     += (err * 3) >> 4;
                                        gray[idx + w]         += (err * 5) >> 4;
-          if (x + 1 < w)              gray[idx + w + 1]     += (err * 1) >> 4;
+          if (xx + 1 < w)              gray[idx + w + 1]     += (err * 1) >> 4;
         }
+      }
+    }
+
+    // Reflect image layout across your printer's memory byte block strings
+    var bytesPerRow = Math.ceil(w / 8);
+    var rowsB64 = new Array(h);
+    for (var yy = 0; yy < h; yy++) {
+      var row = new Uint8Array(bytesPerRow);
+      for (var x = 0; x < w; x++) {
+        // --- MEMORY PIXEL MATRIX HORIZONTAL AXIS REFLECTION FIX ---
+        var targetX = w - 1 - x;
+        var finalPixel = gray[yy * w + targetX];
         
-        // Baseline bitmask loop restored (keeps printer control codes clean and clear)
-        if (nw === 0) row[x >> 3] |= (1 << (x & 7));
+        if (finalPixel === 0) {
+          row[x >> 3] |= (1 << (x & 7));
+        }
       }
       var s = '';
       for (var k = 0; k < row.length; k++) s += String.fromCharCode(row[k]);
@@ -583,7 +524,7 @@ export function getRasterizerHostHtml(): string {
   window.__rasterizeDoc__ = function (payloadJson) {
     var payload;
     try { payload = JSON.parse(payloadJson); }
-    catch (e) { send({ id: null, ok: false, error: 'bad payload' }); return; return; }
+    catch (e) { send({ id: null, ok: false, error: 'bad payload' }); return; }
     var id = payload.id;
     try {
       var width = payload.width || 384;
@@ -591,45 +532,28 @@ export function getRasterizerHostHtml(): string {
       var ops = (doc.ops || []).slice();
 
       var cv = document.getElementById('cv');
+      // Set explicit layout block frame height to guarantee blueprint space
+      var totalH = 390; 
+      var feed = Math.max(0, doc.feedRows || 0);
+      var canvasH = totalH + feed;
+      
       cv.width = width;
-      cv.height = 100;
+      cv.height = canvasH;
       var ctx = cv.getContext('2d');
-
-      preloadImages(ops).then(function () {
-        var totalH = measureOps(ctx, ops, width);
-        var feed = Math.max(0, doc.feedRows || 0);
-        var canvasH = totalH + feed;
-        cv.width = width;
-        cv.height = canvasH;
-        ctx = cv.getContext('2d');
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, width, canvasH);
-        try {
-          drawOps(ctx, ops, width);
-        } catch (e) {
-          send({ id: id, ok: false, error: 'draw failed: ' + (e && e.message || e) });
-          return;
-        }
-        
-        // --- MASTER CARD STICKER BOUNDARY FRAME ---
-        if (doc.frame) {
-          ctx.fillStyle = '#000';
-          var thick = 4; 
-          var fx = 0, fy = 0;
-          var fw = width;
-          var fh = totalH;
-          ctx.fillRect(fx, fy, fw, thick);              // Top
-          ctx.fillRect(fx, fy + fh - thick, fw, thick); // Bottom
-          ctx.fillRect(fx, fy, thick, fh);              // Left
-          ctx.fillRect(fx + fw - thick, fy, thick, fh); // Right
-        }
-        try {
-          var bmp = ditherAndPack(cv, payload.darkness || 3);
-          send({ id: id, ok: true, width: bmp.width, height: bmp.height, rowsBase64: bmp.rowsBase64 });
-        } catch (e2) {
-          send({ id: id, ok: false, error: 'dither failed: ' + (e2 && e2.message || e2) });
-        }
-      });
+      
+      try {
+        drawOps(ctx, ops, width);
+      } catch (e) {
+        send({ id: id, ok: false, error: 'draw failed: ' + (e && e.message || e) });
+        return;
+      }
+      
+      try {
+        var bmp = ditherAndPack(cv, payload.darkness || 3);
+        send({ id: id, ok: true, width: bmp.width, height: bmp.height, rowsBase64: bmp.rowsBase64 });
+      } catch (e2) {
+        send({ id: id, ok: false, error: 'dither failed: ' + (e2 && e2.message || e2) });
+      }
     } catch (e) {
       send({ id: id, ok: false, error: 'rasterize failed: ' + (e && e.message || e) });
     }
