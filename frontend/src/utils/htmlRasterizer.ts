@@ -495,6 +495,7 @@ export function getRasterizerHostHtml(): string {
     }
   }
     /* ---------------- 1-bit Floyd–Steinberg dither ---------------- */
+  /* ---------------- 1-bit Floyd–Steinberg dither ---------------- */
 
   function ditherAndPack(cv, darkness) {
     var w = cv.width, h = cv.height;
@@ -535,17 +536,24 @@ export function getRasterizerHostHtml(): string {
     var rowsB64 = new Array(h);
     for (var yy = 0; yy < h; yy++) {
       var row = new Uint8Array(bytesPerRow);
+      
+      // Step 1: Pack pixels into the byte array normally to protect control bit sequences
       for (var x = 0; x < w; x++) {
-        // --- MEMORY BIT STREAM REFLECTION ---
-        var targetX = w - 1 - x;
-        var finalPixel = gray[yy * w + targetX];
-        
+        var finalPixel = gray[yy * w + x];
         if (finalPixel === 0) {
           row[x >> 3] |= (1 << (x & 7));
         }
       }
+
+      // --- THE BYTE-ORDER REVERSAL MIRROR FIX ---
+      // Step 2: Swap full bytes from right-to-left across the line to un-mirror text safely
+      var mirroredRow = new Uint8Array(bytesPerRow);
+      for (var b = 0; b < bytesPerRow; b++) {
+        mirroredRow[b] = row[bytesPerRow - 1 - b];
+      }
+      
       var s = '';
-      for (var k = 0; k < row.length; k++) s += String.fromCharCode(row[k]);
+      for (var k = 0; k < mirroredRow.length; k++) s += String.fromCharCode(mirroredRow[k]);
       rowsB64[yy] = btoa(s);
     }
     return { width: w, height: h, rowsBase64: rowsB64 };
@@ -594,7 +602,6 @@ export function getRasterizerHostHtml(): string {
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(thick, thick, width - (thick * 2), totalH - (thick * 2)); // Hollow inner content
           
-          // Redraw layout cleanly on top of inner spacing bounds
           try { drawOps(ctx, ops, width); } catch (e) { return; }
         }
         
@@ -615,5 +622,3 @@ export function getRasterizerHostHtml(): string {
 </script>
 </body></html>`;
 }
-
-  
