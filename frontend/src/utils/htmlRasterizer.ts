@@ -339,11 +339,17 @@ export function getRasterizerHostHtml(): string {
     return total + MARGIN * 2;
   }
   /* ---------------- Draw ops (pass 2) ---------------- */
-  /* ---------------- Draw ops (pass 2) ---------------- */
+      /* ---------------- Draw ops (pass 2) ---------------- */
 
   function drawOps(ctx, ops, width) {
     var innerW = width - MARGIN * 2;
     var y = MARGIN;
+    
+    // Save state and apply pure spatial transformation to mirror the visual canvas context
+    ctx.save();
+    ctx.translate(width, 0);
+    ctx.scale(-1, 1);
+
     for (var i = 0; i < ops.length; i++) {
       var op = ops[i];
       switch (op.t) {
@@ -481,7 +487,7 @@ export function getRasterizerHostHtml(): string {
           y += op.__h;
           break;
         }
-              case 'boxed_text': {
+                case 'boxed_text': {
           var bt = String(op.text || '');
           var btSize = op.__size;
           var btPadX = op.padX == null ? 10 : op.padX;
@@ -522,6 +528,8 @@ export function getRasterizerHostHtml(): string {
         }
       }
     }
+    // Restore clean canvas transform tracking context matrix
+    ctx.restore();
   }
 
   /* ---------------- 1-bit Floyd–Steinberg dither ---------------- */
@@ -560,8 +568,8 @@ export function getRasterizerHostHtml(): string {
           if (x + 1 < w)              gray[idx + w + 1]     += (err * 1) >> 4;
         }
         
-        // --- THE BIT-MASK MIRROR REVERSAL FIX ---
-        if (nw === 0) row[x >> 3] |= (1 << (7 - (x & 7)));
+        // Baseline bitmask loop restored (keeps printer control codes clean and clear)
+        if (nw === 0) row[x >> 3] |= (1 << (x & 7));
       }
       var s = '';
       for (var k = 0; k < row.length; k++) s += String.fromCharCode(row[k]);
@@ -575,7 +583,7 @@ export function getRasterizerHostHtml(): string {
   window.__rasterizeDoc__ = function (payloadJson) {
     var payload;
     try { payload = JSON.parse(payloadJson); }
-    catch (e) { send({ id: null, ok: false, error: 'bad payload' }); return; }
+    catch (e) { send({ id: null, ok: false, error: 'bad payload' }); return; return; }
     var id = payload.id;
     try {
       var width = payload.width || 384;
