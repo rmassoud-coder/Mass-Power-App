@@ -4,10 +4,11 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { Asset } from 'expo-asset';
-import { Image, Platform, View, Text } from 'react-native';
+import { Image, Platform, View, Text, AppState } from 'react-native';
 import { initDatabase } from '../src/db/database';
 import RpmLoader from '../src/components/RpmLoader';
 import HtmlRasterizerHost from '../src/components/HtmlRasterizerHost';
+import { runAutoPull } from '../src/utils/autoSync';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -61,6 +62,23 @@ export default function RootLayout() {
     }
 
     prepare();
+  }, []);
+
+  // Safe auto-pull: merges cloud changes in (additive-only, never deletes,
+  // see autoSync.ts / dbSync.ts). Runs once on launch, then again every time
+  // the app returns to the foreground, so the other device's new sales show
+  // up here without needing a manual Pull. Silently no-ops if GitHub isn't
+  // configured, and throttled internally so switching apps repeatedly
+  // doesn't hammer the API.
+  useEffect(() => {
+    runAutoPull().catch(() => { /* swallowed intentionally */ });
+
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        runAutoPull().catch(() => { /* swallowed intentionally */ });
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   if (!appIsReady) {
