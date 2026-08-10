@@ -26,7 +26,7 @@ export interface PrintOptions {
   /** Skip Cat-Printer routing even if it's the active mode. */
   forceExternal?: boolean;
   /** Structured version of the same job — Cat Printer BLE path uses this. */
-  thermal?: ThermalDoc;
+  thermal?: ThermalDoc | Promise<ThermalDoc>; // <--- UPDATED TO ALLOW PROMISE
 }
 
 /** Print the supplied HTML through whichever printer is currently selected. */
@@ -62,7 +62,10 @@ export async function printJob(html: string, opts: PrintOptions = {}): Promise<v
       return printHtml(html);
     }
     try {
-      const bmp = await rasterizeThermalDoc(opts.thermal, {
+      // --- KEY FIX: AWAIT THE THERMAL DOC (resolves the async logo loading) ---
+      const thermalDoc = await opts.thermal; 
+      
+      const bmp = await rasterizeThermalDoc(thermalDoc, {
         width: 384,
         darkness: settings.catPrinterDarkness,
         timeoutMs: 25000,
