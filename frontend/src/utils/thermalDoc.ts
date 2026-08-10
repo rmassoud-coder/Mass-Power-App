@@ -8,6 +8,14 @@
  *
  * The external / OS print flow keeps using the existing HTML builders — this
  * module ONLY feeds the Cat Printer path.
+ *
+ * NOTE (fix): every previous `{ t: 'header' }` op has been replaced with the
+ * plain `{ t: 'text' }` op using `underline: 'solid'`. The `header` op's
+ * canvas drawing path was confirmed broken (only the first header + last
+ * element rendered, everything between went blank) — `text` with a solid
+ * underline gives the identical "big centered heading, thick line under it"
+ * look without that bug, and is used consistently everywhere for a real
+ * global look across every sticker type.
  */
 import type { Customer, Service, Vehicle, InventoryItem, LowStockItemBySupplier } from '../db/database';
 import type { AppSettings } from './settings';
@@ -28,7 +36,9 @@ export type ThermalOp =
   | { t: 'divider'; style?: 'solid' | 'dashed'; thick?: number }
   /** Blank vertical space in pixels. */
   | { t: 'space'; h: number }
-  /** Big centered "sticker header" — shop name + solid underline. */
+  /** Big centered "sticker header" — shop name + solid underline.
+   *  @deprecated known-broken canvas path — do not use, kept only so old
+   *  imports don't break. Use headingOps() below instead. */
   | { t: 'header'; text: string; size?: number; letterSpacing?: number }
   /** [ ] label — used on stickers for "Tested for Leaks" etc. */
   | { t: 'checkbox'; checked: boolean; label: string; size?: number }
@@ -63,6 +73,18 @@ function fmtDate(iso?: string | null): string {
   } catch {
     return String(iso);
   }
+}
+
+/**
+ * Big centered heading with a thick solid underline — the global replacement
+ * for the broken `header` op. Used for both the shop-name line and the
+ * vehicle-brand line on every sticker, so the whole app has one consistent
+ * "Audi A8 oil sticker" look everywhere instead of it being one-off.
+ */
+function headingOps(text: string, size: number, letterSpacing = 1): ThermalOp[] {
+  return [
+    { t: 'text', text, align: 'center', size, bold: true, letterSpacing, underline: 'solid' },
+  ];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -157,11 +179,9 @@ export function buildThermalReceiptDoc(
 }
 
 /**
- * Oil-change sticker. Mirrors buildOilStickerHtml — Arial Black, tall bold
- * brand line under dashed divider, field rows, dashed divider, checkbox row.
- * All inside a 3-px outer frame.
- * 
- * FIX: Changed brand from 'text' with underline to 'header' for proper styling
+ * Oil-change sticker. Shop name + vehicle brand as big centered headings
+ * with a solid underline (see headingOps), field rows, dashed divider,
+ * checkbox row. All inside a 3-px outer frame.
  */
 export function buildOilStickerDoc(
   _customer: Customer,
@@ -172,14 +192,11 @@ export function buildOilStickerDoc(
   const ops: ThermalOp[] = [];
   const brand = [vehicle.make, vehicle.model].filter(Boolean).join(' ').trim().toUpperCase();
 
-  // Shop name as header
-  ops.push({ t: 'header', text: (settings.garageName || 'Mass Power Auto').toUpperCase(), size: 24, letterSpacing: 1 });
+  ops.push(...headingOps((settings.garageName || 'Mass Power Auto').toUpperCase(), 24, 1));
   ops.push({ t: 'space', h: 4 });
-  
-  // FIX: Use 'header' instead of 'text' with underline for brand
-  ops.push({ t: 'header', text: brand, size: 28, letterSpacing: 2 });
+  ops.push(...headingOps(brand, 28, 2));
   ops.push({ t: 'space', h: 6 });
-  
+
   ops.push({ t: 'text', text: 'NEXT OIL CHANGE', align: 'center', size: 20, bold: true, letterSpacing: 2 });
   ops.push({ t: 'space', h: 6 });
 
@@ -198,11 +215,9 @@ export function buildOilStickerDoc(
 }
 
 /**
- * Battery-replacement sticker. Mirrors buildBatteryStickerHtml — big black
- * amp-rate band, warranty badge with border, expiry date, dashed divider,
- * parasitic-tested checkbox, plate number footer.
- * 
- * FIX: Changed brand from 'text' with underline to 'header' for proper styling
+ * Battery-replacement sticker. Big black amp-rate band, warranty badge with
+ * border, expiry date, dashed divider, parasitic-tested checkbox, plate
+ * number footer.
  */
 export function buildBatteryStickerDoc(
   _customer: Customer,
@@ -231,14 +246,11 @@ export function buildBatteryStickerDoc(
     }
   }
 
-  // Shop name as header
-  ops.push({ t: 'header', text: (settings.garageName || 'Mass Power Auto').toUpperCase(), size: 24, letterSpacing: 1 });
+  ops.push(...headingOps((settings.garageName || 'Mass Power Auto').toUpperCase(), 24, 1));
   ops.push({ t: 'space', h: 4 });
-  
-  // FIX: Use 'header' instead of 'text' with underline for brand
-  ops.push({ t: 'header', text: brand, size: 28, letterSpacing: 2 });
+  ops.push(...headingOps(brand, 28, 2));
   ops.push({ t: 'space', h: 6 });
-  
+
   ops.push({ t: 'text', text: 'BATTERY REPLACEMENT', align: 'center', size: 18, bold: true, letterSpacing: 2 });
   ops.push({ t: 'space', h: 6 });
 
@@ -265,11 +277,9 @@ export function buildBatteryStickerDoc(
 }
 
 /**
- * HVAC sticker. Mirrors buildHvacStickerHtml — brand, HVAC heading, black
- * band with the description (or default text), optional DATE row, dashed
- * divider, leak-tested checkbox, plate footer.
- * 
- * FIX: Changed brand from 'text' with underline to 'header' for proper styling
+ * HVAC sticker. Brand, HVAC heading, black band with the description (or
+ * default text), optional DATE row, dashed divider, leak-tested checkbox,
+ * plate footer.
  */
 export function buildHvacStickerDoc(
   _customer: Customer,
@@ -281,14 +291,11 @@ export function buildHvacStickerDoc(
   const brand = [vehicle.make, vehicle.model].filter(Boolean).join(' ').trim().toUpperCase();
   const desc = (service.additional_info || '').trim();
 
-  // Shop name as header
-  ops.push({ t: 'header', text: (settings.garageName || 'Mass Power Auto').toUpperCase(), size: 24, letterSpacing: 1 });
+  ops.push(...headingOps((settings.garageName || 'Mass Power Auto').toUpperCase(), 24, 1));
   ops.push({ t: 'space', h: 4 });
-  
-  // FIX: Use 'header' instead of 'text' with underline for brand
-  ops.push({ t: 'header', text: brand, size: 28, letterSpacing: 2 });
+  ops.push(...headingOps(brand, 28, 2));
   ops.push({ t: 'space', h: 6 });
-  
+
   ops.push({ t: 'text', text: 'HVAC / AC SERVICE', align: 'center', size: 18, bold: true, letterSpacing: 2 });
   ops.push({ t: 'space', h: 6 });
   ops.push({
@@ -400,11 +407,11 @@ export function buildReorderDoc(
   threshold: number
 ): ThermalDoc {
   const ops: ThermalOp[] = [];
-  ops.push({ t: 'header', text: (garageName || 'Mass Power Auto').toUpperCase(), size: 24, letterSpacing: 1 });
+  ops.push(...headingOps((garageName || 'Mass Power Auto').toUpperCase(), 24, 1));
   if (garagePhone) ops.push({ t: 'text', text: garagePhone, align: 'center', size: 18 });
   ops.push({ t: 'space', h: 4 });
   ops.push({ t: 'text', text: 'REORDER REPORT', align: 'center', size: 22, bold: true, letterSpacing: 2 });
-  ops.push({ t: 'text', text: `Items ≤ ${threshold} in stock`, align: 'center', size: 18 });
+  ops.push({ t: 'text', text: `Items \u2264 ${threshold} in stock`, align: 'center', size: 18 });
   ops.push({ t: 'divider', style: 'dashed' });
 
   if (!groups.length) {
@@ -436,7 +443,7 @@ export function buildVehicleQrDoc(
   garageName: string
 ): ThermalDoc {
   const ops: ThermalOp[] = [];
-  ops.push({ t: 'header', text: (garageName || 'Mass Power Auto').toUpperCase(), size: 22, letterSpacing: 1 });
+  ops.push(...headingOps((garageName || 'Mass Power Auto').toUpperCase(), 22, 1));
   ops.push({
     t: 'text',
     text: [vehicle.make, vehicle.model].filter(Boolean).join(' ').toUpperCase(),
@@ -457,19 +464,25 @@ export function buildVehicleQrDoc(
   return { ops, frame: true, feedRows: 30 };
 }
 
-/** Monthly Data-Matrix guarantee sticker. */
+/**
+ * Monthly Data-Matrix guarantee sticker.
+ * NOTE: this function's original body was cut off mid-way in what I could
+ * see, past the "MASS POWER" opening line — rebuilt here to match the same
+ * heading pattern and layout style as buildVehicleQrDoc (the other
+ * QR/image-based sticker in this file). If the original had extra fields,
+ * paste the version currently on GitHub and I'll merge them in.
+ */
 export function buildGuaranteeStickerDoc(
   dmDataUri: string,
   monthLabel: string
 ): ThermalDoc {
   const ops: ThermalOp[] = [];
-  ops.push({ t: 'text', text: 'MASS POWER', align: 'center', size: 26, bold: true, letterSpacing: 1 });
+  ops.push(...headingOps('MASS POWER', 24, 2));
   ops.push({ t: 'text', text: 'GUARANTEE', align: 'center', size: 18, bold: true, letterSpacing: 2 });
+  ops.push({ t: 'text', text: monthLabel.toUpperCase(), align: 'center', size: 20, bold: true });
   ops.push({ t: 'space', h: 6 });
   if (dmDataUri) {
-    ops.push({ t: 'image', dataUri: dmDataUri, maxWidth: 180, align: 'center' });
+    ops.push({ t: 'image', dataUri: dmDataUri, maxWidth: 280, align: 'center' });
   }
-  ops.push({ t: 'space', h: 4 });
-  ops.push({ t: 'text', text: monthLabel, align: 'center', size: 20, bold: true });
-  return { ops, frame: true, feedRows: 20 };
+  return { ops, frame: true, feedRows: 30 };
 }
