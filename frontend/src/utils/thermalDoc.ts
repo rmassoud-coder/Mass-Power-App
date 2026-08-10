@@ -10,15 +10,15 @@ export type ThermalFontFamily = 'sans' | 'mono';
 export type ThermalOp =
   /** Shop name with thick underline */
   | { t: 'shop_title'; text: string }
-  /** Vehicle name with thick underline */
+  /** Vehicle name with thick underline - matches AUDI A8 style */
   | { t: 'header'; text: string; size?: number; letterSpacing?: number }
-  /** Label + value pair (left/right aligned) */
+  /** Label + value pair (left/right aligned) - matches OIL: 5W-30 style */
   | { t: 'label_value'; label: string; value: string; unit?: string }
   /** Horizontal divider */
   | { t: 'divider'; style?: 'solid' | 'dashed'; thick?: number }
   /** Blank space */
   | { t: 'space'; h: number }
-  /** Checkbox with label */
+  /** Checkbox with label - matches FILTER CHANGE style */
   | { t: 'checkbox'; checked: boolean; label: string; size?: number }
   /** Footer text */
   | { t: 'footer'; text: string; size?: number };
@@ -51,12 +51,22 @@ function fmtDate(iso?: string | null): string {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                           Public builders                                  */
+/*                           OIL STICKER BUILDER                              */
+/*                   Matches the Audi A8 oil sticker format                   */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Oil-change sticker - Audi A8 oil sticker look applied globally
+ * Oil-change sticker - EXACTLY matches the Audi A8 oil sticker design
  * Works for ANY vehicle (Audi, BMW, Toyota, etc.)
+ * 
+ * Format:
+ * MASS POWER AUTO SERVICES (shop name with underline)
+ * AUDI A8 (vehicle brand with thick underline)
+ * NEXT OIL CHANGE (section title)
+ * OIL: 5W-30 (label: value)
+ * MILEAGE: 103,000 KM (label: value unit)
+ * DATE: 02/08/2026 (label: value)
+ * ☑ FILTER CHANGE (checkbox with label)
  */
 export function buildOilStickerDoc(
   _customer: Customer,
@@ -65,39 +75,51 @@ export function buildOilStickerDoc(
   settings: AppSettings
 ): ThermalDoc {
   const ops: ThermalOp[] = [];
+  
+  // Build vehicle brand from database
   const brand = [vehicle.make, vehicle.model].filter(Boolean).join(' ').trim().toUpperCase();
 
-  // Shop name with thick underline
+  // 1. Shop name - matches "MASS POWER AUTO SERVICES"
   ops.push({ t: 'shop_title', text: (settings.garageName || 'Mass Power Auto').toUpperCase() });
   ops.push({ t: 'space', h: 4 });
   
-  // Vehicle brand with thick underline - THIS IS THE FIX
-  ops.push({ t: 'header', text: brand, size: 28, letterSpacing: 2 });
-  ops.push({ t: 'space', h: 6 });
+  // 2. Vehicle brand - matches "AUDI A8" with thick underline
+  ops.push({ t: 'header', text: brand, size: 28, letterSpacing: 3 });
+  ops.push({ t: 'space', h: 8 });
   
-  ops.push({ t: 'space', h: 6 });
+  // 3. Section title - matches "NEXT OIL CHANGE"
   ops.push({ t: 'header', text: 'NEXT OIL CHANGE', size: 18, letterSpacing: 2 });
-  ops.push({ t: 'space', h: 6 });
+  ops.push({ t: 'space', h: 8 });
 
+  // 4. OIL: 5W-30 - matches label: value format
   if (service.oil_grade) {
     ops.push({ t: 'label_value', label: 'OIL', value: service.oil_grade });
   }
+  
+  // 5. MILEAGE: 103,000 KM - matches label: value unit format
   if (service.next_service_mileage) {
     ops.push({ t: 'label_value', label: 'MILEAGE', value: service.next_service_mileage.toLocaleString(), unit: 'KM' });
   }
+  
+  // 6. DATE: 02/08/2026 - matches label: value format
   if (service.next_service_date) {
     ops.push({ t: 'label_value', label: 'DATE', value: fmtDate(service.next_service_date) });
   }
-  ops.push({ t: 'divider', style: 'dashed' });
-  ops.push({ t: 'checkbox', checked: !!service.oil_filter_changed, label: 'Filter Change', size: 20 });
+  
   ops.push({ t: 'space', h: 4 });
-  ops.push({ t: 'footer', text: 'NEXT SERVICE DUE' });
+  
+  // 7. Dashed divider line
+  ops.push({ t: 'divider', style: 'dashed' });
+  ops.push({ t: 'space', h: 6 });
+  
+  // 8. FILTER CHANGE checkbox
+  ops.push({ t: 'checkbox', checked: !!service.oil_filter_changed, label: 'Filter Change', size: 18 });
   
   return { ops, frame: true, feedRows: 30 };
 }
 
 /**
- * Battery-replacement sticker.
+ * Battery-replacement sticker - follows same design pattern
  */
 export function buildBatteryStickerDoc(
   _customer: Customer,
@@ -128,10 +150,10 @@ export function buildBatteryStickerDoc(
 
   ops.push({ t: 'shop_title', text: (settings.garageName || 'Mass Power Auto').toUpperCase() });
   ops.push({ t: 'space', h: 4 });
-  ops.push({ t: 'header', text: brand, size: 28, letterSpacing: 2 });
-  ops.push({ t: 'space', h: 6 });
+  ops.push({ t: 'header', text: brand, size: 28, letterSpacing: 3 });
+  ops.push({ t: 'space', h: 8 });
   ops.push({ t: 'header', text: 'BATTERY REPLACEMENT', size: 18, letterSpacing: 2 });
-  ops.push({ t: 'space', h: 6 });
+  ops.push({ t: 'space', h: 8 });
 
   if (service.battery_amp_rate) {
     ops.push({ t: 'label_value', label: 'AMP RATE', value: service.battery_amp_rate });
@@ -146,7 +168,9 @@ export function buildBatteryStickerDoc(
   if (warrantyExpiryFormatted) {
     ops.push({ t: 'label_value', label: 'EXPIRES', value: warrantyExpiryFormatted });
   }
+  ops.push({ t: 'space', h: 4 });
   ops.push({ t: 'divider', style: 'dashed' });
+  ops.push({ t: 'space', h: 6 });
   ops.push({ t: 'checkbox', checked: !!service.battery_parasitic_tested, label: 'Parasitic Draw Tested', size: 18 });
   if (vehicle.plate_number) {
     ops.push({ t: 'divider', style: 'dashed' });
@@ -156,7 +180,7 @@ export function buildBatteryStickerDoc(
 }
 
 /**
- * HVAC sticker.
+ * HVAC sticker - follows same design pattern
  */
 export function buildHvacStickerDoc(
   _customer: Customer,
@@ -170,15 +194,17 @@ export function buildHvacStickerDoc(
 
   ops.push({ t: 'shop_title', text: (settings.garageName || 'Mass Power Auto').toUpperCase() });
   ops.push({ t: 'space', h: 4 });
-  ops.push({ t: 'header', text: brand, size: 28, letterSpacing: 2 });
-  ops.push({ t: 'space', h: 6 });
+  ops.push({ t: 'header', text: brand, size: 28, letterSpacing: 3 });
+  ops.push({ t: 'space', h: 8 });
   ops.push({ t: 'header', text: 'HVAC / AC SERVICE', size: 18, letterSpacing: 2 });
-  ops.push({ t: 'space', h: 6 });
+  ops.push({ t: 'space', h: 8 });
   ops.push({ t: 'header', text: (desc ? desc : 'HVAC SERVICE PERFORMED').toUpperCase(), size: 20, letterSpacing: 1 });
   if (service.hvac_freon_date) {
     ops.push({ t: 'label_value', label: 'DATE', value: fmtDate(service.hvac_freon_date) });
   }
+  ops.push({ t: 'space', h: 4 });
   ops.push({ t: 'divider', style: 'dashed' });
+  ops.push({ t: 'space', h: 6 });
   ops.push({ t: 'checkbox', checked: !!service.hvac_leak_tested, label: 'Tested for Leaks', size: 18 });
   if (vehicle.plate_number) {
     ops.push({ t: 'divider', style: 'dashed' });
@@ -188,7 +214,7 @@ export function buildHvacStickerDoc(
 }
 
 /**
- * Thermal customer receipt.
+ * Thermal customer receipt - follows same design pattern
  */
 export function buildThermalReceiptDoc(
   customer: Customer,
