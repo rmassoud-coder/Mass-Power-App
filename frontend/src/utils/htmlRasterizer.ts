@@ -1,17 +1,18 @@
 /**
  * ThermalDoc → 384-px-wide 1-bit dithered bitmap.
  *
- * Design rewrite: the previous version relied on SVG <foreignObject> to
- * rasterize arbitrary HTML in a hidden WebView. That approach turned out to
- * be flaky on real Android WebViews (Huawei, LG etc. return "SVG image load
- * failed"). We now paint the receipt DIRECTLY on a Canvas 2D context, one
- * op at a time. No SVG, no HTML parsing — just deterministic drawing.
+ * Paints the receipt DIRECTLY on a Canvas 2D context, one op at a time —
+ * no SVG, no HTML parsing, just deterministic drawing. A single hidden
+ * <WebView> (HtmlRasterizerHost) hosts a bootstrap page that owns a
+ * <canvas>. Native RN calls rasterizeThermalDoc(doc, opts) → the JSON
+ * payload is injected via injectJavaScript, the WebView paints the ops,
+ * dithers to 1-bit rows and posts the base64 rows back.
  *
- *   • A single hidden <WebView> is mounted at the app root via
- *     <HtmlRasterizerHost />. It hosts a bootstrap page that owns a <canvas>.
- *   • Native RN calls `rasterizeThermalDoc(doc, opts)` → the JSON payload is
- *     injected via `injectJavaScript`, the WebView paints the ops, dithers
- *     to 1-bit rows and posts the base64 rows back.
+ * NOTE: horizontal mirror correction lives in catPrinter.ts's decodeRow()
+ * (byte-order reverse + per-byte bit-mirror), NOT here. An earlier canvas-
+ * level flip (translate+scale) was tried here and removed — it mirrored
+ * individual glyphs as well as word order, which is wrong, and doubled up
+ * with the fix that now lives in catPrinter.ts. Do not re-add a flip here.
  */
 import type { MonoBitmap } from './catPrinter';
 import type { ThermalDoc } from './thermalDoc';
@@ -31,15 +32,10 @@ type PendingReq = {
   timer: any;
 };
 
-/* -------------------------------------------------------------------------- */
-/*                Module-level bridge (host writes/reads these)               */
-/* -------------------------------------------------------------------------- */
-
 let _hostReady = false;
 let _injectJs: ((js: string) => void) | null = null;
 const _pending = new Map<string, PendingReq>();
 
-/** Called by the RN host component whenever the WebView is mounted/unmounted. */
 export function _registerRasterizerHost(injectJs: ((js: string) => void) | null): void {
   _injectJs = injectJs;
   _hostReady = !!injectJs;
@@ -52,7 +48,6 @@ export function _registerRasterizerHost(injectJs: ((js: string) => void) | null)
   }
 }
 
-/** Called by the RN host on every message coming out of the WebView. */
 export function _onRasterizerMessage(raw: string): void {
   let payload: any;
   try { payload = JSON.parse(raw); } catch { return; }
@@ -76,7 +71,6 @@ export function isRasterizerReady(): boolean {
   return _hostReady && _injectJs != null;
 }
 
-/** Rasterize a ThermalDoc → mono bitmap. */
 export function rasterizeThermalDoc(doc: ThermalDoc, opts: RasterizeOptions = {}): Promise<MonoBitmap> {
   const width = opts.width ?? 384;
   const darkness = Math.max(1, Math.min(5, Math.round(opts.darkness ?? 3)));
@@ -108,15 +102,10 @@ export function rasterizeThermalDoc(doc: ThermalDoc, opts: RasterizeOptions = {}
 
 /**
  * @deprecated — kept only so old imports don't break. Immediately rejects.
- * New callers should build a ThermalDoc and use rasterizeThermalDoc.
  */
 export function rasterizeHtml(_html: string, _opts: RasterizeOptions = {}): Promise<MonoBitmap> {
   return Promise.reject(new Error('HTML rasterization is deprecated — use rasterizeThermalDoc'));
 }
-
-/* -------------------------------------------------------------------------- */
-/*                    Bootstrap HTML for the hidden WebView                   */
-/* -------------------------------------------------------------------------- */
 
 export function getRasterizerHostHtml(): string {
   return `<!DOCTYPE html>
@@ -137,13 +126,6 @@ export function getRasterizerHostHtml(): string {
     } catch (e) {}
   }
 
-  /* ---------------- Text helpers ---------------- */
-
-  function measureText(ctx, text, font) {
-    ctx.font = font;
-    return ctx.measureText(text).width;
-  }
-
   function fontFor(size, bold, family) {
     var fam = (family === 'mono')
       ? '"Courier New", "Menlo", monospace'
@@ -151,7 +133,6 @@ export function getRasterizerHostHtml(): string {
     return (bold ? 'bold ' : '') + size + 'px ' + fam;
   }
 
-  // Draw a string with per-character letter spacing.
   function drawSpacedText(ctx, text, x, y, letterSpacing) {
     if (!letterSpacing || letterSpacing <= 0) {
       ctx.fillText(text, x, y);
@@ -163,7 +144,7 @@ export function getRasterizerHostHtml(): string {
       ctx.fillText(ch, cx, y);
       cx += ctx.measureText(ch).width + letterSpacing;
     }
-    return cx - x - letterSpacing; // total width without trailing gap
+    return cx - x - letterSpacing;
   }
 
   function measureSpacedText(ctx, text, letterSpacing) {
@@ -175,7 +156,6 @@ export function getRasterizerHostHtml(): string {
     return w + Math.max(0, (text.length - 1)) * letterSpacing;
   }
 
-  // Greedy word-wrap. Returns array of lines that each fit within maxWidth.
   function wrapLines(ctx, text, font, maxWidth) {
     ctx.font = font;
     if (!text) return [''];
@@ -209,56 +189,20 @@ export function getRasterizerHostHtml(): string {
     ctx.fillText(text, drawX, y);
   }
 
-  /* ---------------- GLOBAL OIL STICKER DESIGN SYSTEM ---------------- */
-  /* Applies to ALL services - Audi, BMW, Toyota, ANY car */
+  var DESIGN = { frameThickness: 3 };
+  var MARGIN = 8;
+  var LINE_GAP = 2;
 
-  var DESIGN = {
-    // Margins
-    margin: 8,                    // 8px outer margins
-    innerMargin: 12,              // 12px inner padding
-    
-    // Typography - Universal sizing
-    titleSize: 26,                // Shop name
-    headerSize: 22,               // Vehicle name (ANY car)
-    labelSize: 16,                // Labels (OIL:, MILEAGE:, etc)
-    valueSize: 18,                // Values (5W-30, 103,000, etc)
-    smallSize: 14,                // Units (KM, date)
-    checkboxSize: 14,             // Checkbox labels
-    
-    // Spacing
-    lineGap: 3,
-    sectionGap: 6,
-    dividerGap: 4,
-    
-    // Borders - Thick and bold
-    frameThickness: 4,
-    dividerThickness: 2,
-    
-    // Font families
-    fontFamily: '"Arial Black", "Arial", sans-serif',
-    monoFamily: '"Courier New", "Menlo", monospace',
-    
-    // Letter spacing for headers
-    titleSpacing: 2,
-    headerSpacing: 3,
-  };
-
-  /* ---------------- Op sizing (pass 1) ---------------- */
-
-  // Load one image (data URI) as HTMLImageElement.
   function loadImage(uri) {
     return new Promise(function (resolve) {
       var img = new Image();
       img.onload = function () { resolve(img); };
       img.onerror = function () { resolve(null); };
       img.src = uri;
-      // Safety: if it never fires, resolve after 4s
       setTimeout(function () { resolve(null); }, 4000);
     });
   }
 
-  // Preload all images referenced in ops so we know their dimensions before
-  // computing total height.
   function preloadImages(ops) {
     var jobs = [];
     for (var i = 0; i < ops.length; i++) {
@@ -271,41 +215,62 @@ export function getRasterizerHostHtml(): string {
     return Promise.all(jobs);
   }
 
-  // Compute the y-height each op needs.
   function measureOps(ctx, ops, width) {
-    var total = DESIGN.margin * 2; // top+bottom padding
+    var innerW = width - MARGIN * 2;
+    var total = 0;
     for (var i = 0; i < ops.length; i++) {
       var op = ops[i];
       var h = 0;
       switch (op.t) {
-        case 'shop_title': {
-          var size = DESIGN.titleSize;
-          var font = fontFor(size, true, 'sans');
+        case 'text': {
+          var size = op.size || 22;
+          var font = fontFor(size, !!op.bold, op.family);
           op.__size = size;
           op.__font = font;
-          op.__lines = [op.text || ''];
-          h = size + 14;
+          if (op.letterSpacing && op.letterSpacing > 0) {
+            op.__lines = [op.text || ''];
+          } else {
+            op.__lines = wrapLines(ctx, op.text || '', font, innerW);
+          }
+          var extraUnderline = op.underline && op.underline !== 'none' ? 8 : 0;
+          h = op.__lines.length * (size + LINE_GAP) + extraUnderline;
+          break;
+        }
+        case 'wrap': {
+          var size2 = op.size || 20;
+          var font2 = fontFor(size2, !!op.bold, op.family);
+          var lines2 = wrapLines(ctx, op.text || '', font2, innerW);
+          op.__lines = lines2;
+          op.__size = size2;
+          op.__font = font2;
+          h = lines2.length * (size2 + LINE_GAP);
+          break;
+        }
+        case 'row': {
+          var size3 = op.size || 22;
+          var font3 = fontFor(size3, !!op.bold, op.family);
+          op.__font = font3;
+          op.__size = size3;
+          h = size3 + LINE_GAP;
+          break;
+        }
+        case 'band': {
+          var sizeB = op.size || 24;
+          var fontB = fontFor(sizeB, op.bold === false ? false : true, op.family);
+          op.__font = fontB;
+          op.__size = sizeB;
+          h = sizeB + 14;
           break;
         }
         case 'header': {
-          var sizeH = DESIGN.headerSize;
+          var sizeH = op.size || 24;
           op.__size = sizeH;
-          op.__font = fontFor(sizeH, true, 'sans');
+          op.__font = fontFor(sizeH, true, op.family);
           h = sizeH + 14;
           break;
         }
-        case 'label_value': {
-          var labelSize = DESIGN.labelSize;
-          var valueSize = DESIGN.valueSize;
-          op.__labelSize = labelSize;
-          op.__valueSize = valueSize;
-          op.__labelFont = fontFor(labelSize, true, 'sans');
-          op.__valueFont = fontFor(valueSize, true, 'sans');
-          h = Math.max(labelSize, valueSize) + 6;
-          break;
-        }
         case 'divider': {
-          h = 8 + DESIGN.dividerThickness;
+          h = 8 + (op.thick || 0);
           break;
         }
         case 'space': {
@@ -313,17 +278,30 @@ export function getRasterizerHostHtml(): string {
           break;
         }
         case 'checkbox': {
-          var sizeC = DESIGN.checkboxSize;
+          var sizeC = op.size || 18;
           op.__size = sizeC;
-          op.__font = fontFor(sizeC, true, 'sans');
+          op.__font = fontFor(sizeC, true, op.family);
           h = Math.max(24, sizeC) + 6;
           break;
         }
-        case 'footer': {
-          var sizeF = DESIGN.smallSize;
-          op.__size = sizeF;
-          op.__font = fontFor(sizeF, false, 'sans');
-          h = sizeF + 8;
+        case 'boxed_text': {
+          var sizeBx = op.size || 20;
+          op.__size = sizeBx;
+          op.__font = fontFor(sizeBx, true);
+          var padYBx = op.padY == null ? 6 : op.padY;
+          h = sizeBx + padYBx * 2 + 4;
+          break;
+        }
+        case 'image': {
+          var img = op.__img;
+          if (!img) { h = 0; break; }
+          var maxW = Math.min(innerW, op.maxWidth || innerW);
+          var iw = img.width, ih = img.height;
+          var scale = maxW / iw;
+          if (scale > 1) scale = 1;
+          op.__drawW = Math.round(iw * scale);
+          op.__drawH = Math.round(ih * scale);
+          h = op.__drawH + 4;
           break;
         }
         default:
@@ -332,93 +310,129 @@ export function getRasterizerHostHtml(): string {
       op.__h = h;
       total += h;
     }
-    return total;
+    return total + MARGIN * 2;
   }
 
-  /* ---------------- Draw ops (pass 2) ---------------- */
-
   function drawOps(ctx, ops, width) {
-    var innerW = width - DESIGN.margin * 2;
-    var y = DESIGN.margin;
-    
+    var innerW = width - MARGIN * 2;
+    var y = MARGIN;
     for (var i = 0; i < ops.length; i++) {
       var op = ops[i];
       switch (op.t) {
-        case 'shop_title': {
+        case 'text': {
           ctx.fillStyle = '#000';
           ctx.font = op.__font;
           ctx.textBaseline = 'top';
-          ctx.textAlign = 'center';
-          var text = String(op.text || '').toUpperCase();
-          var ls = DESIGN.titleSpacing;
-          var totalW = measureSpacedText(ctx, text, ls);
-          var x = (width - totalW) / 2;
-          drawSpacedText(ctx, text, x, y, ls);
-          y += op.__size + 14;
+          var align = op.align || 'center';
+          var ls = op.letterSpacing || 0;
+          for (var l = 0; l < op.__lines.length; l++) {
+            var lt = op.__lines[l];
+            var lw = ls > 0 ? measureSpacedText(ctx, lt, ls) : ctx.measureText(lt).width;
+            var lx = MARGIN;
+            if (align === 'center') lx = MARGIN + (innerW - lw) / 2;
+            else if (align === 'right') lx = MARGIN + (innerW - lw);
+            if (ls > 0) drawSpacedText(ctx, lt, lx, y, ls);
+            else ctx.fillText(lt, lx, y);
+            y += op.__size + LINE_GAP;
+          }
+          if (op.underline === 'solid') {
+            ctx.fillRect(MARGIN, y + 2, innerW, 3);
+            y += 8;
+          } else if (op.underline === 'dashed') {
+            for (var udx = MARGIN; udx < MARGIN + innerW; udx += 8) {
+              ctx.fillRect(udx, y + 3, 4, 2);
+            }
+            y += 8;
+          }
+          break;
+        }
+        case 'wrap': {
+          ctx.fillStyle = '#000';
+          ctx.font = op.__font;
+          var align2 = op.align || 'left';
+          for (var l2 = 0; l2 < op.__lines.length; l2++) {
+            drawTextLine(ctx, op.__lines[l2], MARGIN, y, op.__size, align2, innerW);
+            y += op.__size + LINE_GAP;
+          }
+          break;
+        }
+        case 'row': {
+          ctx.fillStyle = '#000';
+          ctx.font = op.__font;
+          ctx.textBaseline = 'top';
+          var right = String(op.right == null ? '' : op.right);
+          var left = String(op.left == null ? '' : op.left);
+          var rightW = ctx.measureText(right).width;
+          var leftMax = innerW - rightW - 8;
+          if (leftMax < 20) leftMax = 20;
+          while (ctx.measureText(left).width > leftMax && left.length > 3) {
+            left = left.substring(0, left.length - 2) + '\\u2026';
+          }
+          ctx.fillText(left, MARGIN, y);
+          ctx.fillText(right, MARGIN + innerW - rightW, y);
+          y += op.__size + LINE_GAP;
+          break;
+        }
+        case 'band': {
+          var bh = op.__h;
+          ctx.fillStyle = '#000';
+          ctx.fillRect(0, y, width, bh);
+          ctx.fillStyle = '#fff';
+          ctx.font = op.__font;
+          var text = String(op.text || '');
+          var sz = op.__size;
+          while (ctx.measureText(text).width > width - 8 && sz > 12) {
+            sz -= 1;
+            ctx.font = fontFor(sz, op.bold === false ? false : true, op.family);
+          }
+          var tw = ctx.measureText(text).width;
+          ctx.textBaseline = 'top';
+          ctx.fillText(text, (width - tw) / 2, y + (bh - sz) / 2);
+          y += bh;
           break;
         }
         case 'header': {
           ctx.fillStyle = '#000';
           ctx.font = op.__font;
           ctx.textBaseline = 'top';
-          ctx.textAlign = 'center';
-          var head = String(op.text || '').toUpperCase();
+          var head = String(op.text || '');
           var hsz = op.__size;
-          var ls = DESIGN.headerSpacing;
-          var hw = measureSpacedText(ctx, head, ls);
+          var ls2 = op.letterSpacing || 0;
+          var hw = ls2 > 0 ? measureSpacedText(ctx, head, ls2) : ctx.measureText(head).width;
+          while (hw > innerW - 4 && hsz > 12) {
+            hsz -= 1;
+            ctx.font = fontFor(hsz, true, op.family);
+            hw = ls2 > 0 ? measureSpacedText(ctx, head, ls2) : ctx.measureText(head).width;
+          }
           var hx = (width - hw) / 2;
-          drawSpacedText(ctx, head, hx, y, ls);
-          // Thick underline
-          ctx.fillRect(DESIGN.margin + 10, y + hsz + 6, innerW - 20, 3);
+          if (ls2 > 0) drawSpacedText(ctx, head, hx, y, ls2);
+          else ctx.fillText(head, hx, y);
+          ctx.fillRect(MARGIN, y + hsz + 4, innerW, 2);
           y += hsz + 14;
           break;
         }
-        case 'label_value': {
-          ctx.textBaseline = 'top';
-          var label = String(op.label || '').toUpperCase();
-          var value = String(op.value || '');
-          var unit = String(op.unit || '');
-          
-          // Draw label
-          ctx.fillStyle = '#000';
-          ctx.font = op.__labelFont;
-          ctx.textAlign = 'left';
-          ctx.fillText(label, DESIGN.margin + 4, y);
-          
-          // Draw value
-          ctx.font = op.__valueFont;
-          ctx.textAlign = 'right';
-          var valueX = width - DESIGN.margin - 4;
-          if (unit) {
-            // Draw unit after value
-            var valueW = ctx.measureText(value).width;
-            ctx.fillText(value, valueX - ctx.measureText(unit).width - 6, y);
-            ctx.font = fontFor(DESIGN.smallSize, false, 'sans');
-            ctx.fillText(unit, valueX, y + 2);
-          } else {
-            ctx.fillText(value, valueX, y);
-          }
-          
-          y += op.__h;
-          break;
-        }
         case 'divider': {
-          var thick = DESIGN.dividerThickness;
-          ctx.fillStyle = '#000';
-          ctx.fillRect(DESIGN.margin + 4, y + 3, innerW - 8, thick);
-          y += 8 + thick;
+          var thick = op.thick || 2;
+          if ((op.style || 'solid') === 'dashed') {
+            ctx.fillStyle = '#000';
+            for (var dx = MARGIN; dx < MARGIN + innerW; dx += 8) {
+              ctx.fillRect(dx, y + 3, 4, thick);
+            }
+          } else {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(MARGIN, y + 3, innerW, thick);
+          }
+          y += 8 + (op.thick || 0);
           break;
         }
-        case 'space': {
+        case 'space':
           y += op.__h;
           break;
-        }
         case 'checkbox': {
-          var boxSize = 20;
+          var boxSize = 22;
           var boxY = y + 2;
-          var boxX = DESIGN.margin + 4;
+          var boxX = MARGIN + 4;
           ctx.fillStyle = '#000';
-          // Box outline
           ctx.fillRect(boxX, boxY, boxSize, 2);
           ctx.fillRect(boxX, boxY + boxSize - 2, boxSize, 2);
           ctx.fillRect(boxX, boxY, 2, boxSize);
@@ -434,44 +448,53 @@ export function getRasterizerHostHtml(): string {
           }
           ctx.font = op.__font;
           ctx.textBaseline = 'top';
-          ctx.textAlign = 'left';
           ctx.fillStyle = '#000';
-          ctx.fillText(String(op.label || '').toUpperCase(), boxX + boxSize + 10, boxY + (boxSize - op.__size) / 2 + 2);
+          ctx.fillText(String(op.label || ''), boxX + boxSize + 10, boxY + (boxSize - op.__size) / 2 + 2);
           y += op.__h;
           break;
         }
-        case 'footer': {
-          ctx.fillStyle = '#000';
+        case 'boxed_text': {
+          var bt = String(op.text || '');
+          var btSize = op.__size;
+          var btPadX = op.padX == null ? 10 : op.padX;
+          var btPadY = op.padY == null ? 6 : op.padY;
+          var btLs = op.letterSpacing || 0;
           ctx.font = op.__font;
+          ctx.fillStyle = '#000';
           ctx.textBaseline = 'top';
-          ctx.textAlign = 'center';
-          ctx.fillText(String(op.text || ''), width / 2, y);
+          var btW = btLs > 0 ? measureSpacedText(ctx, bt, btLs) : ctx.measureText(bt).width;
+          var rectW = btW + btPadX * 2;
+          if (rectW > innerW) rectW = innerW;
+          var rectX = MARGIN + (innerW - rectW) / 2;
+          var rectH = btSize + btPadY * 2;
+          ctx.fillRect(rectX, y, rectW, 2);
+          ctx.fillRect(rectX, y + rectH - 2, rectW, 2);
+          ctx.fillRect(rectX, y, 2, rectH);
+          ctx.fillRect(rectX + rectW - 2, y, 2, rectH);
+          var btX = rectX + (rectW - btW) / 2;
+          var btY = y + btPadY;
+          if (btLs > 0) drawSpacedText(ctx, bt, btX, btY, btLs);
+          else ctx.fillText(bt, btX, btY);
           y += op.__h;
+          break;
+        }
+        case 'image': {
+          if (op.__img) {
+            var iw = op.__drawW;
+            var ih = op.__drawH;
+            var ix = MARGIN;
+            if ((op.align || 'center') === 'center') ix = (width - iw) / 2;
+            else if (op.align === 'right') ix = width - MARGIN - iw;
+            try {
+              ctx.drawImage(op.__img, Math.floor(ix), Math.floor(y), iw, ih);
+            } catch (e) { /* ignore */ }
+            y += ih + 4;
+          }
           break;
         }
       }
     }
   }
-
-  /* ---------------- THE FIX: Horizontal flip before dithering ---------------- */
-
-  function flipCanvasHorizontally(sourceCanvas, width, height) {
-    var flippedCanvas = document.createElement('canvas');
-    flippedCanvas.width = width;
-    flippedCanvas.height = height;
-    var flippedCtx = flippedCanvas.getContext('2d');
-    
-    // Apply horizontal flip using translate + scale
-    flippedCtx.save();
-    flippedCtx.translate(width, 0);
-    flippedCtx.scale(-1, 1);
-    flippedCtx.drawImage(sourceCanvas, 0, 0);
-    flippedCtx.restore();
-    
-    return flippedCanvas;
-  }
-
-  /* ---------------- 1-bit Floyd–Steinberg dither ---------------- */
 
   function ditherAndPack(cv, darkness) {
     var w = cv.width, h = cv.height;
@@ -515,8 +538,6 @@ export function getRasterizerHostHtml(): string {
     return { width: w, height: h, rowsBase64: rowsB64 };
   }
 
-  /* ---------------- Public API ---------------- */
-
   window.__rasterizeDoc__ = function (payloadJson) {
     var payload;
     try { payload = JSON.parse(payloadJson); }
@@ -533,27 +554,15 @@ export function getRasterizerHostHtml(): string {
       var ctx = cv.getContext('2d');
 
       preloadImages(ops).then(function () {
-        // Pass 1 — measure
         var totalH = measureOps(ctx, ops, width);
-        // Feed rows show up as blank whitespace so paper can be torn off
         var feed = Math.max(0, doc.feedRows || 0);
         var canvasH = totalH + feed;
         cv.width = width;
         cv.height = canvasH;
         ctx = cv.getContext('2d');
-        // White background
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, width, canvasH);
-        
-        // Draw frame (4px thick border)
-        ctx.fillStyle = '#000';
-        var thick = DESIGN.frameThickness;
-        ctx.fillRect(thick/2, thick/2, width - thick, thick);              // top
-        ctx.fillRect(thick/2, canvasH - thick - thick/2, width - thick, thick); // bottom
-        ctx.fillRect(thick/2, thick/2, thick, canvasH - thick);           // left
-        ctx.fillRect(width - thick - thick/2, thick/2, thick, canvasH - thick); // right
-        
-        // Pass 2 — draw
+
         try {
           drawOps(ctx, ops, width);
         } catch (e) {
@@ -561,14 +570,20 @@ export function getRasterizerHostHtml(): string {
           return;
         }
 
-        /* ================================================================
-           THE FIX: Flip horizontally at the visual layer
-           ================================================================ */
-        var flippedCv = flipCanvasHorizontally(cv, width, canvasH);
+        if (doc.frame) {
+          ctx.fillStyle = '#000';
+          var thick = DESIGN.frameThickness;
+          var fx = 2, fy = 2;
+          var fw = width - fx * 2;
+          var fh = totalH - fy * 2;
+          ctx.fillRect(fx, fy, fw, thick);
+          ctx.fillRect(fx, fy + fh - thick, fw, thick);
+          ctx.fillRect(fx, fy, thick, fh);
+          ctx.fillRect(fx + fw - thick, fy, thick, fh);
+        }
 
-        // Dither + return using the flipped canvas
         try {
-          var bmp = ditherAndPack(flippedCv, payload.darkness || 3);
+          var bmp = ditherAndPack(cv, payload.darkness || 3);
           send({ id: id, ok: true, width: bmp.width, height: bmp.height, rowsBase64: bmp.rowsBase64 });
         } catch (e2) {
           send({ id: id, ok: false, error: 'dither failed: ' + (e2 && e2.message || e2) });
