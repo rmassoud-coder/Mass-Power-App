@@ -1,7 +1,5 @@
 /**
  * ThermalDoc → 384-px-wide 1-bit dithered bitmap.
- * 
- * FIX: Removed canvas-level horizontal flip. Added support for 'image' ops.
  */
 import type { MonoBitmap } from './catPrinter';
 import type { ThermalDoc } from './thermalDoc';
@@ -105,54 +103,30 @@ export function getRasterizerHostHtml(): string {
     } catch (e) {}
   }
 
-  // Standard helper functions
   function fontFor(size, bold, family) {
     var fam = (family === 'mono') ? '"Courier New", "Menlo", monospace' : '"Arial Black", "Arial", sans-serif';
     return (bold ? 'bold ' : '') + size + 'px ' + fam;
   }
 
-  // Design constants
   var DESIGN = {
-    margin: 12, // Increased margin to prevent text bleeding
-    frameThickness: 3, 
-    dividerThickness: 2,
-    titleSize: 22, // Reduced size to prevent bleeding
-    headerSize: 24, 
-    labelSize: 16, 
-    valueSize: 18, 
-    checkboxSize: 14, 
-    smallSize: 14
+    margin: 12, frameThickness: 3, dividerThickness: 2,
+    titleSize: 22, headerSize: 24, labelSize: 16, valueSize: 18, checkboxSize: 14, smallSize: 14
   };
 
-  // --- MEASURE OPS ---
   function measureOps(ctx, ops, width) {
     var total = DESIGN.margin * 2;
     for (var i = 0; i < ops.length; i++) {
       var op = ops[i];
       var h = 0;
       switch (op.t) {
-        case 'shop_title':
-          op.__size = DESIGN.titleSize; op.__font = fontFor(DESIGN.titleSize, true, 'sans');
-          h = DESIGN.titleSize + 14; break;
-        case 'header':
-          op.__size = op.size || DESIGN.headerSize; op.__font = fontFor(op.__size, true, 'sans');
-          h = op.__size + 14; break;
-        case 'label_value':
-          op.__labelSize = DESIGN.labelSize; op.__valueSize = DESIGN.valueSize;
-          op.__labelFont = fontFor(DESIGN.labelSize, true, 'sans'); op.__valueFont = fontFor(DESIGN.valueSize, true, 'sans');
-          h = Math.max(DESIGN.labelSize, DESIGN.valueSize) + 6; break;
+        case 'shop_title': op.__size = DESIGN.titleSize; op.__font = fontFor(DESIGN.titleSize, true, 'sans'); h = DESIGN.titleSize + 14; break;
+        case 'header': op.__size = op.size || DESIGN.headerSize; op.__font = fontFor(op.__size, true, 'sans'); h = op.__size + 14; break;
+        case 'label_value': op.__labelSize = DESIGN.labelSize; op.__valueSize = DESIGN.valueSize; op.__labelFont = fontFor(DESIGN.labelSize, true, 'sans'); op.__valueFont = fontFor(DESIGN.valueSize, true, 'sans'); h = Math.max(DESIGN.labelSize, DESIGN.valueSize) + 6; break;
         case 'divider': h = 8 + (op.thick || DESIGN.dividerThickness); break;
         case 'space': h = Math.max(0, op.h || 8); break;
-        case 'checkbox':
-          op.__size = op.size || DESIGN.checkboxSize; op.__font = fontFor(op.__size, true, 'sans');
-          h = Math.max(24, op.__size) + 6; break;
-        case 'footer':
-          op.__size = op.size || DESIGN.smallSize; op.__font = fontFor(op.__size, false, 'sans');
-          h = op.__size + 8; break;
-        case 'image': 
-          // Reserve space for the logo
-          op.__h = 80; 
-          h = 80; break;
+        case 'checkbox': op.__size = op.size || DESIGN.checkboxSize; op.__font = fontFor(op.__size, true, 'sans'); h = Math.max(24, op.__size) + 6; break;
+        case 'footer': op.__size = op.size || DESIGN.smallSize; op.__font = fontFor(op.__size, false, 'sans'); h = op.__size + 8; break;
+        case 'image': op.__h = 80; h = 80; break;
         default: h = 0;
       }
       op.__h = h;
@@ -161,7 +135,6 @@ export function getRasterizerHostHtml(): string {
     return total;
   }
 
-  // --- DRAW OPS ---
   function drawOps(ctx, ops, width) {
     var y = DESIGN.margin;
     for (var i = 0; i < ops.length; i++) {
@@ -210,14 +183,15 @@ export function getRasterizerHostHtml(): string {
           ctx.fillText(String(op.label || '').toUpperCase(), bx + boxSize + 10, by + (boxSize - op.__size) / 2 + 2);
           y += op.__h; break;
         case 'image':
-          if (op.dataUri) {
+          if (op.url) {
             var img = new Image();
+            img.crossOrigin = "Anonymous";
             img.onload = function() {
               var imgWidth = op.width || 60;
               var scale = imgWidth / img.width;
               ctx.drawImage(img, (width - imgWidth) / 2, y, imgWidth, img.height * scale);
             };
-            img.src = op.dataUri;
+            img.src = op.url;
           }
           y += op.__h; break;
         case 'footer':
@@ -242,7 +216,6 @@ export function getRasterizerHostHtml(): string {
     }
   }
 
-  // --- DITHER ---
   function ditherAndPack(cv, darkness) {
     var w = cv.width, h = cv.height;
     var ctx = cv.getContext('2d');
@@ -281,7 +254,6 @@ export function getRasterizerHostHtml(): string {
     return { width: w, height: h, rowsBase64: rowsB64 };
   }
 
-  // --- BOOTSTRAP ---
   window.__rasterizeDoc__ = function (payloadJson) {
     var payload = JSON.parse(payloadJson);
     var id = payload.id;
