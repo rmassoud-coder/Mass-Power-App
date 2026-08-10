@@ -4,6 +4,7 @@
 import type { Customer, Service, Vehicle, InventoryItem, LowStockItemBySupplier } from '../db/database';
 import type { AppSettings } from './settings';
 
+// We added 'image' to the supported ops
 export type ThermalOp =
   | { t: 'shop_title'; text: string }
   | { t: 'header'; text: string; size?: number; letterSpacing?: number }
@@ -11,7 +12,8 @@ export type ThermalOp =
   | { t: 'divider'; style?: 'solid' | 'dashed'; thick?: number }
   | { t: 'space'; h: number }
   | { t: 'checkbox'; checked: boolean; label: string; size?: number }
-  | { t: 'footer'; text: string; size?: number };
+  | { t: 'footer'; text: string; size?: number }
+  | { t: 'image'; dataUri: string; width?: number }; // Added for Logo
 
 export interface ThermalDoc {
   feedRows?: number;
@@ -32,24 +34,30 @@ export function buildOilStickerDoc(
   const ops: ThermalOp[] = [];
   const brand = [vehicle.make, vehicle.model].filter(Boolean).join(' ').trim().toUpperCase();
 
-  // 1. Shop name - Heavy, bold, solid line
+  // 1. THE LOGO (Assumes settings has the Data URI)
+  if (settings.logoDataUri) {
+    ops.push({ t: 'image', dataUri: settings.logoDataUri, width: 60 });
+    ops.push({ t: 'space', h: 6 });
+  }
+
+  // 2. Shop name - REDUCED SIZE to prevent bleeding (22px instead of 26px)
   ops.push({ t: 'shop_title', text: (settings.garageName || 'Mass Power Auto').toUpperCase() });
   
-  // 2. Solid line under shop name
+  // 3. Solid line under shop name
   ops.push({ t: 'divider', style: 'solid', thick: 3 });
   ops.push({ t: 'space', h: 6 });
 
-  // 3. Vehicle Brand - Large, spaced out, solid line
+  // 4. Vehicle Brand - Large, spaced out, solid line
   ops.push({ t: 'header', text: brand, size: 32, letterSpacing: 4 });
   ops.push({ t: 'divider', style: 'solid', thick: 3 });
   ops.push({ t: 'space', h: 8 });
 
-  // 4. Section Title - Dashed line underneath
+  // 5. Section Title
   ops.push({ t: 'header', text: 'NEXT OIL CHANGE', size: 18, letterSpacing: 2 });
   ops.push({ t: 'divider', style: 'dashed' });
   ops.push({ t: 'space', h: 10 });
 
-  // 5. Data Rows - Aligned exactly
+  // 6. Data Rows
   if (service.oil_grade) {
     ops.push({ t: 'label_value', label: 'OIL:', value: service.oil_grade });
   }
@@ -62,16 +70,16 @@ export function buildOilStickerDoc(
   
   ops.push({ t: 'space', h: 6 });
   
-  // 6. Dashed divider before footer
+  // 7. Dashed divider before footer
   ops.push({ t: 'divider', style: 'dashed' });
   ops.push({ t: 'space', h: 6 });
 
-  // 7. Filter Change Checkbox
+  // 8. Filter Change Checkbox
   ops.push({ t: 'checkbox', checked: !!service.oil_filter_changed, label: 'FILTER CHANGE', size: 16 });
   
   return { 
     ops, 
-    frame: true, // Forces the outer 3px black border
+    frame: true, 
     feedRows: 30 
   };
 }
@@ -86,8 +94,7 @@ function fmtDate(iso?: string | null): string {
   catch { return String(iso); }
 }
 
-// Dummy exports for the other sticker types (Battery, HVAC, etc.) 
-// You can keep these as they were in your original file, they are unchanged.
+// Placeholder exports for other sticker types (keep existing content if you have it)
 export function buildBatteryStickerDoc(...args: any[]): ThermalDoc { return { ops: [], feedRows: 30 }; }
 export function buildHvacStickerDoc(...args: any[]): ThermalDoc { return { ops: [], feedRows: 30 }; }
 export function buildThermalReceiptDoc(...args: any[]): ThermalDoc { return { ops: [], feedRows: 40 }; }
