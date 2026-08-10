@@ -1,8 +1,7 @@
 /**
  * ThermalDoc → 384-px-wide 1-bit dithered bitmap.
  * 
- * FIX: Removed the harmful canvas-level horizontal flip. The printer's driver
- * (catPrinter.ts) handles row-reversal and bit-mirroring internally.
+ * FIX: Removed canvas-level horizontal flip. Added support for 'image' ops.
  */
 import type { MonoBitmap } from './catPrinter';
 import type { ThermalDoc } from './thermalDoc';
@@ -114,13 +113,19 @@ export function getRasterizerHostHtml(): string {
 
   // Design constants
   var DESIGN = {
-    margin: 8, frameThickness: 4, dividerThickness: 2,
-    titleSize: 26, headerSize: 22, labelSize: 16, valueSize: 18, checkboxSize: 14, smallSize: 14
+    margin: 12, // Increased margin to prevent text bleeding
+    frameThickness: 3, 
+    dividerThickness: 2,
+    titleSize: 22, // Reduced size to prevent bleeding
+    headerSize: 24, 
+    labelSize: 16, 
+    valueSize: 18, 
+    checkboxSize: 14, 
+    smallSize: 14
   };
 
   // --- MEASURE OPS ---
   function measureOps(ctx, ops, width) {
-    var innerW = width - DESIGN.margin * 2;
     var total = DESIGN.margin * 2;
     for (var i = 0; i < ops.length; i++) {
       var op = ops[i];
@@ -144,9 +149,10 @@ export function getRasterizerHostHtml(): string {
         case 'footer':
           op.__size = op.size || DESIGN.smallSize; op.__font = fontFor(op.__size, false, 'sans');
           h = op.__size + 8; break;
-        case 'text': case 'row': case 'wrap': case 'band': case 'boxed_text': case 'image':
-          // Fallback for future thermalDoc ops
-          h = op.h || 20; break;
+        case 'image': 
+          // Reserve space for the logo
+          op.__h = 80; 
+          h = 80; break;
         default: h = 0;
       }
       op.__h = h;
@@ -203,10 +209,21 @@ export function getRasterizerHostHtml(): string {
           ctx.font = op.__font; ctx.textBaseline = 'top'; ctx.textAlign = 'left'; ctx.fillStyle = '#000';
           ctx.fillText(String(op.label || '').toUpperCase(), bx + boxSize + 10, by + (boxSize - op.__size) / 2 + 2);
           y += op.__h; break;
+        case 'image':
+          if (op.dataUri) {
+            var img = new Image();
+            img.onload = function() {
+              var imgWidth = op.width || 60;
+              var scale = imgWidth / img.width;
+              ctx.drawImage(img, (width - imgWidth) / 2, y, imgWidth, img.height * scale);
+            };
+            img.src = op.dataUri;
+          }
+          y += op.__h; break;
         case 'footer':
           ctx.fillStyle = '#000'; ctx.font = op.__font; ctx.textBaseline = 'top'; ctx.textAlign = 'center';
           ctx.fillText(String(op.text || ''), width / 2, y); y += op.__h; break;
-        default: y += op.__h; // Skip unknown
+        default: y += op.__h;
       }
     }
   }
@@ -294,7 +311,6 @@ export function getRasterizerHostHtml(): string {
       
       drawOps(ctx, ops, width);
       
-      // REMOVED: flipCanvasHorizontally (driver handles mirroring)
       var bmp = ditherAndPack(cv, payload.darkness || 3);
       send({ id: id, ok: true, width: bmp.width, height: bmp.height, rowsBase64: bmp.rowsBase64 });
     } catch (e) {
