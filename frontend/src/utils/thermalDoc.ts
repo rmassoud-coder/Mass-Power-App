@@ -1,10 +1,10 @@
 /**
  * ThermalDoc — structured print job matching the exact Target Image layout.
  */
+import { Image } from 'react-native'; // <--- ADDED THIS
 import type { Customer, Service, Vehicle, InventoryItem, LowStockItemBySupplier } from '../db/database';
 import type { AppSettings } from './settings';
 
-// We added 'image' to the supported ops
 export type ThermalOp =
   | { t: 'shop_title'; text: string }
   | { t: 'header'; text: string; size?: number; letterSpacing?: number }
@@ -13,7 +13,7 @@ export type ThermalOp =
   | { t: 'space'; h: number }
   | { t: 'checkbox'; checked: boolean; label: string; size?: number }
   | { t: 'footer'; text: string; size?: number }
-  | { t: 'image'; dataUri: string; width?: number }; // Added for Logo
+  | { t: 'image'; dataUri: string; width?: number };
 
 export interface ThermalDoc {
   feedRows?: number;
@@ -22,25 +22,64 @@ export interface ThermalDoc {
 }
 
 /* -------------------------------------------------------------------------- */
+/*                SMART LOGO LOADER (Converts .png to Data URI)               */
+/* -------------------------------------------------------------------------- */
+
+// The name must match the file in frontend/assets/images/
+const LOGO_FILE_NAME = 'mass-power-logo.png';
+
+// This function magically turns the image file into the base64 string the printer needs
+function getLogoDataUri(): Promise<string | null> {
+  return new Promise((resolve) => {
+    try {
+      // Resolve the asset ID from the filename
+      const asset = Image.resolveAssetSource(require('../assets/images/' + LOGO_FILE_NAME));
+      if (!asset || !asset.uri) {
+        resolve(null);
+        return;
+      }
+
+      // Fetch the image and convert to base64
+      fetch(asset.uri)
+        .then(res => res.blob())
+        .then(blob => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            // Returns string like: data:image/png;base64,...
+            resolve(reader.result as string);
+          };
+          reader.readAsDataURL(blob);
+        })
+        .catch(() => resolve(null));
+    } catch (e) {
+      resolve(null); // If image not found, just skip it
+    }
+  });
+}
+
+/* -------------------------------------------------------------------------- */
 /*                           OIL STICKER BUILDER                              */
 /*                     MATCHES THE EXACT TARGET IMAGE                         */
 /* -------------------------------------------------------------------------- */
-export function buildOilStickerDoc(
+
+// We make this function ASYNC so it can wait for the logo to load
+export async function buildOilStickerDoc(
   _customer: Customer,
   vehicle: Vehicle,
   service: Service,
   settings: AppSettings
-): ThermalDoc {
+): Promise<ThermalDoc> { // <--- Returns a Promise
   const ops: ThermalOp[] = [];
   const brand = [vehicle.make, vehicle.model].filter(Boolean).join(' ').trim().toUpperCase();
 
-  // 1. THE LOGO (Assumes settings has the Data URI)
-  if (settings.logoDataUri) {
-    ops.push({ t: 'image', dataUri: settings.logoDataUri, width: 60 });
+  // 1. SMART LOGO LOADING
+  const logoData = await getLogoDataUri();
+  if (logoData) {
+    ops.push({ t: 'image', dataUri: logoData, width: 60 });
     ops.push({ t: 'space', h: 6 });
   }
 
-  // 2. Shop name - REDUCED SIZE to prevent bleeding (22px instead of 26px)
+  // 2. Shop name - REDUCED SIZE to prevent bleeding (22px)
   ops.push({ t: 'shop_title', text: (settings.garageName || 'Mass Power Auto').toUpperCase() });
   
   // 3. Solid line under shop name
@@ -94,7 +133,9 @@ function fmtDate(iso?: string | null): string {
   catch { return String(iso); }
 }
 
-// Placeholder exports for other sticker types (keep existing content if you have it)
+/* -------------------------------------------------------------------------- */
+/*              OTHER STICKERS (Kept as-is for compatibility)                 */
+/* -------------------------------------------------------------------------- */
 export function buildBatteryStickerDoc(...args: any[]): ThermalDoc { return { ops: [], feedRows: 30 }; }
 export function buildHvacStickerDoc(...args: any[]): ThermalDoc { return { ops: [], feedRows: 30 }; }
 export function buildThermalReceiptDoc(...args: any[]): ThermalDoc { return { ops: [], feedRows: 40 }; }
