@@ -240,43 +240,54 @@ export function getRasterizerHostHtml(): string {
     }
   }
 
+  // Hard threshold (no error-diffusion dithering) + 1px dilation.
+  // Floyd-Steinberg dithering is for photos with gradients; for stamped
+  // text/line content it breaks antialiased edges into sparse dots,
+  // making text look thin/gray instead of solid black. Threshold + bolden
+  // is standard practice for thermal receipt/label rendering.
   function ditherAndPack(cv, darkness) {
     var w = cv.width, h = cv.height;
     var ctx = cv.getContext('2d');
     var img = ctx.getImageData(0, 0, w, h);
     var d = img.data;
-    var gray = new Int16Array(w * h);
     var shift = ({1:-30, 2:-15, 3:0, 4:15, 5:30})[darkness] || 0;
+    var threshold = 128 - shift; // same darkness semantics as before
+
+    var bw = new Uint8Array(w * h); // 1 = black
     for (var i = 0, p = 0; i < d.length; i += 4, p++) {
       var a = d[i + 3] / 255;
-      var y = 0.299 * (d[i] * a + 255 * (1 - a)) + 0.587 * (d[i+1] * a + 255 * (1 - a)) + 0.114 * (d[i+2] * a + 255 * (1 - a)) + shift;
-      if (y < 0) y = 0; if (y > 255) y = 255;
-      gray[p] = y;
+      var y = 0.299 * (d[i] * a + 255 * (1 - a)) + 0.587 * (d[i+1] * a + 255 * (1 - a)) + 0.114 * (d[i+2] * a + 255 * (1 - a));
+      bw[p] = (y < threshold) ? 1 : 0;
     }
+
+    // Bolden: any pixel adjacent to a black pixel also becomes black.
+    // Thin strokes (font hairlines, thin dividers) survive thermal print
+    // heads much better at 1px+ thickness.
+    var bold = new Uint8Array(w * h);
+    for (var yy = 0; yy < h; yy++) {
+      for (var xx = 0; xx < w; xx++) {
+        var idx = yy * w + xx;
+        if (bw[idx]) { bold[idx] = 1; continue; }
+        var hit =
+          (xx > 0 && bw[idx - 1]) || (xx < w - 1 && bw[idx + 1]) ||
+          (yy > 0 && bw[idx - w]) || (yy < h - 1 && bw[idx + w]);
+        bold[idx] = hit ? 1 : 0;
+      }
+    }
+
     var bytesPerRow = Math.ceil(w / 8);
     var rowsB64 = new Array(h);
-    for (var yy = 0; yy < h; yy++) {
+    for (var Y = 0; Y < h; Y++) {
       var row = new Uint8Array(bytesPerRow);
-      for (var x = 0; x < w; x++) {
-        var idx = yy * w + x;
-        var old = gray[idx];
-        var nw = old < 128 ? 0 : 255;
-        var err = old - nw;
-        gray[idx] = nw;
-        if (x + 1 < w) gray[idx + 1] += (err * 7) >> 4;
-        if (yy + 1 < h) {
-          if (x > 0) gray[idx + w - 1] += (err * 3) >> 4;
-          gray[idx + w] += (err * 5) >> 4;
-          if (x + 1 < w) gray[idx + w + 1] += (err * 1) >> 4;
-        }
-        if (nw === 0) {
-          var bitPos = MSB_FIRST ? (7 - (x & 7)) : (x & 7);
-          row[x >> 3] |= (1 << bitPos);
+      for (var X = 0; X < w; X++) {
+        if (bold[Y * w + X]) {
+          var bitPos = MSB_FIRST ? (7 - (X & 7)) : (X & 7);
+          row[X >> 3] |= (1 << bitPos);
         }
       }
       var s = '';
       for (var k = 0; k < row.length; k++) s += String.fromCharCode(row[k]);
-      rowsB64[yy] = btoa(s);
+      rowsB64[Y] = btoa(s);
     }
     return { width: w, height: h, rowsBase64: rowsB64 };
   }
