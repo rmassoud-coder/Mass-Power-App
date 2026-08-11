@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "exported_at": "2026-08-11T22:00:00.000Z",
+  "exported_at": "2026-08-11T22:30:00.000Z",
   "customers": [],
   "vehicles": [],
   "services": [],
@@ -135,7 +135,7 @@
   "inventory": [
     {
       "id": "mr3ln2b6b2eqhztw",
-      "item_number": "INV-917",
+      "item_number": "INV-2001",
       "item_type": "Safe Octane",
       "item_quantity": 5,
       "item_price": 2,
@@ -147,7 +147,7 @@
     },
     {
       "id": "mr3m7ibd8i04ebrv",
-      "item_number": "INV-923",
+      "item_number": "INV-2002",
       "item_type": "Spark Plugs NGk 21",
       "item_quantity": 12,
       "item_price": 2,
@@ -159,7 +159,7 @@
     },
     {
       "id": "mr5ah9ui2axvcz35",
-      "item_number": "INV-944",
+      "item_number": "INV-2003",
       "item_type": "Coil VW",
       "item_quantity": 2,
       "item_price": 15,
@@ -171,7 +171,7 @@
     },
     {
       "id": "mr6nr71n529cevyk",
-      "item_number": "INV-945",
+      "item_number": "INV-2004",
       "item_type": "Addinol 10w40 X1 Liters",
       "item_quantity": 12,
       "item_price": 8,
@@ -183,7 +183,7 @@
     },
     {
       "id": "mr6nsxii7gtmv0r9",
-      "item_number": "INV-946",
+      "item_number": "INV-2005",
       "item_type": "Addinol 5w40 X1 Liters",
       "item_quantity": 12,
       "item_price": 10,
@@ -195,7 +195,7 @@
     },
     {
       "id": "mr6nvhcxch3ypad6",
-      "item_number": "INV-947",
+      "item_number": "INV-2006",
       "item_type": "Addinol 5w30 X1 Liters",
       "item_quantity": 12,
       "item_price": 10,
@@ -207,7 +207,7 @@
     },
     {
       "id": "mrab2smo1o6kbzya",
-      "item_number": "INV-948",
+      "item_number": "INV-2007",
       "item_type": "Oil Filter MB W124",
       "item_quantity": 3,
       "item_price": 4,
@@ -219,7 +219,7 @@
     },
     {
       "id": "mrab5ko8klun817z",
-      "item_number": "INV-949",
+      "item_number": "INV-2008",
       "item_type": "Oil Filter MB S-Class",
       "item_quantity": 3,
       "item_price": 4,
@@ -231,7 +231,7 @@
     },
     {
       "id": "mrkfzhe5jwyi0oy1",
-      "item_number": "INV-990",
+      "item_number": "INV-2009",
       "item_type": "Konmax Antifreeze 5KG Pink",
       "item_quantity": 3,
       "item_price": 10,
@@ -243,7 +243,7 @@
     },
     {
       "id": "mrkg0aafy9gnsx84",
-      "item_number": "INV-991",
+      "item_number": "INV-2010",
       "item_type": "Konmax Antifreeze Green 5kG",
       "item_quantity": 4,
       "item_price": 10,
@@ -255,7 +255,7 @@
     },
     {
       "id": "mrkg2k06hs3ykj5q",
-      "item_number": "INV-992",
+      "item_number": "INV-2011",
       "item_type": "Konmax Antifreeze 1.5 KG",
       "item_quantity": 11,
       "item_price": 7,
@@ -267,7 +267,7 @@
     },
     {
       "id": "mrkvuzeu70rv7yhh",
-      "item_number": "INV-993",
+      "item_number": "INV-2012",
       "item_type": "Spark Plug Generic 2",
       "item_quantity": 10,
       "item_price": 3.25,
@@ -279,7 +279,7 @@
     },
     {
       "id": "mrkvw7u9rn5el0aj",
-      "item_number": "INV-994",
+      "item_number": "INV-2013",
       "item_type": "Spark Plug Bosch Generic 2 Heads",
       "item_quantity": 10,
       "item_price": 3.25,
@@ -291,7 +291,7 @@
     },
     {
       "id": "mrkvykfaas4we8e1",
-      "item_number": "INV-995",
+      "item_number": "INV-2014",
       "item_type": "Spark Plug Bosch Generic 3 Heads",
       "item_quantity": 20,
       "item_price": 3.5,
@@ -303,7 +303,7 @@
     },
     {
       "id": "mrkw36tng00zgpdp",
-      "item_number": "INV-996",
+      "item_number": "INV-2015",
       "item_type": "Fuel Filter Peugeot Renault",
       "item_quantity": 3,
       "item_price": 4,
@@ -315,7 +315,7 @@
     },
     {
       "id": "mrkw5m0ngfxw1m2q",
-      "item_number": "INV-997",
+      "item_number": "INV-2016",
       "item_type": "Fuel Filter Rapid Bosch",
       "item_quantity": 3,
       "item_price": 2.75,
@@ -327,7 +327,7 @@
     },
     {
       "id": "mrkwbn8l6hxpftf4",
-      "item_number": "INV-998",
+      "item_number": "INV-2017",
       "item_type": "Fuel Filter Pathfinder Original",
       "item_quantity": 1,
       "item_price": 4,
@@ -339,7 +339,7 @@
     },
     {
       "id": "mrkwdj0d3laqibp1",
-      "item_number": "INV-999",
+      "item_number": "INV-2018",
       "item_type": "Fuel Filter Pathfinder Alco",
       "item_quantity": 2,
       "item_price": 2.25,
@@ -351,7 +351,7 @@
     },
     {
       "id": "mrkwexfttzbio42j",
-      "item_number": "INV-1000",
+      "item_number": "INV-2019",
       "item_type": "Fuel Filter Generic Mann",
       "item_quantity": 10,
       "item_price": 0.8,
@@ -363,7 +363,7 @@
     },
     {
       "id": "mrkwhcklh3nlhbrl",
-      "item_number": "INV-1001",
+      "item_number": "INV-2020",
       "item_type": "Fuel Filter BMW Long Tube",
       "item_quantity": 2,
       "item_price": 9,
@@ -375,7 +375,7 @@
     },
     {
       "id": "mrkwieq0gn70n1jm",
-      "item_number": "INV-1002",
+      "item_number": "INV-2021",
       "item_type": "Fuel Filter Carburetor Big",
       "item_quantity": 5,
       "item_price": 1,
@@ -387,7 +387,7 @@
     },
     {
       "id": "mrkwjki0q2ynai9l",
-      "item_number": "INV-1003",
+      "item_number": "INV-2022",
       "item_type": "Fuel Filter Grand Cherokee",
       "item_quantity": 2,
       "item_price": 11,
@@ -399,7 +399,7 @@
     },
     {
       "id": "mrkwkllynk96otpz",
-      "item_number": "INV-1004",
+      "item_number": "INV-2023",
       "item_type": "Fuel Filter American",
       "item_quantity": 2,
       "item_price": 3.5,
@@ -411,7 +411,7 @@
     },
     {
       "id": "mrkwm09f8x3ulg5k",
-      "item_number": "INV-1005",
+      "item_number": "INV-2024",
       "item_type": "Fuel Filter Envoy",
       "item_quantity": 2,
       "item_price": 4.5,
@@ -423,7 +423,7 @@
     },
     {
       "id": "mrkwn26d70oce1n5",
-      "item_number": "INV-1006",
+      "item_number": "INV-2025",
       "item_type": "Fuel Filter BMW Original",
       "item_quantity": 3,
       "item_price": 4,
@@ -435,7 +435,7 @@
     },
     {
       "id": "mrkwo1ty9t363m7o",
-      "item_number": "INV-1007",
+      "item_number": "INV-2026",
       "item_type": "Fuel Filter MB Old",
       "item_quantity": 2,
       "item_price": 7,
@@ -447,7 +447,7 @@
     },
     {
       "id": "mrkwoxgi5xil23vf",
-      "item_number": "INV-1008",
+      "item_number": "INV-2027",
       "item_type": "Fuel Filter MB 300",
       "item_quantity": 2,
       "item_price": 6,
@@ -459,7 +459,7 @@
     },
     {
       "id": "mrkwqh0mnau8mu69",
-      "item_number": "INV-1009",
+      "item_number": "INV-2028",
       "item_type": "Fuel Filter MB Return Valve",
       "item_quantity": 2,
       "item_price": 16,
@@ -471,7 +471,7 @@
     },
     {
       "id": "mrkwso8rm4oiyv85",
-      "item_number": "INV-1010",
+      "item_number": "INV-2029",
       "item_type": "Fuel Filter Japanese New",
       "item_quantity": 2,
       "item_price": 5,
@@ -483,7 +483,7 @@
     },
     {
       "id": "mrkwtmz07hjy35f1",
-      "item_number": "INV-1011",
+      "item_number": "INV-2030",
       "item_type": "Fuel Filter Japanese Generic",
       "item_quantity": 2,
       "item_price": 6,
