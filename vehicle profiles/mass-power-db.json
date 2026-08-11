@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "exported_at": "2026-08-11T09:57:04.984Z",
+  "exported_at": "2026-08-11T14:28:29.287Z",
   "customers": [
     {
       "id": "6a1dcd13d860efc6bc5dc11e",
@@ -300,7 +300,20 @@
     }
   ],
   "service_items": [],
-  "inventory": [],
+  "inventory": [
+    {
+      "id": "msor9qstkpehlg07",
+      "item_number": "INV-001",
+      "item_type": "Filter",
+      "item_quantity": 10,
+      "item_price": 5,
+      "created_at": "2026-08-11T14:28:28.018Z",
+      "updated_at": "2026-08-11T14:28:28.018Z",
+      "item_retail_price": 10,
+      "item_supplier": "Berro",
+      "item_code": null
+    }
+  ],
   "suppliers": [
     {
       "id": "mslr1qp3g1xdbfo8",
