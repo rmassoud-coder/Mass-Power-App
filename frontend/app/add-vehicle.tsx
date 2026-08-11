@@ -125,7 +125,7 @@ export default function AddVehicleScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!vin.trim() || !plateNumber.trim() || !make.trim() || !model.trim()) {
+    if (!vin.trim() || !make.trim() || !model.trim()) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
