@@ -1,3 +1,4 @@
+// catPrinter.ts — only leadFeedFrame doubled (40 → 80)
 /**
  * catPrinter.ts — BLE driver for GT01/GB02/GB03/MX/PD01-series "cat printers".
  *
@@ -188,13 +189,10 @@ async function sendBitmap(deviceId: string, bmp: MonoBitmap): Promise<void> {
     const orderedRows = [...bmp.rowsBase64].reverse();
     const rowFrames = orderedRows.map((r) => buildFrame(CMD_DRAW_BITMAP, decodeRow(r)));
 
-    // Lead-in feed so the top of the image clears the tear bar/print head
-    // housing before drawing starts. Without this the first ~15-20px of
-    // content (e.g. a logo) prints hidden inside the mechanism and only
-    // becomes visible once the *next* job's feed pushes it out. If the
-    // logo/header is still clipped on your printer, increase this value
-    // (each unit is roughly one print line of feed).
-    const leadFeedFrame = buildFrame(CMD_FEED_PAPER, Uint8Array.from([40]));
+    // Lead-in feed so the top of the image (logo/header) fully clears the
+    // tear bar/print head housing before drawing starts. Doubled from 40 to
+    // 80 dots after testing showed 40 still clipped the top of the sticker.
+    const leadFeedFrame = buildFrame(CMD_FEED_PAPER, Uint8Array.from([80]));
     const feedFrame = buildFrame(CMD_FEED_PAPER, Uint8Array.from([80]));
 
     let mtu = 23;
