@@ -191,7 +191,7 @@ async function sendBitmap(deviceId: string, bmp: MonoBitmap): Promise<void> {
     // Lead-in feed so the top of the image (logo/header) fully clears the
     // tear bar/print head housing before drawing starts.
     const leadFeedFrame = buildFrame(CMD_FEED_PAPER, Uint8Array.from([80]));
-    const feedFrame = buildFrame(CMD_FEED_PAPER, Uint8Array.from([80]));
+    const feedFrame = buildFrame(CMD_FEED_PAPER, Uint8Array.from([180]));
 
     let mtu = 23;
     try {
