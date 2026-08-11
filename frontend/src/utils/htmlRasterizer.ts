@@ -172,8 +172,8 @@ export function getRasterizerHostHtml(): string {
     return Promise.all(promises);
   }
 
-  function drawOps(ctx, ops, width) {
-    var y = DESIGN.margin;
+  function drawOps(ctx, ops, width, startY) {
+    var y = startY;
     for (var i = 0; i < ops.length; i++) {
       var op = ops[i];
       switch (op.t) {
@@ -303,24 +303,28 @@ export function getRasterizerHostHtml(): string {
         var cv = document.getElementById('cv');
         var ctx = cv.getContext('2d');
 
+        var leadRows = Math.max(0, doc.leadRows || 0);
         var totalH = measureOps(ctx, ops, width);
         var feed = Math.max(0, doc.feedRows || 0);
-        var canvasH = totalH + feed;
+        var canvasH = leadRows + totalH + feed;
 
         cv.width = width; cv.height = canvasH;
         ctx = cv.getContext('2d');
         ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, width, canvasH);
 
+        // Frame is drawn around the CONTENT area only, not the blank lead-in
+        // space at the top.
         if (doc.frame) {
           ctx.fillStyle = '#000';
           var thick = DESIGN.frameThickness;
-          ctx.fillRect(thick/2, thick/2, width - thick, thick);
-          ctx.fillRect(thick/2, canvasH - thick - thick/2, width - thick, thick);
-          ctx.fillRect(thick/2, thick/2, thick, canvasH - thick);
-          ctx.fillRect(width - thick - thick/2, thick/2, thick, canvasH - thick);
+          var contentH = totalH;
+          ctx.fillRect(thick/2, leadRows + thick/2, width - thick, thick);
+          ctx.fillRect(thick/2, leadRows + contentH - thick - thick/2, width - thick, thick);
+          ctx.fillRect(thick/2, leadRows + thick/2, thick, contentH - thick);
+          ctx.fillRect(width - thick - thick/2, leadRows + thick/2, thick, contentH - thick);
         }
 
-        drawOps(ctx, ops, width);
+        drawOps(ctx, ops, width, leadRows + DESIGN.margin);
 
         var bmp = ditherAndPack(cv, payload.darkness || 3);
         send({ id: id, ok: true, width: bmp.width, height: bmp.height, rowsBase64: bmp.rowsBase64 });
