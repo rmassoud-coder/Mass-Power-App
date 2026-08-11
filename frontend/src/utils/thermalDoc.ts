@@ -30,7 +30,7 @@ export function buildOilStickerDoc(
   const brand = [vehicle.make, vehicle.model].filter(Boolean).join(' ').trim().toUpperCase();
 
   const logoUrl = "https://rmassoud-coder.github.io/Mass-Power-App/vehicle%20profiles/mass-power-logo.png";
-  ops.push({ t: 'image', url: logoUrl, width: 60 });
+  ops.push({ t: 'image', url: logoUrl, width: 130 });
   ops.push({ t: 'space', h: 6 });
 
   ops.push({ t: 'shop_title', text: (settings.garageName || 'Mass Power Auto').toUpperCase() });
