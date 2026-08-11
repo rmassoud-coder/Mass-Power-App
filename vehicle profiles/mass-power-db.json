@@ -1556,7 +1556,42 @@
       "outsource_cost": 0
     }
   ],
+    "inventory": [
+        {
+      "id": "mryul4mkgowve68v",
+      "service_id": "mryul4lvjr1ypb79",
+      "inventory_id": "mr3m6kgsq4kn3jfz",
+      "item_type": "Spark Plug NGK Generic 16",
+      "quantity": 8,
+      "unit_price": 6,
+      "created_at": "2026-07-24T11:19:17.420Z"
+    },
     {
+      "id": "ms3emkidly4bqxyd",
+      "service_id": "ms0mjacn9zz1ms1z",
+      "inventory_id": "mrkfzhe5jwyi0oy1",
+      "item_type": "Konmax Antifreeze 5KG Pink",
+      "quantity": 1,
+      "unit_price": 15,
+      "created_at": "2026-07-27T15:51:21.685Z"
+    },
+    {
+      "id": "ms3en1okk5gekr3b",
+      "service_id": "mrqc72ki3obnjy4b",
+      "inventory_id": "mr3k6pwt51w5n9kz",
+      "item_type": "Lorf 10W40 X4 Liters",
+      "quantity": 1,
+      "unit_price": 40,
+      "created_at": "2026-07-27T15:51:43.940Z"
+    },
+    {
+      "id": "ms3k4yq5vo88rahv",
+      "service_id": "ms34ux4wx2yg88zk",
+      "inventory_id": "mr3kf3q8d07l7zdr",
+      "item_type": "Lorf  5w40 X4 Liters",
+      "quantity": 1,
+      "unit_price": 45,
+      "created_at": "20{
       "id": "mriw3c6xlx1lscvj",
       "service_id": "mriw3c5zdrgzyj22",
       "inventory_id": "mrarbnvbl0hagxlz",
@@ -1709,41 +1744,7 @@
       "unit_price": 12,
       "created_at": "2026-07-24T10:39:48.441Z"
     },
-    {
-      "id": "mryul4mkgowve68v",
-      "service_id": "mryul4lvjr1ypb79",
-      "inventory_id": "mr3m6kgsq4kn3jfz",
-      "item_type": "Spark Plug NGK Generic 16",
-      "quantity": 8,
-      "unit_price": 6,
-      "created_at": "2026-07-24T11:19:17.420Z"
-    },
-    {
-      "id": "ms3emkidly4bqxyd",
-      "service_id": "ms0mjacn9zz1ms1z",
-      "inventory_id": "mrkfzhe5jwyi0oy1",
-      "item_type": "Konmax Antifreeze 5KG Pink",
-      "quantity": 1,
-      "unit_price": 15,
-      "created_at": "2026-07-27T15:51:21.685Z"
-    },
-    {
-      "id": "ms3en1okk5gekr3b",
-      "service_id": "mrqc72ki3obnjy4b",
-      "inventory_id": "mr3k6pwt51w5n9kz",
-      "item_type": "Lorf 10W40 X4 Liters",
-      "quantity": 1,
-      "unit_price": 40,
-      "created_at": "2026-07-27T15:51:43.940Z"
-    },
-    {
-      "id": "ms3k4yq5vo88rahv",
-      "service_id": "ms34ux4wx2yg88zk",
-      "inventory_id": "mr3kf3q8d07l7zdr",
-      "item_type": "Lorf  5w40 X4 Liters",
-      "quantity": 1,
-      "unit_price": 45,
-      "created_at": "2026-07-27T18:25:37.997Z"
+26-07-27T18:25:37.997Z"
     },
     {
       "id": "ms3k4yqmgmfmam1u",
@@ -1753,9 +1754,7 @@
       "quantity": 2,
       "unit_price": 12,
       "created_at": "2026-07-27T18:25:38.014Z"
-    }
-  ],
-  "inventory": [
+    },
     {
       "id": "msor9qstkpehlg07",
       "item_number": "INV-001",
@@ -2235,8 +2234,7 @@
       "item_retail_price": 25,
       "item_supplier": "Fawaz",
       "item_code"
-  "service_items": [],
-  "inventory": [
+    },
     {
       "id": "msor9qstkpehlg07",
       "item_number": "INV-001",
