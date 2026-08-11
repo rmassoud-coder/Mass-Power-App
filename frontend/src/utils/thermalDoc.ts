@@ -16,6 +16,11 @@ export type ThermalOp =
 
 export interface ThermalDoc {
   feedRows?: number;
+  /** Blank white rows rendered at the TOP of the canvas, before any content.
+   *  Baked into the bitmap itself so it always prints, unlike a separate
+   *  BLE feed command sent before the draw command (which some cat-printer
+   *  firmware buffers/ignores depending on ordering). */
+  leadRows?: number;
   frame?: boolean;
   ops: ThermalOp[];
 }
@@ -52,7 +57,7 @@ export function buildOilStickerDoc(
   ops.push({ t: 'space', h: 6 });
   ops.push({ t: 'checkbox', checked: !!service.oil_filter_changed, label: 'FILTER CHANGE', size: 16 });
   
-  return { ops, frame: true, feedRows: 30 };
+  return { ops, frame: true, feedRows: 30, leadRows: 60 };
 }
 
 function fmtDate(iso?: string | null): string {
