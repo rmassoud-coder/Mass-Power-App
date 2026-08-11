@@ -95,6 +95,10 @@ export function getRasterizerHostHtml(): string {
 <canvas id="cv"></canvas>
 <script>
 (function () {
+  // catPrinter.ts expects LSB-first packed rows (it does its own row-reverse +
+  // bit-mirror to convert). Do not change this without also updating catPrinter.ts.
+  var MSB_FIRST = false;
+
   function send(obj) {
     try {
       if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
@@ -126,13 +130,39 @@ export function getRasterizerHostHtml(): string {
         case 'space': h = Math.max(0, op.h || 8); break;
         case 'checkbox': op.__size = op.size || DESIGN.checkboxSize; op.__font = fontFor(op.__size, true, 'sans'); h = Math.max(24, op.__size) + 6; break;
         case 'footer': op.__size = op.size || DESIGN.smallSize; op.__font = fontFor(op.__size, false, 'sans'); h = op.__size + 8; break;
-        case 'image': op.__h = 80; h = 80; break;
+        case 'image': op.__h = op.__imgH || 80; h = op.__h; break;
         default: h = 0;
       }
       op.__h = h;
       total += h;
     }
     return total;
+  }
+
+  function loadImages(ops) {
+    var promises = [];
+    ops.forEach(function (op) {
+      if (op.t === 'image' && op.url) {
+        promises.push(new Promise(function (resolve) {
+          var img = new Image();
+          img.crossOrigin = 'Anonymous';
+          img.onload = function () {
+            var imgWidth = op.width || 60;
+            var scale = imgWidth / img.width;
+            op.__img = img;
+            op.__imgW = imgWidth;
+            op.__imgH = Math.round(img.height * scale);
+            resolve();
+          };
+          img.onerror = function () {
+            op.__img = null;
+            resolve();
+          };
+          img.src = op.url;
+        }));
+      }
+    });
+    return Promise.all(promises);
   }
 
   function drawOps(ctx, ops, width) {
@@ -183,15 +213,9 @@ export function getRasterizerHostHtml(): string {
           ctx.fillText(String(op.label || '').toUpperCase(), bx + boxSize + 10, by + (boxSize - op.__size) / 2 + 2);
           y += op.__h; break;
         case 'image':
-          if (op.url) {
-            var img = new Image();
-            img.crossOrigin = "Anonymous";
-            img.onload = function() {
-              var imgWidth = op.width || 60;
-              var scale = imgWidth / img.width;
-              ctx.drawImage(img, (width - imgWidth) / 2, y, imgWidth, img.height * scale);
-            };
-            img.src = op.url;
+          if (op.__img) {
+            var imgWidth = op.__imgW || op.width || 60;
+            ctx.drawImage(op.__img, (width - imgWidth) / 2, y, imgWidth, op.__imgH);
           }
           y += op.__h; break;
         case 'footer':
@@ -245,7 +269,10 @@ export function getRasterizerHostHtml(): string {
           gray[idx + w] += (err * 5) >> 4;
           if (x + 1 < w) gray[idx + w + 1] += (err * 1) >> 4;
         }
-        if (nw === 0) row[x >> 3] |= (1 << (x & 7));
+        if (nw === 0) {
+          var bitPos = MSB_FIRST ? (7 - (x & 7)) : (x & 7);
+          row[x >> 3] |= (1 << bitPos);
+        }
       }
       var s = '';
       for (var k = 0; k < row.length; k++) s += String.fromCharCode(row[k]);
@@ -257,37 +284,40 @@ export function getRasterizerHostHtml(): string {
   window.__rasterizeDoc__ = function (payloadJson) {
     var payload = JSON.parse(payloadJson);
     var id = payload.id;
-    try {
-      var width = payload.width || 384;
-      var doc = payload.doc || { ops: [] };
-      var ops = (doc.ops || []).slice();
-      var cv = document.getElementById('cv');
-      var ctx = cv.getContext('2d');
-      
-      var totalH = measureOps(ctx, ops, width);
-      var feed = Math.max(0, doc.feedRows || 0);
-      var canvasH = totalH + feed;
-      
-      cv.width = width; cv.height = canvasH;
-      ctx = cv.getContext('2d');
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, width, canvasH);
-      
-      if (doc.frame) {
-        ctx.fillStyle = '#000';
-        var thick = DESIGN.frameThickness;
-        ctx.fillRect(thick/2, thick/2, width - thick, thick);
-        ctx.fillRect(thick/2, canvasH - thick - thick/2, width - thick, thick);
-        ctx.fillRect(thick/2, thick/2, thick, canvasH - thick);
-        ctx.fillRect(width - thick - thick/2, thick/2, thick, canvasH - thick);
+    var width = payload.width || 384;
+    var doc = payload.doc || { ops: [] };
+    var ops = (doc.ops || []).slice();
+
+    loadImages(ops).then(function () {
+      try {
+        var cv = document.getElementById('cv');
+        var ctx = cv.getContext('2d');
+
+        var totalH = measureOps(ctx, ops, width);
+        var feed = Math.max(0, doc.feedRows || 0);
+        var canvasH = totalH + feed;
+
+        cv.width = width; cv.height = canvasH;
+        ctx = cv.getContext('2d');
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, width, canvasH);
+
+        if (doc.frame) {
+          ctx.fillStyle = '#000';
+          var thick = DESIGN.frameThickness;
+          ctx.fillRect(thick/2, thick/2, width - thick, thick);
+          ctx.fillRect(thick/2, canvasH - thick - thick/2, width - thick, thick);
+          ctx.fillRect(thick/2, thick/2, thick, canvasH - thick);
+          ctx.fillRect(width - thick - thick/2, thick/2, thick, canvasH - thick);
+        }
+
+        drawOps(ctx, ops, width);
+
+        var bmp = ditherAndPack(cv, payload.darkness || 3);
+        send({ id: id, ok: true, width: bmp.width, height: bmp.height, rowsBase64: bmp.rowsBase64 });
+      } catch (e) {
+        send({ id: id, ok: false, error: 'Rasterizer error: ' + (e && e.message || e) });
       }
-      
-      drawOps(ctx, ops, width);
-      
-      var bmp = ditherAndPack(cv, payload.darkness || 3);
-      send({ id: id, ok: true, width: bmp.width, height: bmp.height, rowsBase64: bmp.rowsBase64 });
-    } catch (e) {
-      send({ id: id, ok: false, error: 'Rasterizer error: ' + (e && e.message || e) });
-    }
+    });
   };
 })();
 </script>
