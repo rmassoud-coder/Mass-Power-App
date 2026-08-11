@@ -1,4 +1,3 @@
-// htmlRasterizer.ts — DESIGN sizes +10%, shop_title darkened with a heavier stroke pass
 /**
  * ThermalDoc → 384-px-wide 1-bit dithered bitmap.
  */
@@ -113,15 +112,11 @@ export function getRasterizerHostHtml(): string {
     return (bold ? 'bold ' : '') + size + 'px ' + fam;
   }
 
-  // All sizes +10% from previous pass.
   var DESIGN = {
     margin: 12, frameThickness: 4, dividerThickness: 3,
     titleSize: 29, headerSize: 31, labelSize: 21, valueSize: 23, checkboxSize: 19, smallSize: 18
   };
 
-  // Bold fill: fillText + a strokeText pass on top gives real stroke weight
-  // instead of relying only on the 1px dilation pass in ditherAndPack.
-  // weight param lets specific ops (e.g. shop_title) get an extra-heavy pass.
   function boldText(ctx, text, x, y, weight) {
     ctx.fillText(text, x, y);
     ctx.strokeStyle = ctx.fillStyle;
@@ -183,8 +178,6 @@ export function getRasterizerHostHtml(): string {
       var op = ops[i];
       switch (op.t) {
         case 'shop_title':
-          // Extra-heavy stroke weight (2.4) specifically for the shop title —
-          // this line was still reading faint at the previous weight.
           ctx.fillStyle = '#000'; ctx.font = op.__font; ctx.textBaseline = 'top'; ctx.textAlign = 'center';
           drawSpacedText(ctx, String(op.text || '').toUpperCase(), width / 2, y, 0, true, 2.4);
           y += op.__h; break;
@@ -254,7 +247,6 @@ export function getRasterizerHostHtml(): string {
     }
   }
 
-  // Hard threshold (no error-diffusion dithering) + 1px dilation.
   function ditherAndPack(cv, darkness) {
     var w = cv.width, h = cv.height;
     var ctx = cv.getContext('2d');
