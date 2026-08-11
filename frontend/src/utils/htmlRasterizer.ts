@@ -1,3 +1,4 @@
+// htmlRasterizer.ts — DESIGN sizes +10%, shop_title darkened with a heavier stroke pass
 /**
  * ThermalDoc → 384-px-wide 1-bit dithered bitmap.
  */
@@ -112,10 +113,21 @@ export function getRasterizerHostHtml(): string {
     return (bold ? 'bold ' : '') + size + 'px ' + fam;
   }
 
+  // All sizes +10% from previous pass.
   var DESIGN = {
-    margin: 12, frameThickness: 3, dividerThickness: 2,
-    titleSize: 22, headerSize: 24, labelSize: 16, valueSize: 18, checkboxSize: 14, smallSize: 14
+    margin: 12, frameThickness: 4, dividerThickness: 3,
+    titleSize: 29, headerSize: 31, labelSize: 21, valueSize: 23, checkboxSize: 19, smallSize: 18
   };
+
+  // Bold fill: fillText + a strokeText pass on top gives real stroke weight
+  // instead of relying only on the 1px dilation pass in ditherAndPack.
+  // weight param lets specific ops (e.g. shop_title) get an extra-heavy pass.
+  function boldText(ctx, text, x, y, weight) {
+    ctx.fillText(text, x, y);
+    ctx.strokeStyle = ctx.fillStyle;
+    ctx.lineWidth = weight || 1;
+    ctx.strokeText(text, x, y);
+  }
 
   function measureOps(ctx, ops, width) {
     var total = DESIGN.margin * 2;
@@ -124,12 +136,12 @@ export function getRasterizerHostHtml(): string {
       var h = 0;
       switch (op.t) {
         case 'shop_title': op.__size = DESIGN.titleSize; op.__font = fontFor(DESIGN.titleSize, true, 'sans'); h = DESIGN.titleSize + 14; break;
-        case 'header': op.__size = op.size || DESIGN.headerSize; op.__font = fontFor(op.__size, true, 'sans'); h = op.__size + 14; break;
-        case 'label_value': op.__labelSize = DESIGN.labelSize; op.__valueSize = DESIGN.valueSize; op.__labelFont = fontFor(DESIGN.labelSize, true, 'sans'); op.__valueFont = fontFor(DESIGN.valueSize, true, 'sans'); h = Math.max(DESIGN.labelSize, DESIGN.valueSize) + 6; break;
+        case 'header': op.__size = op.size ? Math.round(op.size * 1.1) + 4 : DESIGN.headerSize; op.__font = fontFor(op.__size, true, 'sans'); h = op.__size + 14; break;
+        case 'label_value': op.__labelSize = DESIGN.labelSize; op.__valueSize = DESIGN.valueSize; op.__labelFont = fontFor(DESIGN.labelSize, true, 'sans'); op.__valueFont = fontFor(DESIGN.valueSize, true, 'sans'); h = Math.max(DESIGN.labelSize, DESIGN.valueSize) + 8; break;
         case 'divider': h = 8 + (op.thick || DESIGN.dividerThickness); break;
         case 'space': h = Math.max(0, op.h || 8); break;
-        case 'checkbox': op.__size = op.size || DESIGN.checkboxSize; op.__font = fontFor(op.__size, true, 'sans'); h = Math.max(24, op.__size) + 6; break;
-        case 'footer': op.__size = op.size || DESIGN.smallSize; op.__font = fontFor(op.__size, false, 'sans'); h = op.__size + 8; break;
+        case 'checkbox': op.__size = op.size ? Math.round(op.size * 1.1) + 2 : DESIGN.checkboxSize; op.__font = fontFor(op.__size, true, 'sans'); h = Math.max(26, op.__size) + 8; break;
+        case 'footer': op.__size = op.size ? Math.round(op.size * 1.1) + 2 : DESIGN.smallSize; op.__font = fontFor(op.__size, false, 'sans'); h = op.__size + 8; break;
         case 'image': op.__h = op.__imgH || 80; h = op.__h; break;
         default: h = 0;
       }
@@ -171,26 +183,28 @@ export function getRasterizerHostHtml(): string {
       var op = ops[i];
       switch (op.t) {
         case 'shop_title':
+          // Extra-heavy stroke weight (2.4) specifically for the shop title —
+          // this line was still reading faint at the previous weight.
           ctx.fillStyle = '#000'; ctx.font = op.__font; ctx.textBaseline = 'top'; ctx.textAlign = 'center';
-          drawSpacedText(ctx, String(op.text || '').toUpperCase(), width / 2, y, 0, true);
+          drawSpacedText(ctx, String(op.text || '').toUpperCase(), width / 2, y, 0, true, 2.4);
           y += op.__h; break;
         case 'header':
           ctx.fillStyle = '#000'; ctx.font = op.__font; ctx.textBaseline = 'top'; ctx.textAlign = 'center';
           var text = String(op.text || '').toUpperCase();
-          drawSpacedText(ctx, text, width / 2, y, op.letterSpacing || 2, true);
+          drawSpacedText(ctx, text, width / 2, y, op.letterSpacing || 2, true, 1.6);
           ctx.fillRect(DESIGN.margin + 10, y + op.__size + 4, width - DESIGN.margin * 2 - 20, 3);
           y += op.__h; break;
         case 'label_value':
           ctx.textBaseline = 'top';
           ctx.fillStyle = '#000'; ctx.font = op.__labelFont; ctx.textAlign = 'left';
-          ctx.fillText(String(op.label || '').toUpperCase(), DESIGN.margin + 4, y);
+          boldText(ctx, String(op.label || '').toUpperCase(), DESIGN.margin + 4, y, 1.4);
           ctx.font = op.__valueFont; ctx.textAlign = 'right';
           var val = String(op.value || '');
           var valX = width - DESIGN.margin - 4;
           if (op.unit) { 
-            ctx.fillText(val, valX - ctx.measureText(op.unit).width - 6, y);
-            ctx.font = fontFor(DESIGN.smallSize, false, 'sans'); ctx.fillText(op.unit, valX, y);
-          } else ctx.fillText(val, valX, y);
+            boldText(ctx, val, valX - ctx.measureText(op.unit).width - 6, y, 1.4);
+            ctx.font = fontFor(DESIGN.smallSize, false, 'sans'); boldText(ctx, op.unit, valX, y, 1.2);
+          } else boldText(ctx, val, valX, y, 1.4);
           y += op.__h; break;
         case 'divider':
           var thick = op.thick || DESIGN.dividerThickness;
@@ -201,7 +215,7 @@ export function getRasterizerHostHtml(): string {
           y += 8 + thick; break;
         case 'space': y += op.__h; break;
         case 'checkbox':
-          var boxSize = 20, bx = DESIGN.margin + 4, by = y + 2;
+          var boxSize = 24, bx = DESIGN.margin + 4, by = y + 2;
           ctx.fillStyle = '#000';
           ctx.fillRect(bx, by, boxSize, 2); ctx.fillRect(bx, by + boxSize - 2, boxSize, 2);
           ctx.fillRect(bx, by, 2, boxSize); ctx.fillRect(bx + boxSize - 2, by, 2, boxSize);
@@ -210,7 +224,7 @@ export function getRasterizerHostHtml(): string {
             ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.stroke();
           }
           ctx.font = op.__font; ctx.textBaseline = 'top'; ctx.textAlign = 'left'; ctx.fillStyle = '#000';
-          ctx.fillText(String(op.label || '').toUpperCase(), bx + boxSize + 10, by + (boxSize - op.__size) / 2 + 2);
+          boldText(ctx, String(op.label || '').toUpperCase(), bx + boxSize + 10, by + (boxSize - op.__size) / 2 + 2, 1.4);
           y += op.__h; break;
         case 'image':
           if (op.__img) {
@@ -220,13 +234,13 @@ export function getRasterizerHostHtml(): string {
           y += op.__h; break;
         case 'footer':
           ctx.fillStyle = '#000'; ctx.font = op.__font; ctx.textBaseline = 'top'; ctx.textAlign = 'center';
-          ctx.fillText(String(op.text || ''), width / 2, y); y += op.__h; break;
+          boldText(ctx, String(op.text || ''), width / 2, y, 1.2); y += op.__h; break;
         default: y += op.__h;
       }
     }
   }
 
-  function drawSpacedText(ctx, text, x, y, spacing, isCenter) {
+  function drawSpacedText(ctx, text, x, y, spacing, isCenter, weight) {
     if (!text) return;
     var cx = x; 
     if (isCenter) {
@@ -235,34 +249,27 @@ export function getRasterizerHostHtml(): string {
       cx = x - totalW / 2;
     }
     for (var j=0; j<text.length; j++) {
-      ctx.fillText(text[j], cx, y);
+      boldText(ctx, text[j], cx, y, weight);
       cx += ctx.measureText(text[j]).width + (spacing||0);
     }
   }
 
   // Hard threshold (no error-diffusion dithering) + 1px dilation.
-  // Floyd-Steinberg dithering is for photos with gradients; for stamped
-  // text/line content it breaks antialiased edges into sparse dots,
-  // making text look thin/gray instead of solid black. Threshold + bolden
-  // is standard practice for thermal receipt/label rendering.
   function ditherAndPack(cv, darkness) {
     var w = cv.width, h = cv.height;
     var ctx = cv.getContext('2d');
     var img = ctx.getImageData(0, 0, w, h);
     var d = img.data;
     var shift = ({1:-30, 2:-15, 3:0, 4:15, 5:30})[darkness] || 0;
-    var threshold = 128 - shift; // same darkness semantics as before
+    var threshold = 128 - shift;
 
-    var bw = new Uint8Array(w * h); // 1 = black
+    var bw = new Uint8Array(w * h);
     for (var i = 0, p = 0; i < d.length; i += 4, p++) {
       var a = d[i + 3] / 255;
       var y = 0.299 * (d[i] * a + 255 * (1 - a)) + 0.587 * (d[i+1] * a + 255 * (1 - a)) + 0.114 * (d[i+2] * a + 255 * (1 - a));
       bw[p] = (y < threshold) ? 1 : 0;
     }
 
-    // Bolden: any pixel adjacent to a black pixel also becomes black.
-    // Thin strokes (font hairlines, thin dividers) survive thermal print
-    // heads much better at 1px+ thickness.
     var bold = new Uint8Array(w * h);
     for (var yy = 0; yy < h; yy++) {
       for (var xx = 0; xx < w; xx++) {
