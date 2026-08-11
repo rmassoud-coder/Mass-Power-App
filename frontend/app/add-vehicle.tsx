@@ -221,7 +221,7 @@ export default function AddVehicleScreen() {
 
             {/* Plate Number */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Plate Number *</Text>
+              <Text style={styles.label}>Plate Number </Text>
               <View style={styles.inputContainer}>
                 <Ionicons name="reader-outline" size={20} color="#666" style={styles.inputIcon} />
                 <TextInput
