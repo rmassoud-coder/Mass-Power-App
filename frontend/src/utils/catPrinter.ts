@@ -12,6 +12,14 @@
  * BIT ORDER: htmlRasterizer.ts packs each row as row[x>>3] |= (1 << (x&7))
  * — LSB-first. This protocol expects MSB-first, so we mirror bits before
  * sending (see MIRROR_BITS below).
+ *
+ * NOTE: a separate lead-in CMD_FEED_PAPER sent before the draw-bitmap
+ * frames was tried to push the top of the image clear of the print head,
+ * but proved unreliable — firmware appears to buffer/reorder feed commands
+ * inconsistently when they precede draw commands. Lead-in space is instead
+ * baked directly into the bitmap as blank rows (see ThermalDoc.leadRows in
+ * thermalDoc.ts / htmlRasterizer.ts), which always prints correctly since
+ * it's just image data.
  */
 import { BleManager, Device, State as BleState } from 'react-native-ble-plx';
 import { PermissionsAndroid, Platform } from 'react-native';
@@ -187,11 +195,7 @@ async function sendBitmap(deviceId: string, bmp: MonoBitmap): Promise<void> {
   try {
     const orderedRows = [...bmp.rowsBase64].reverse();
     const rowFrames = orderedRows.map((r) => buildFrame(CMD_DRAW_BITMAP, decodeRow(r)));
-
-    // Lead-in feed so the top of the image (logo/header) fully clears the
-    // tear bar/print head housing before drawing starts.
-    const leadFeedFrame = buildFrame(CMD_FEED_PAPER, Uint8Array.from([100]));
-    const feedFrame = buildFrame(CMD_FEED_PAPER, Uint8Array.from([500]));
+    const feedFrame = buildFrame(CMD_FEED_PAPER, Uint8Array.from([80]));
 
     let mtu = 23;
     try {
@@ -202,13 +206,9 @@ async function sendBitmap(deviceId: string, bmp: MonoBitmap): Promise<void> {
     }
     const maxChunk = Math.max(20, mtu - 3);
 
-    const totalLen =
-      leadFeedFrame.length +
-      rowFrames.reduce((s, f) => s + f.length, 0) +
-      feedFrame.length;
+    const totalLen = rowFrames.reduce((s, f) => s + f.length, 0) + feedFrame.length;
     const stream = new Uint8Array(totalLen);
     let off = 0;
-    stream.set(leadFeedFrame, off); off += leadFeedFrame.length;
     for (const f of rowFrames) { stream.set(f, off); off += f.length; }
     stream.set(feedFrame, off);
 
