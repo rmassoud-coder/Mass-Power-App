@@ -50,7 +50,10 @@ function printHtmlOnWeb(html: string): Promise<void> {
           popup.document.write(html);
           popup.document.close();
 
+          let printed = false;
           const triggerPrint = () => {
+            if (printed) return;
+            printed = true;
             try {
               popup.focus();
               popup.print();
