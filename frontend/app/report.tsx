@@ -775,6 +775,36 @@ export default function ReportScreen() {
                 </View>
               </View>
 
+              {/* PRIVATE cash-flow summary (owner-only, never printed) */}
+              {report.outsource_total > 0 && (
+                <View style={styles.cashflowCard}>
+                  <View style={styles.cashflowHeaderRow}>
+                    <Ionicons name="lock-closed" size={13} color="#6b21a8" />
+                    <Text style={styles.cashflowHeader}>Cash-Flow (Private)</Text>
+                  </View>
+                  <View style={styles.cashflowRow}>
+                    <Text style={styles.cashflowLabel}>Revenue</Text>
+                    <Text style={styles.cashflowValue}>
+                      ${report.total_cost.toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={styles.cashflowRow}>
+                    <Text style={[styles.cashflowLabel, { color: '#dc2626' }]}>
+                      − Outsource
+                    </Text>
+                    <Text style={[styles.cashflowValue, { color: '#dc2626' }]}>
+                      − ${report.outsource_total.toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={styles.cashflowGrandRow}>
+                    <Text style={styles.cashflowGrandLabel}>Net Cash in Hand</Text>
+                    <Text style={styles.cashflowGrandValue}>
+                      ${report.net_cash_flow.toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
               {report.unpaid_count > 0 && (
                 <View style={styles.unpaidSummaryCard}>
                   <View style={styles.unpaidSummaryRow}>
