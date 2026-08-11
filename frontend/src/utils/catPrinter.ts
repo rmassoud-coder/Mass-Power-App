@@ -187,6 +187,14 @@ async function sendBitmap(deviceId: string, bmp: MonoBitmap): Promise<void> {
   try {
     const orderedRows = [...bmp.rowsBase64].reverse();
     const rowFrames = orderedRows.map((r) => buildFrame(CMD_DRAW_BITMAP, decodeRow(r)));
+
+    // Lead-in feed so the top of the image clears the tear bar/print head
+    // housing before drawing starts. Without this the first ~15-20px of
+    // content (e.g. a logo) prints hidden inside the mechanism and only
+    // becomes visible once the *next* job's feed pushes it out. If the
+    // logo/header is still clipped on your printer, increase this value
+    // (each unit is roughly one print line of feed).
+    const leadFeedFrame = buildFrame(CMD_FEED_PAPER, Uint8Array.from([40]));
     const feedFrame = buildFrame(CMD_FEED_PAPER, Uint8Array.from([80]));
 
     let mtu = 23;
@@ -198,9 +206,13 @@ async function sendBitmap(deviceId: string, bmp: MonoBitmap): Promise<void> {
     }
     const maxChunk = Math.max(20, mtu - 3);
 
-    const totalLen = rowFrames.reduce((s, f) => s + f.length, 0) + feedFrame.length;
+    const totalLen =
+      leadFeedFrame.length +
+      rowFrames.reduce((s, f) => s + f.length, 0) +
+      feedFrame.length;
     const stream = new Uint8Array(totalLen);
     let off = 0;
+    stream.set(leadFeedFrame, off); off += leadFeedFrame.length;
     for (const f of rowFrames) { stream.set(f, off); off += f.length; }
     stream.set(feedFrame, off);
 
