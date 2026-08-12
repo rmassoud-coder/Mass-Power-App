@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "exported_at": "2026-08-12T14:56:59.218Z",
+  "exported_at": "2026-08-12T15:58:39.327Z",
   "customers": [
     {
       "id": "6a1dcd13d860efc6bc5dc11e",
@@ -148,6 +148,13 @@
       "mobile_number": "76155820",
       "created_at": "2026-07-27T11:11:26.373Z",
       "updated_at": "2026-07-27T11:11:26.373Z"
+    },
+    {
+      "id": null,
+      "name": "Walk-in Customer",
+      "mobile_number": "00000000",
+      "created_at": "2026-08-12T15:58:38.049Z",
+      "updated_at": "2026-08-12T15:58:38.049Z"
     }
   ],
   "vehicles": [
@@ -400,6 +407,16 @@
       "model": "Grand Cherokee",
       "year": "2005",
       "created_at": "2026-07-27T11:15:36.300Z"
+    },
+    {
+      "id": null,
+      "customer_id": "22",
+      "vin": "WALKIN",
+      "plate_number": "WALKIN",
+      "make": "Walk-in",
+      "model": "Service",
+      "year": "2026",
+      "created_at": "2026-08-12T15:58:38.049Z"
     }
   ],
   "services": [
@@ -1513,6 +1530,38 @@
       "next_service_date": "2026-10-24",
       "next_service_mileage": 188117,
       "oil_grade": "5W-40",
+      "oil_filter_changed": false,
+      "reminder_dismissed": false,
+      "battery_amp_rate": null,
+      "battery_install_date": null,
+      "battery_warranty_months": null,
+      "battery_parasitic_tested": false,
+      "hvac_freon_date": null,
+      "hvac_leak_tested": false,
+      "outsource_cost": 0
+    },
+    {
+      "id": null,
+      "vehicle_id": "26",
+      "customer_id": "22",
+      "service_description": "Test (Test)",
+      "additional_info": null,
+      "cost": 5,
+      "is_paid": false,
+      "service_date": "2026-08-12T15:58:38.049Z",
+      "created_at": "2026-08-12T15:58:38.049Z",
+      "partial_paid": 0,
+      "dash_abs": false,
+      "dash_check_engine": false,
+      "dash_brake": false,
+      "dash_airbag": false,
+      "dash_immobilizer": false,
+      "dash_tpms": false,
+      "dash_oil_leak": false,
+      "current_mileage": null,
+      "next_service_date": null,
+      "next_service_mileage": null,
+      "oil_grade": null,
       "oil_filter_changed": false,
       "reminder_dismissed": false,
       "battery_amp_rate": null,
