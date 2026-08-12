@@ -1790,13 +1790,17 @@ export const createWalkinService = async (
   partialPaid: number,
   additionalInfo?: string
 ): Promise<void> => {
+  Alert.alert('Step 1', 'createWalkinService called');
   const db = await getDb();
   const now = new Date().toISOString();
+  Alert.alert('Step 2', `Date: ${now}`);
 
   try {
     let walkInCustomerId = await getWalkInCustomerId();
+    Alert.alert('Step 3', `Customer ID: ${walkInCustomerId || 'null'}`);
 
     if (!walkInCustomerId) {
+      Alert.alert('Step 4', 'Creating new walk-in customer');
       const result = await db.runAsync(
         `INSERT INTO customers (name, mobile_number, created_at, updated_at) 
          VALUES (?, ?, ?, ?)`,
@@ -1806,6 +1810,7 @@ export const createWalkinService = async (
         now
       );
       walkInCustomerId = result.lastInsertRowId?.toString() || null;
+      Alert.alert('Step 5', `New customer ID: ${walkInCustomerId || 'null'}`);
       
       if (!walkInCustomerId) {
         throw new Error('Failed to create walk-in customer');
@@ -1813,8 +1818,10 @@ export const createWalkinService = async (
     }
 
     let walkInVehicleId = await getWalkInVehicleId(walkInCustomerId);
+    Alert.alert('Step 6', `Vehicle ID: ${walkInVehicleId || 'null'}`);
 
     if (!walkInVehicleId) {
+      Alert.alert('Step 7', 'Creating new walk-in vehicle');
       const result = await db.runAsync(
         `INSERT INTO vehicles (customer_id, vin, plate_number, make, model, year, created_at) 
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -1827,6 +1834,7 @@ export const createWalkinService = async (
         now
       );
       walkInVehicleId = result.lastInsertRowId?.toString() || null;
+      Alert.alert('Step 8', `New vehicle ID: ${walkInVehicleId || 'null'}`);
       
       if (!walkInVehicleId) {
         throw new Error('Failed to create walk-in vehicle');
@@ -1840,6 +1848,8 @@ export const createWalkinService = async (
 
     let isPaidFinal = isPaid ? 1 : 0;
     let partialPaidFinal = partialPaid || 0;
+
+    Alert.alert('Step 9', `About to insert service: ${finalDescription}, $${cost}`);
 
     await db.runAsync(
       `INSERT INTO services (
@@ -1865,8 +1875,11 @@ export const createWalkinService = async (
       now,
       0
     );
+
+    Alert.alert('Success', 'Service inserted successfully!');
   } catch (error) {
     console.error('Error creating walk-in service:', error);
+    Alert.alert('Error', `Failed: ${error}`);
     throw error;
   }
 };
