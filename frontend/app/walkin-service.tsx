@@ -58,7 +58,7 @@ export default function WalkinServiceScreen() {
 
     setLoading(true);
     try {
-      await createWalkinService(
+      await Database.createWalkinService(
         customerName.trim() || undefined,
         serviceDescription.trim(),
         costValue,
