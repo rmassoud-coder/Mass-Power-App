@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
@@ -16,6 +17,9 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Updates from 'expo-updates';
 import {
+  searchCustomers,
+  searchVehiclesByVin,
+  searchVehiclesByPlate,
   listInventory,
   listDueOilReminders,
 } from '../src/db/database';
@@ -27,10 +31,14 @@ let oilReminderShown = false;
 
 export default function HomeScreen() {
   const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(false);
   const { height } = useWindowDimensions();
 
   // Responsive sizing
   const isSmallScreen = height < 700;
+  const cardPadding = isSmallScreen ? 14 : 20;
+  const cardMargin = isSmallScreen ? 10 : 16;
   const buttonPadding = isSmallScreen ? 10 : 14;
 
   // Out-of-stock reminder
@@ -117,6 +125,57 @@ export default function HomeScreen() {
     checkDueReminders();
   }, [router]);
 
+  const handleSearch = async () => {
+    const query = searchQuery.trim();
+    if (!query) {
+      Alert.alert('Error', 'Please enter a search term');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      let results: any[] = [];
+
+      // Try searching by mobile
+      const mobileResults = await searchCustomers(query);
+      if (mobileResults.length > 0) {
+        results = mobileResults;
+      } else {
+        // Try searching by VIN
+        const vinResults = await searchVehiclesByVin(query);
+        if (vinResults.length > 0) {
+          results = vinResults;
+        } else {
+          // Try searching by Plate
+          const plateResults = await searchVehiclesByPlate(query);
+          if (plateResults.length > 0) {
+            results = plateResults;
+          }
+        }
+      }
+
+      if (results.length === 0) {
+        Alert.alert(
+          'No Results Found',
+          'Would you like to create a new customer?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Create', onPress: () => router.push('/add-customer') },
+          ]
+        );
+      } else {
+        router.push({
+          pathname: '/search-results',
+          params: { results: JSON.stringify(results) },
+        });
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to search. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -152,6 +211,36 @@ export default function HomeScreen() {
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
         >
+          {/* Unified Search - works with mobile, VIN, or plate */}
+          <View style={[styles.searchCard, { padding: cardPadding, marginBottom: cardMargin }]}>
+            <View style={styles.searchHeader}>
+              <Ionicons name="search-outline" size={isSmallScreen ? 20 : 24} color="#2563eb" />
+              <Text style={styles.searchTitle}>Search Customer</Text>
+            </View>
+            <Text style={styles.searchHint}>
+              Enter mobile number, VIN, or plate number
+            </Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="Mobile • VIN • Plate"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCapitalize="characters"
+                testID="unified-search-input"
+              />
+            </View>
+            <TouchableOpacity
+              style={[styles.searchButton, loading && styles.searchButtonDisabled]}
+              onPress={handleSearch}
+              disabled={loading}
+              testID="unified-search-button"
+            >
+              <Ionicons name="search" size={isSmallScreen ? 16 : 20} color="#fff" />
+              <Text style={styles.searchButtonText}>Search</Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Walk-in Customer Button */}
           <TouchableOpacity
             style={styles.walkinCard}
@@ -263,6 +352,61 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 24,
+  },
+  searchCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  searchHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  searchTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginLeft: 12,
+  },
+  searchHint: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginBottom: 12,
+    marginLeft: 36,
+  },
+  inputContainer: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  input: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#1e293b',
+  },
+  searchButton: {
+    backgroundColor: '#2563eb',
+    borderRadius: 12,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchButtonDisabled: {
+    opacity: 0.6,
+  },
+  searchButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
   walkinCard: {
     backgroundColor: '#2563eb',
