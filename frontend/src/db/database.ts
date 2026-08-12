@@ -1755,132 +1755,40 @@ export async function getLowStockBySupplier(
 }
 
 // ==================== WALK-IN SERVICES ====================
-
-export const getWalkInCustomerId = async (): Promise<string | null> => {
-  const db = await getDb();
-  try {
-    const result = await db.getFirstAsync<{ id: string }>(
-      `SELECT id FROM customers WHERE name = 'Walk-in Customer' LIMIT 1`
-    );
-    return result ? result.id : null;
-  } catch (error) {
-    console.warn('Error getting walk-in customer:', error);
-    return null;
-  }
-};
-
-export const getWalkInVehicleId = async (customerId: string): Promise<string | null> => {
-  const db = await getDb();
-  try {
-    const result = await db.getFirstAsync<{ id: string }>(
-      `SELECT id FROM vehicles WHERE customer_id = ? AND vin = 'WALKIN' LIMIT 1`,
-      customerId
-    );
-    return result ? result.id : null;
-  } catch (error) {
-    console.warn('Error getting walk-in vehicle:', error);
-    return null;
-  }
-};
-
-export const createWalkinService = async (
-  customerName: string | undefined,
-  serviceDescription: string,
-  cost: number,
-  isPaid: boolean,
-  partialPaid: number,
-  additionalInfo?: string
-): Promise<void> => {
-  Alert.alert('Step 1', 'createWalkinService called');
+export const getOrCreateWalkInVehicle = async (): Promise<Vehicle> => {
   const db = await getDb();
   const now = new Date().toISOString();
-  Alert.alert('Step 2', `Date: ${now}`);
 
-  try {
-    let walkInCustomerId = await getWalkInCustomerId();
-    Alert.alert('Step 3', `Customer ID: ${walkInCustomerId || 'null'}`);
-
-    if (!walkInCustomerId) {
-      Alert.alert('Step 4', 'Creating new walk-in customer');
-      const result = await db.runAsync(
-        `INSERT INTO customers (name, mobile_number, created_at, updated_at) 
-         VALUES (?, ?, ?, ?)`,
-        'Walk-in Customer',
-        '00000000',
-        now,
-        now
-      );
-      walkInCustomerId = result.lastInsertRowId?.toString() || null;
-      Alert.alert('Step 5', `New customer ID: ${walkInCustomerId || 'null'}`);
-      
-      if (!walkInCustomerId) {
-        throw new Error('Failed to create walk-in customer');
-      }
-    }
-
-    let walkInVehicleId = await getWalkInVehicleId(walkInCustomerId);
-    Alert.alert('Step 6', `Vehicle ID: ${walkInVehicleId || 'null'}`);
-
-    if (!walkInVehicleId) {
-      Alert.alert('Step 7', 'Creating new walk-in vehicle');
-      const result = await db.runAsync(
-        `INSERT INTO vehicles (customer_id, vin, plate_number, make, model, year, created_at) 
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        walkInCustomerId,
-        'WALKIN',
-        'WALKIN',
-        'Walk-in',
-        'Service',
-        new Date().getFullYear().toString(),
-        now
-      );
-      walkInVehicleId = result.lastInsertRowId?.toString() || null;
-      Alert.alert('Step 8', `New vehicle ID: ${walkInVehicleId || 'null'}`);
-      
-      if (!walkInVehicleId) {
-        throw new Error('Failed to create walk-in vehicle');
-      }
-    }
-
-    let finalDescription = serviceDescription;
-    if (customerName && customerName.trim()) {
-      finalDescription = `${serviceDescription} (${customerName.trim()})`;
-    }
-
-    let isPaidFinal = isPaid ? 1 : 0;
-    let partialPaidFinal = partialPaid || 0;
-
-    Alert.alert('Step 9', `About to insert service: ${finalDescription}, $${cost}`);
-
-    await db.runAsync(
-      `INSERT INTO services (
-        vehicle_id, 
-        customer_id, 
-        service_description, 
-        additional_info, 
-        cost, 
-        is_paid, 
-        partial_paid,
-        service_date, 
-        created_at,
-        outsource_cost
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      walkInVehicleId,
-      walkInCustomerId,
-      finalDescription,
-      additionalInfo || null,
-      cost,
-      isPaidFinal,
-      partialPaidFinal,
-      now,
-      now,
-      0
+  // Get or create walk-in customer
+  let customerId = await getWalkInCustomerId();
+  if (!customerId) {
+    const result = await db.runAsync(
+      `INSERT INTO customers (name, mobile_number, created_at, updated_at) VALUES (?, ?, ?, ?)`,
+      'Walk-in Customer', '00000000', now, now
     );
-
-    Alert.alert('Success', 'Service inserted successfully!');
-  } catch (error) {
-    console.error('Error creating walk-in service:', error);
-    Alert.alert('Error', `Failed: ${error}`);
-    throw error;
+    customerId = result.lastInsertRowId?.toString() || '';
   }
+
+  // Get or create walk-in vehicle
+  let vehicleId = await getWalkInVehicleId(customerId);
+  if (!vehicleId) {
+    const result = await db.runAsync(
+      `INSERT INTO vehicles (customer_id, vin, plate_number, make, model, year, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      customerId, 'WALKIN', 'WALKIN', 'Walk-in', 'Service', new Date().getFullYear().toString(), now
+    );
+    vehicleId = result.lastInsertRowId?.toString() || '';
+  }
+
+  // Get the full vehicle record
+  const vehicle = await db.getFirstAsync<Vehicle>(
+    `SELECT * FROM vehicles WHERE id = ?`,
+    [vehicleId]
+  );
+
+  if (!vehicle) {
+    throw new Error('Failed to create or retrieve walk-in vehicle');
+  }
+
+  return vehicle;
 };
+        
