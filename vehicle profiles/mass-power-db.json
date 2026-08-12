@@ -3124,7 +3124,6 @@
     }
   ]
 }
-// ==================== WALK-IN SERVICES ====================
 
 export const getWalkInCustomerId = async (): Promise<string | null> => {
   const db = await getDatabase();
@@ -3165,7 +3164,6 @@ export const createWalkinService = async (
   const now = new Date().toISOString();
 
   try {
-    // Get or create "Walk-in Customer"
     let walkInCustomerId = await getWalkInCustomerId();
 
     if (!walkInCustomerId) {
@@ -3184,7 +3182,6 @@ export const createWalkinService = async (
       }
     }
 
-    // Get or create "Walk-in Vehicle"
     let walkInVehicleId = await getWalkInVehicleId(walkInCustomerId);
 
     if (!walkInVehicleId) {
@@ -3206,17 +3203,14 @@ export const createWalkinService = async (
       }
     }
 
-    // Build service description with customer name if provided
     let finalDescription = serviceDescription;
     if (customerName && customerName.trim()) {
       finalDescription = `${serviceDescription} (${customerName.trim()})`;
     }
 
-    // Determine payment status
     let isPaidFinal = isPaid ? 1 : 0;
     let partialPaidFinal = partialPaid || 0;
 
-    // Create the service
     await db.runAsync(
       `INSERT INTO services (
         vehicle_id, 
