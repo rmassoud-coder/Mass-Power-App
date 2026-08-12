@@ -3246,3 +3246,8 @@ export const createWalkinService = async (
     throw error;
   }
 };
+export {
+  createWalkinService,
+  getWalkInCustomerId,
+  getWalkInVehicleId,
+};
