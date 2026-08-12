@@ -1868,4 +1868,4 @@ export const createWalkinService = async (
     console.error('Error creating walk-in service:', error);
     throw error;
   }
-};
+}
