@@ -125,30 +125,28 @@ export default function ManagementScreen() {
   }, []);
 
   const loadCashFlow = useCallback(async () => {
-  setCashFlowLoading(true);
-  try {
-    const today = new Date().toISOString().slice(0, 10);
-    console.log('📅 Today:', today);
-    const data = await getReport(
-      `${today}T00:00:00`,
-      `${today}T23:59:59`,
-      undefined,
-      undefined,
-      undefined,
-      false
-    );
-    console.log('📊 Cash Flow Data:', JSON.stringify(data, null, 2));
-    setCashFlow({
-      revenue: data.total_cost,
-      outsource: data.outsource_total || 0,
-      net: data.net_cash_flow || 0,
-    });
-  } catch (e) {
-    console.error('❌ Cash flow error:', e);
-  } finally {
-    setCashFlowLoading(false);
-  }
-}, []);
+    setCashFlowLoading(true);
+    try {
+      // Get ALL services - no date filter
+      const data = await getReport(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        false
+      );
+      setCashFlow({
+        revenue: data.total_cost,
+        outsource: data.outsource_total || 0,
+        net: data.net_cash_flow || 0,
+      });
+    } catch (e) {
+      // silently fail
+    } finally {
+      setCashFlowLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     refreshLast();
@@ -320,7 +318,7 @@ export default function ManagementScreen() {
         >
           <View style={styles.cashFlowHeader}>
             <Ionicons name="cash-outline" size={20} color="#6b21a8" />
-            <Text style={styles.cashFlowTitle}>Today's Cash Flow</Text>
+            <Text style={styles.cashFlowTitle}>Cash Flow (All Time)</Text>
             {cashFlowLoading ? (
               <ActivityIndicator size="small" color="#6b21a8" style={{ marginLeft: 'auto' }} />
             ) : (
