@@ -20,7 +20,6 @@ import {
   restoreLocalSafetySnapshot,
   getLocalSafetySnapshotTime,
 } from '../src/utils/dbSync';
-import { getReport } from '../src/db/database';
 
 type Tile = {
   label: string;
@@ -112,49 +111,15 @@ export default function ManagementScreen() {
   const [syncing, setSyncing] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [snapshotAt, setSnapshotAt] = useState<string | null>(null);
-  const [cashFlow, setCashFlow] = useState<{
-    revenue: number;
-    outsource: number;
-    net: number;
-  } | null>(null);
-  const [cashFlowLoading, setCashFlowLoading] = useState(false);
 
   const refreshLast = useCallback(async () => {
     setLastSyncAt(await getLastSyncAt());
     setSnapshotAt(await getLocalSafetySnapshotTime());
   }, []);
 
-  const loadCashFlow = useCallback(async () => {
-    setCashFlowLoading(true);
-    try {
-      // Get ALL services - no date filter
-      const data = await getReport(
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        false
-      );
-      setCashFlow({
-        revenue: data.total_cost,
-        outsource: data.outsource_total || 0,
-        net: data.net_cash_flow || 0,
-      });
-    } catch (e) {
-      // silently fail
-    } finally {
-      setCashFlowLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     refreshLast();
   }, [refreshLast]);
-
-  useEffect(() => {
-    loadCashFlow();
-  }, [loadCashFlow]);
 
   // Sync only ever runs when the user taps Push or Pull below.
   // There is no automatic/background/startup sync anywhere in the app.
@@ -309,44 +274,6 @@ export default function ManagementScreen() {
           ) : null}
         </View>
 
-        {/* Cash Flow Card */}
-        <TouchableOpacity
-          style={styles.cashFlowCard}
-          onPress={() => router.push('/report')}
-          activeOpacity={0.7}
-          testID="cashflow-card"
-        >
-          <View style={styles.cashFlowHeader}>
-            <Ionicons name="cash-outline" size={20} color="#6b21a8" />
-            <Text style={styles.cashFlowTitle}>Cash Flow (All Time)</Text>
-            {cashFlowLoading ? (
-              <ActivityIndicator size="small" color="#6b21a8" style={{ marginLeft: 'auto' }} />
-            ) : (
-              <View style={styles.cashFlowBadge}>
-                <Text style={styles.cashFlowBadgeText}>Tap to view</Text>
-              </View>
-            )}
-          </View>
-          <View style={styles.cashFlowRow}>
-            <Text style={styles.cashFlowLabel}>Revenue</Text>
-            <Text style={styles.cashFlowValue}>
-              ${cashFlow ? cashFlow.revenue.toFixed(2) : '--'}
-            </Text>
-          </View>
-          <View style={styles.cashFlowRow}>
-            <Text style={[styles.cashFlowLabel, { color: '#dc2626' }]}>− Outsource</Text>
-            <Text style={[styles.cashFlowValue, { color: '#dc2626' }]}>
-              ${cashFlow ? cashFlow.outsource.toFixed(2) : '--'}
-            </Text>
-          </View>
-          <View style={styles.cashFlowGrandRow}>
-            <Text style={styles.cashFlowGrandLabel}>Net Cash</Text>
-            <Text style={styles.cashFlowGrandValue}>
-              ${cashFlow ? cashFlow.net.toFixed(2) : '--'}
-            </Text>
-          </View>
-        </TouchableOpacity>
-
         <View style={styles.grid}>
           {TILES.map((t) => (
             <TouchableOpacity
@@ -469,71 +396,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     textDecorationLine: 'underline',
-  },
-  cashFlowCard: {
-    backgroundColor: '#faf5ff',
-    borderWidth: 1.5,
-    borderColor: '#c4b5fd',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 14,
-  },
-  cashFlowHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  cashFlowTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#6b21a8',
-    marginLeft: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  cashFlowBadge: {
-    backgroundColor: '#6b21a8',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginLeft: 'auto',
-  },
-  cashFlowBadgeText: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: '700',
-  },
-  cashFlowRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 3,
-  },
-  cashFlowLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  cashFlowValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  cashFlowGrandRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 6,
-    paddingTop: 8,
-    borderTopWidth: 1.5,
-    borderTopColor: '#c4b5fd',
-  },
-  cashFlowGrandLabel: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#6b21a8',
-  },
-  cashFlowGrandValue: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#059669',
   },
 });
