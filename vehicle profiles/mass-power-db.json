@@ -3124,3 +3124,8 @@
     }
   ]
 }
+export {
+  createWalkinService,
+  getWalkInCustomerId,
+  getWalkInVehicleId,
+};
