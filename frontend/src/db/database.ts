@@ -1752,6 +1752,3 @@ export async function getLowStockBySupplier(
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([supplier_name, items]) => ({ supplier_name, items }));
 }
-
-
-
