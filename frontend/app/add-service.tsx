@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,7 @@ import {
   OilReminder,
   BatteryReplacement,
   HvacService,
+  getOrCreateWalkInVehicle,
 } from '../src/db/database';
 import { triggerAutoPush } from '../src/utils/autoSync';
 import DashLightsPicker from '../src/components/DashLightsPicker';
@@ -45,9 +46,12 @@ interface Vehicle {
 
 export default function AddServiceScreen() {
   const params = useLocalSearchParams();
-  const vehicles: Vehicle[] = params.vehicles ? JSON.parse(params.vehicles as string) : [];
+  const vehiclesParam: Vehicle[] = params.vehicles ? JSON.parse(params.vehicles as string) : [];
+  const isWalkIn = params.walkin === 'true';
 
-  const [selectedVehicleId, setSelectedVehicleId] = useState(vehicles[0]?.id || '');
+  const [vehicles, setVehicles] = useState<Vehicle[]>(vehiclesParam);
+  const [selectedVehicleId, setSelectedVehicleId] = useState(vehiclesParam[0]?.id || '');
+  const [loadingVehicles, setLoadingVehicles] = useState(isWalkIn);
   const [serviceCategory, setServiceCategory] = useState<string>(SERVICE_CATEGORIES[0]);
   const [additionalInfo, setAdditionalInfo] = useState('');
   const [cost, setCost] = useState('');
@@ -64,6 +68,24 @@ export default function AddServiceScreen() {
   const [pickedItems, setPickedItems] = useState<PickedItem[]>([]);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  // Load walk-in vehicle if needed
+  useEffect(() => {
+    if (isWalkIn && vehicles.length === 0) {
+      const loadWalkInVehicle = async () => {
+        try {
+          const walkInVehicle = await getOrCreateWalkInVehicle();
+          setVehicles([walkInVehicle]);
+          setSelectedVehicleId(walkInVehicle.id);
+        } catch (error) {
+          Alert.alert('Error', 'Failed to load walk-in vehicle');
+        } finally {
+          setLoadingVehicles(false);
+        }
+      };
+      loadWalkInVehicle();
+    }
+  }, [isWalkIn, vehicles.length]);
 
   const isOilService = serviceCategory === 'Oil Services';
   const isBatteryService = serviceCategory === 'Battery Replacement';
@@ -147,6 +169,17 @@ export default function AddServiceScreen() {
     }
   };
 
+  if (loadingVehicles) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#2563eb" />
+          <Text style={styles.loadingText}>Loading walk-in vehicle...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -167,26 +200,39 @@ export default function AddServiceScreen() {
               <Ionicons name="construct" size={48} color="#10b981" />
             </View>
 
-            {/* Vehicle Selection */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Select Vehicle *</Text>
-              <View style={styles.pickerContainer}>
-                <Ionicons name="car-sport-outline" size={20} color="#666" style={styles.pickerIcon} />
-                <Picker
-                  selectedValue={selectedVehicleId}
-                  onValueChange={(value) => setSelectedVehicleId(value)}
-                  style={styles.picker}
-                >
-                  {vehicles.map((vehicle) => (
-                    <Picker.Item
-                      key={vehicle.id}
-                      label={`${vehicle.year || ''} ${vehicle.make} ${vehicle.model} - ${vehicle.plate_number}`}
-                      value={vehicle.id}
-                    />
-                  ))}
-                </Picker>
+            {/* Walk-in Badge */}
+            {isWalkIn && (
+              <View style={styles.walkinBadge}>
+                <Ionicons name="walk-outline" size={20} color="#2563eb" />
+                <Text style={styles.walkinBadgeText}>Walk-in Customer</Text>
+                <Text style={styles.walkinBadgeSubtext}>
+                  {vehicles.length > 0 ? `${vehicles[0]?.make} ${vehicles[0]?.model}` : 'Loading...'}
+                </Text>
               </View>
-            </View>
+            )}
+
+            {/* Vehicle Selection - Hidden for walk-in */}
+            {!isWalkIn && (
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Select Vehicle *</Text>
+                <View style={styles.pickerContainer}>
+                  <Ionicons name="car-sport-outline" size={20} color="#666" style={styles.pickerIcon} />
+                  <Picker
+                    selectedValue={selectedVehicleId}
+                    onValueChange={(value) => setSelectedVehicleId(value)}
+                    style={styles.picker}
+                  >
+                    {vehicles.map((vehicle) => (
+                      <Picker.Item
+                        key={vehicle.id}
+                        label={`${vehicle.year || ''} ${vehicle.make} ${vehicle.model} - ${vehicle.plate_number}`}
+                        value={vehicle.id}
+                      />
+                    ))}
+                  </Picker>
+                </View>
+              </View>
+            )}
 
             {/* Service Category (Dropdown) */}
             <View style={styles.inputGroup}>
@@ -584,5 +630,36 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
+  },
+  walkinBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  walkinBadgeText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2563eb',
+    marginLeft: 10,
+  },
+  walkinBadgeSubtext: {
+    marginLeft: 'auto',
+    fontSize: 14,
+    color: '#64748b',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#64748b',
   },
 });
