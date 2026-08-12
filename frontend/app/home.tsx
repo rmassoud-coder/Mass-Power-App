@@ -242,29 +242,6 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Walk-in Customer Button */}
-          <TouchableOpacity
-            style={styles.walkinCard}
-            onPress={() => router.push({
-              pathname: '/add-service',
-              params: { walkin: 'true' }
-            })}
-            activeOpacity={0.7}
-            testID="walkin-button"
-          >
-            <View style={styles.walkinIconContainer}>
-              <Ionicons name="walk-outline" size={40} color="#fff" />
-            </View>
-            <View style={styles.walkinContent}>
-              <Text style={styles.walkinTitle}>Walk-in Customer</Text>
-              <Text style={styles.walkinSubtitle}>Quick service without customer profile</Text>
-              <View style={styles.walkinBadge}>
-                <Text style={styles.walkinBadgeText}>Add Service</Text>
-                <Ionicons name="arrow-forward" size={16} color="#fff" />
-              </View>
-            </View>
-          </TouchableOpacity>
-
           {/* Add New Customer */}
           <TouchableOpacity
             style={[styles.addCustomerButton, { paddingVertical: buttonPadding }]}
@@ -411,59 +388,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
-  },
-  walkinCard: {
-    backgroundColor: '#2563eb',
-    borderRadius: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#1d4ed8',
-    shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-    marginBottom: 16,
-  },
-  walkinIconContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  walkinContent: {
-    flex: 1,
-  },
-  walkinTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  walkinSubtitle: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 2,
-  },
-  walkinBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 20,
-    marginTop: 6,
-    alignSelf: 'flex-start',
-  },
-  walkinBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-    marginRight: 4,
   },
   addCustomerButton: {
     flexDirection: 'row',
