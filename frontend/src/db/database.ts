@@ -1752,10 +1752,26 @@ export async function getLowStockBySupplier(
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([supplier_name, items]) => ({ supplier_name, items }));
 }
+/      walkInVehicleId,
+      walkInCustomerId,
+      finalDescription,
+      additionalInfo || null,
+      cost,
+      isPaidFinal,
+      partialPaidFinal,
+      now,
+      now,
+      0
+    );
+  } catch (error) {
+    console.error('Error creating walk-in service:', error);
+    throw error;
+  }
+}
 // ==================== WALK-IN SERVICES ====================
 
 export const getWalkInCustomerId = async (): Promise<string | null> => {
-  const db = await getDatabase();
+  const db = await getDb();  // ✅ FIXED
   try {
     const result = await db.getFirstAsync<{ id: string }>(
       `SELECT id FROM customers WHERE name = 'Walk-in Customer' LIMIT 1`
@@ -1768,7 +1784,7 @@ export const getWalkInCustomerId = async (): Promise<string | null> => {
 };
 
 export const getWalkInVehicleId = async (customerId: string): Promise<string | null> => {
-  const db = await getDatabase();
+  const db = await getDb();  // ✅ FIXED
   try {
     const result = await db.getFirstAsync<{ id: string }>(
       `SELECT id FROM vehicles WHERE customer_id = ? AND vin = 'WALKIN' LIMIT 1`,
@@ -1789,7 +1805,7 @@ export const createWalkinService = async (
   partialPaid: number,
   additionalInfo?: string
 ): Promise<void> => {
-  const db = await getDatabase();
+  const db = await getDb();  // ✅ FIXED
   const now = new Date().toISOString();
 
   try {
@@ -1868,4 +1884,4 @@ export const createWalkinService = async (
     console.error('Error creating walk-in service:', error);
     throw error;
   }
-}
+};
