@@ -126,6 +126,7 @@ export default function RootLayout() {
           <Stack.Screen name="edit-service" />
           <Stack.Screen name="report" />
           <Stack.Screen name="backup" />
+          <Stack.Screen name="walkin-service" options={{ headerShown: false }} />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>
