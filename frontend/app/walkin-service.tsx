@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as Database from './database';
+import * as Database from '../src/db/database';
 import { triggerAutoPush } from '../src/utils/autoSync';
 
 type PaymentStatus = 'paid' | 'unpaid' | 'partial';
