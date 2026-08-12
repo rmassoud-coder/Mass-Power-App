@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import seedData from './seed.json';
+import { Alert } from 'react-native';
 
 const DB_NAME = 'mass_power.db';
 
