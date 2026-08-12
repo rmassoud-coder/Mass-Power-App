@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
@@ -17,9 +16,6 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Updates from 'expo-updates';
 import {
-  searchCustomers,
-  searchVehiclesByVin,
-  searchVehiclesByPlate,
   listInventory,
   listDueOilReminders,
 } from '../src/db/database';
@@ -30,15 +26,14 @@ let outOfStockReminderShown = false;
 let oilReminderShown = false;
 
 export default function HomeScreen() {
-  const [mobileNumber, setMobileNumber] = useState('');
-  const [vinNumber, setVinNumber] = useState('');
-  const [plateNumber, setPlateNumber] = useState('');
-  const [loading, setLoading] = useState(false);
-  
   const router = useRouter();
   const { height } = useWindowDimensions();
 
-  // Out-of-stock reminder — runs once per app session after the home screen loads
+  // Responsive sizing
+  const isSmallScreen = height < 700;
+  const buttonPadding = isSmallScreen ? 10 : 14;
+
+  // Out-of-stock reminder
   useEffect(() => {
     if (outOfStockReminderShown) return;
     outOfStockReminderShown = true;
@@ -49,7 +44,6 @@ export default function HomeScreen() {
         const outOfStock = items.filter((it) => Number(it.item_quantity) === 0);
         if (outOfStock.length === 0) return;
 
-        // Build a readable list (cap at first 8 to keep the alert tidy)
         const preview = outOfStock
           .slice(0, 8)
           .map((it) => `• ${it.item_number} — ${it.item_type}`)
@@ -57,7 +51,6 @@ export default function HomeScreen() {
         const extra =
           outOfStock.length > 8 ? `\n…and ${outOfStock.length - 8} more` : '';
 
-        // Small delay so the alert appears after the home screen settles
         setTimeout(() => {
           Alert.alert(
             `Out of Stock (${outOfStock.length})`,
@@ -74,7 +67,6 @@ export default function HomeScreen() {
           );
         }, 350);
       } catch (e) {
-        // Silently ignore — reminder is non-critical
         console.warn('Out-of-stock check failed:', e);
       }
     };
@@ -82,7 +74,7 @@ export default function HomeScreen() {
     checkOutOfStock();
   }, [router]);
 
-  // Oil-change WhatsApp reminders — fire once per app session after launch
+  // Oil-change reminders
   useEffect(() => {
     if (oilReminderShown) return;
     oilReminderShown = true;
@@ -103,7 +95,6 @@ export default function HomeScreen() {
           .join('\n');
         const extra = due.length > 6 ? `\n…and ${due.length - 6} more` : '';
 
-        // Give the inventory alert (if any) a chance to be dismissed first
         setTimeout(() => {
           Alert.alert(
             `Oil Change Reminders (${due.length})`,
@@ -125,53 +116,6 @@ export default function HomeScreen() {
 
     checkDueReminders();
   }, [router]);
-
-  // Responsive sizing
-  const isSmallScreen = height < 700;
-  const cardPadding = isSmallScreen ? 14 : 20;
-  const cardMargin = isSmallScreen ? 10 : 16;
-  const sectionGap = isSmallScreen ? 8 : 16;
-  const titleFontSize = isSmallScreen ? 14 : 16;
-  const buttonPadding = isSmallScreen ? 10 : 14;
-
-  const handleSearch = async (searchType: 'mobile' | 'vin' | 'plate', query: string) => {
-    if (!query.trim()) {
-      Alert.alert('Error', 'Please enter a search term');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      let results: any[] = [];
-      if (searchType === 'mobile') {
-        results = await searchCustomers(query.trim());
-      } else if (searchType === 'vin') {
-        results = await searchVehiclesByVin(query.trim());
-      } else if (searchType === 'plate') {
-        results = await searchVehiclesByPlate(query.trim());
-      }
-
-      if (results.length === 0) {
-        Alert.alert(
-          'No Results Found',
-          'Would you like to create a new customer?',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Create', onPress: () => router.push('/add-customer') },
-          ]
-        );
-      } else {
-        router.push({
-          pathname: '/search-results',
-          params: { results: JSON.stringify(results) },
-        });
-      }
-    } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to search. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -208,87 +152,27 @@ export default function HomeScreen() {
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
         >
-          {/* Search by Mobile Number */}
-          <View style={[styles.searchCard, { padding: cardPadding, marginBottom: cardMargin }]}>
-            <View style={[styles.searchHeader, { marginBottom: sectionGap }]}>
-              <Ionicons name="call-outline" size={isSmallScreen ? 20 : 24} color="#2563eb" />
-              <Text style={[styles.searchTitle, { fontSize: titleFontSize }]}>Search by Mobile Number</Text>
+          {/* Walk-in Customer Button */}
+          <TouchableOpacity
+            style={styles.walkinCard}
+            onPress={() => router.push('/walkin-service')}
+            activeOpacity={0.7}
+            testID="walkin-button"
+          >
+            <View style={styles.walkinIconContainer}>
+              <Ionicons name="walk-outline" size={40} color="#fff" />
             </View>
-            <View style={[styles.inputContainer, { marginBottom: sectionGap }]}>
-              <TextInput
-                style={[styles.input, { paddingVertical: isSmallScreen ? 8 : 12 }]}
-                placeholder="Enter mobile number"
-                value={mobileNumber}
-                onChangeText={setMobileNumber}
-                keyboardType="phone-pad"
-                testID="mobile-search-input"
-              />
+            <View style={styles.walkinContent}>
+              <Text style={styles.walkinTitle}>Walk-in Customer</Text>
+              <Text style={styles.walkinSubtitle}>Quick service without customer profile</Text>
+              <View style={styles.walkinBadge}>
+                <Text style={styles.walkinBadgeText}>Add Service</Text>
+                <Ionicons name="arrow-forward" size={16} color="#fff" />
+              </View>
             </View>
-            <TouchableOpacity
-              style={[styles.searchButton, { paddingVertical: buttonPadding }, loading && styles.searchButtonDisabled]}
-              onPress={() => handleSearch('mobile', mobileNumber)}
-              disabled={loading}
-              testID="mobile-search-button"
-            >
-              <Ionicons name="search" size={isSmallScreen ? 16 : 20} color="#fff" />
-              <Text style={styles.searchButtonText}>Search</Text>
-            </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
 
-          {/* Search by VIN Number */}
-          <View style={[styles.searchCard, { padding: cardPadding, marginBottom: cardMargin }]}>
-            <View style={[styles.searchHeader, { marginBottom: sectionGap }]}>
-              <Ionicons name="barcode-outline" size={isSmallScreen ? 20 : 24} color="#2563eb" />
-              <Text style={[styles.searchTitle, { fontSize: titleFontSize }]}>Search by VIN Number</Text>
-            </View>
-            <View style={[styles.inputContainer, { marginBottom: sectionGap }]}>
-              <TextInput
-                style={[styles.input, { paddingVertical: isSmallScreen ? 8 : 12 }]}
-                placeholder="Enter VIN number"
-                value={vinNumber}
-                onChangeText={setVinNumber}
-                autoCapitalize="characters"
-                testID="vin-search-input"
-              />
-            </View>
-            <TouchableOpacity
-              style={[styles.searchButton, { paddingVertical: buttonPadding }, loading && styles.searchButtonDisabled]}
-              onPress={() => handleSearch('vin', vinNumber)}
-              disabled={loading}
-              testID="vin-search-button"
-            >
-              <Ionicons name="search" size={isSmallScreen ? 16 : 20} color="#fff" />
-              <Text style={styles.searchButtonText}>Search</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Search by Plate Number */}
-          <View style={[styles.searchCard, { padding: cardPadding, marginBottom: cardMargin }]}>
-            <View style={[styles.searchHeader, { marginBottom: sectionGap }]}>
-              <Ionicons name="car-outline" size={isSmallScreen ? 20 : 24} color="#2563eb" />
-              <Text style={[styles.searchTitle, { fontSize: titleFontSize }]}>Search by Plate Number</Text>
-            </View>
-            <View style={[styles.inputContainer, { marginBottom: sectionGap }]}>
-              <TextInput
-                style={[styles.input, { paddingVertical: isSmallScreen ? 8 : 12 }]}
-                placeholder="Enter plate number"
-                value={plateNumber}
-                onChangeText={setPlateNumber}
-                autoCapitalize="characters"
-                testID="plate-search-input"
-              />
-            </View>
-            <TouchableOpacity
-              style={[styles.searchButton, { paddingVertical: buttonPadding }, loading && styles.searchButtonDisabled]}
-              onPress={() => handleSearch('plate', plateNumber)}
-              disabled={loading}
-              testID="plate-search-button"
-            >
-              <Ionicons name="search" size={isSmallScreen ? 16 : 20} color="#fff" />
-              <Text style={styles.searchButtonText}>Search</Text>
-            </TouchableOpacity>
-          </View>
-
+          {/* Add New Customer */}
           <TouchableOpacity
             style={[styles.addCustomerButton, { paddingVertical: buttonPadding }]}
             onPress={() => router.push('/add-customer')}
@@ -298,6 +182,7 @@ export default function HomeScreen() {
             <Text style={styles.addCustomerButtonText}>Add New Customer</Text>
           </TouchableOpacity>
 
+          {/* Backend Management */}
           <TouchableOpacity
             style={[styles.reportButton, styles.managementButton, { paddingVertical: buttonPadding }]}
             onPress={() => router.push('/management')}
@@ -307,7 +192,7 @@ export default function HomeScreen() {
             <Text style={styles.reportButtonText}>Backend Management</Text>
           </TouchableOpacity>
 
-          {/* Muted deployment/sync timestamp (bottom of landing page) */}
+          {/* Build timestamp */}
           <Text style={styles.buildStamp} testID="build-timestamp">
             {Updates.createdAt
               ? `Last update: ${new Date(Updates.createdAt).toLocaleString()}`
@@ -355,15 +240,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  headerIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#eff6ff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
   headerLogo: {
     width: 52,
     height: 52,
@@ -388,54 +264,58 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 24,
   },
-  searchCard: {
-    backgroundColor: '#fff',
+  walkinCard: {
+    backgroundColor: '#2563eb',
     borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  searchHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-  },
-  searchTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1e293b',
-    marginLeft: 12,
-  },
-  inputContainer: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    marginBottom: 12,
+    padding: 20,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#1d4ed8',
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+    marginBottom: 16,
   },
-  input: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#1e293b',
-  },
-  searchButton: {
-    backgroundColor: '#2563eb',
-    borderRadius: 12,
-    paddingVertical: 12,
-    flexDirection: 'row',
+  walkinIconContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 16,
   },
-  searchButtonDisabled: {
-    opacity: 0.6,
+  walkinContent: {
+    flex: 1,
   },
-  searchButtonText: {
+  walkinTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
     color: '#fff',
-    fontSize: 16,
+  },
+  walkinSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+  },
+  walkinBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
+    marginTop: 6,
+    alignSelf: 'flex-start',
+  },
+  walkinBadgeText: {
+    color: '#fff',
+    fontSize: 12,
     fontWeight: '600',
-    marginLeft: 8,
+    marginRight: 4,
   },
   addCustomerButton: {
     flexDirection: 'row',
@@ -468,25 +348,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
-  },
-  backupButton: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 12,
-    backgroundColor: '#f1f5f9',
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  backupButtonText: {
-    color: '#1e293b',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  remindersButton: {
-    backgroundColor: '#25D366',
   },
   managementButton: {
     backgroundColor: '#0f172a',
