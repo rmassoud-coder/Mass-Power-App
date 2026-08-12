@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,177 +8,174 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  ActivityIndicator,
   ScrollView,
+  Image,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Picker } from '@react-native-picker/picker';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import * as Updates from 'expo-updates';
 import {
-  createService,
-  SERVICE_CATEGORIES,
-  EMPTY_DASH_LIGHTS,
-  EMPTY_OIL_REMINDER,
-  EMPTY_BATTERY_REPLACEMENT,
-  EMPTY_HVAC_SERVICE,
-  DashLights,
-  OilReminder,
-  BatteryReplacement,
-  HvacService,
-  getOrCreateWalkInVehicle,
+  searchCustomers,
+  searchVehiclesByVin,
+  searchVehiclesByPlate,
+  listInventory,
+  listDueOilReminders,
 } from '../src/db/database';
-import { triggerAutoPush } from '../src/utils/autoSync';
-import DashLightsPicker from '../src/components/DashLightsPicker';
-import OilReminderForm from '../src/components/OilReminderForm';
-import BatteryReplacementForm from '../src/components/BatteryReplacementForm';
-import HvacServiceForm from '../src/components/HvacServiceForm';
-import InventoryPicker, { PickedItem } from '../src/components/InventoryPicker';
+import SyncStatusPill from '../src/components/SyncStatusPill';
 
-interface Vehicle {
-  id: string;
-  vin: string;
-  plate_number: string;
-  make: string;
-  model: string;
-  year?: string;
-}
+// Module-level flag so the out-of-stock + reminder alerts only trigger once per app session
+let outOfStockReminderShown = false;
+let oilReminderShown = false;
 
-export default function AddServiceScreen() {
-  const params = useLocalSearchParams();
-  const vehiclesParam: Vehicle[] = params.vehicles ? JSON.parse(params.vehicles as string) : [];
-  const isWalkIn = params.walkin === 'true';
-
-  const [vehicles, setVehicles] = useState<Vehicle[]>(vehiclesParam);
-  const [selectedVehicleId, setSelectedVehicleId] = useState(vehiclesParam[0]?.id || '');
-  const [loadingVehicles, setLoadingVehicles] = useState(isWalkIn);
-  const [serviceCategory, setServiceCategory] = useState<string>(SERVICE_CATEGORIES[0]);
-  const [additionalInfo, setAdditionalInfo] = useState('');
-  const [cost, setCost] = useState('');
-  const [isPaid, setIsPaid] = useState(false);
-  const [isPending, setIsPending] = useState(false);
-  const [partialAmount, setPartialAmount] = useState('');
-  const [dashLights, setDashLights] = useState<DashLights>(EMPTY_DASH_LIGHTS);
-  const [oilReminder, setOilReminder] = useState<OilReminder>(EMPTY_OIL_REMINDER);
-  const [batteryReplacement, setBatteryReplacement] = useState<BatteryReplacement>(
-    EMPTY_BATTERY_REPLACEMENT
-  );
-  const [hvacService, setHvacService] = useState<HvacService>(EMPTY_HVAC_SERVICE);
-  const [outsourceCost, setOutsourceCost] = useState('');
-  const [pickedItems, setPickedItems] = useState<PickedItem[]>([]);
+export default function HomeScreen() {
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  
   const router = useRouter();
+  const { height } = useWindowDimensions();
 
-  // Load walk-in vehicle if needed
+  // Responsive sizing
+  const isSmallScreen = height < 700;
+  const cardPadding = isSmallScreen ? 14 : 20;
+  const cardMargin = isSmallScreen ? 10 : 16;
+  const buttonPadding = isSmallScreen ? 10 : 14;
+
+  // Out-of-stock reminder
   useEffect(() => {
-    if (isWalkIn && vehicles.length === 0) {
-      const loadWalkInVehicle = async () => {
-        try {
-          const walkInVehicle = await getOrCreateWalkInVehicle();
-          setVehicles([walkInVehicle]);
-          setSelectedVehicleId(walkInVehicle.id);
-        } catch (error) {
-          Alert.alert('Error', 'Failed to load walk-in vehicle');
-        } finally {
-          setLoadingVehicles(false);
-        }
-      };
-      loadWalkInVehicle();
-    }
-  }, [isWalkIn, vehicles.length]);
+    if (outOfStockReminderShown) return;
+    outOfStockReminderShown = true;
 
-  const isOilService = serviceCategory === 'Oil Services';
-  const isBatteryService = serviceCategory === 'Battery Replacement';
-  const isHvacService = serviceCategory === 'HVAC Services';
-  const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId);
+    const checkOutOfStock = async () => {
+      try {
+        const items = await listInventory();
+        const outOfStock = items.filter((it) => Number(it.item_quantity) === 0);
+        if (outOfStock.length === 0) return;
 
-  const productsSubtotal = pickedItems.reduce(
-    (sum, it) => sum + it.quantity * it.unit_price,
-    0
-  );
-  const laborCost = parseFloat(cost) || 0;
-  const grandTotal = laborCost + productsSubtotal;
+        const preview = outOfStock
+          .slice(0, 8)
+          .map((it) => `• ${it.item_number} — ${it.item_type}`)
+          .join('\n');
+        const extra =
+          outOfStock.length > 8 ? `\n…and ${outOfStock.length - 8} more` : '';
 
-  const handleSubmit = async () => {
-    if (!selectedVehicleId || !serviceCategory || !cost.trim()) {
-      Alert.alert('Error', 'Please fill in all required fields');
-      return;
-    }
-
-    if (isOilService && !oilReminder.oilGrade.trim()) {
-      Alert.alert('Error', 'Oil grade is required for Oil Services (e.g. 5W-30)');
-      return;
-    }
-
-    if (isBatteryService && !batteryReplacement.ampRate.trim()) {
-      Alert.alert(
-        'Error',
-        'Amp Rate is required for Battery Replacement (e.g. 700 CCA or 80 Ah)'
-      );
-      return;
-    }
-
-    const laborNumber = parseFloat(cost);
-    if (isNaN(laborNumber) || laborNumber < 0) {
-      Alert.alert('Error', 'Please enter a valid labor cost');
-      return;
-    }
-    // Grand total = labor + parts retail
-    const costNumber = laborNumber + productsSubtotal;
-
-    // Pending payment validation
-    let partialPaidNumber = 0;
-    if (isPending) {
-      partialPaidNumber = parseFloat(partialAmount) || 0;
-      if (partialPaidNumber < 0) {
-        Alert.alert('Error', 'Partial payment cannot be negative');
-        return;
+        setTimeout(() => {
+          Alert.alert(
+            `Out of Stock (${outOfStock.length})`,
+            `The following inventory item${outOfStock.length === 1 ? '' : 's'} ` +
+              `${outOfStock.length === 1 ? 'is' : 'are'} at zero quantity:\n\n${preview}${extra}`,
+            [
+              { text: 'Dismiss', style: 'cancel' },
+              {
+                text: 'View Inventory',
+                onPress: () => router.push('/inventory'),
+              },
+            ],
+            { cancelable: true }
+          );
+        }, 350);
+      } catch (e) {
+        console.warn('Out-of-stock check failed:', e);
       }
-      if (partialPaidNumber >= costNumber) {
-        Alert.alert(
-          'Error',
-          'Partial payment must be less than total cost. Use "Paid" instead if fully paid.'
-        );
-        return;
+    };
+
+    checkOutOfStock();
+  }, [router]);
+
+  // Oil-change reminders
+  useEffect(() => {
+    if (oilReminderShown) return;
+    oilReminderShown = true;
+
+    const checkDueReminders = async () => {
+      try {
+        const due = await listDueOilReminders();
+        if (due.length === 0) return;
+
+        const preview = due
+          .slice(0, 6)
+          .map(
+            (r) =>
+              `• ${r.customer_name} — ${[r.vehicle_make, r.vehicle_model]
+                .filter(Boolean)
+                .join(' ') || 'vehicle'}`
+          )
+          .join('\n');
+        const extra = due.length > 6 ? `\n…and ${due.length - 6} more` : '';
+
+        setTimeout(() => {
+          Alert.alert(
+            `Oil Change Reminders (${due.length})`,
+            `${due.length} customer${due.length === 1 ? ' is' : 's are'} due for an oil change:\n\n${preview}${extra}`,
+            [
+              { text: 'Later', style: 'cancel' },
+              {
+                text: 'Open Reminders',
+                onPress: () => router.push('/reminders'),
+              },
+            ],
+            { cancelable: true }
+          );
+        }, 900);
+      } catch (e) {
+        console.warn('Oil reminder check failed:', e);
       }
+    };
+
+    checkDueReminders();
+  }, [router]);
+
+  const handleSearch = async () => {
+    const query = searchQuery.trim();
+    if (!query) {
+      Alert.alert('Error', 'Please enter a search term');
+      return;
     }
 
     setLoading(true);
     try {
-      await createService(
-        selectedVehicleId,
-        serviceCategory,
-        additionalInfo.trim() || undefined,
-        costNumber,
-        isPaid,
-        dashLights,
-        isOilService ? oilReminder : EMPTY_OIL_REMINDER,
-        pickedItems.map((p) => ({ inventory_id: p.inventory_id, quantity: p.quantity })),
-        partialPaidNumber,
-        isBatteryService ? batteryReplacement : undefined,
-        isHvacService ? hvacService : undefined,
-        parseFloat(outsourceCost || '0') || 0
-      );
-      triggerAutoPush();
+      let results: any[] = [];
 
-      router.back();
+      // Try searching by mobile
+      const mobileResults = await searchCustomers(query);
+      if (mobileResults.length > 0) {
+        results = mobileResults;
+      } else {
+        // Try searching by VIN
+        const vinResults = await searchVehiclesByVin(query);
+        if (vinResults.length > 0) {
+          results = vinResults;
+        } else {
+          // Try searching by Plate
+          const plateResults = await searchVehiclesByPlate(query);
+          if (plateResults.length > 0) {
+            results = plateResults;
+          }
+        }
+      }
+
+      if (results.length === 0) {
+        Alert.alert(
+          'No Results Found',
+          'Would you like to create a new customer?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Create', onPress: () => router.push('/add-customer') },
+          ]
+        );
+      } else {
+        router.push({
+          pathname: '/search-results',
+          params: { results: JSON.stringify(results) },
+        });
+      }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to add service');
+      Alert.alert('Error', error?.message || 'Failed to search. Please try again.');
     } finally {
       setLoading(false);
     }
   };
-
-  if (loadingVehicles) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2563eb" />
-          <Text style={styles.loadingText}>Loading walk-in vehicle...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -187,252 +184,113 @@ export default function AddServiceScreen() {
         style={styles.keyboardView}
       >
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#1e293b" />
+          <View style={styles.headerLeft}>
+            <Image
+              source={require('../assets/images/mass-power-logo.png')}
+              style={styles.headerLogo}
+              resizeMode="contain"
+            />
+            <View>
+              <Text style={styles.headerTitle}>Mass Power</Text>
+              <Text style={styles.headerSubtitle}>Auto Services</Text>
+              <View style={{ marginTop: 4 }}>
+                <SyncStatusPill />
+              </View>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.headerAddButton}
+            onPress={() => router.push('/add-customer')}
+            testID="header-add-customer-button"
+          >
+            <Ionicons name="person-add" size={22} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add Service Record</Text>
-          <View style={{ width: 40 }} />
         </View>
 
-        <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
-          <View style={styles.form}>
-            <View style={styles.iconContainer}>
-              <Ionicons name="construct" size={48} color="#10b981" />
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Unified Search - works with mobile, VIN, or plate */}
+          <View style={[styles.searchCard, { padding: cardPadding, marginBottom: cardMargin }]}>
+            <View style={styles.searchHeader}>
+              <Ionicons name="search-outline" size={isSmallScreen ? 20 : 24} color="#2563eb" />
+              <Text style={styles.searchTitle}>Search Customer</Text>
             </View>
-
-            {/* Walk-in Badge */}
-            {isWalkIn && (
-              <View style={styles.walkinBadge}>
-                <Ionicons name="walk-outline" size={20} color="#2563eb" />
-                <Text style={styles.walkinBadgeText}>Walk-in Customer</Text>
-                <Text style={styles.walkinBadgeSubtext}>
-                  {vehicles.length > 0 ? `${vehicles[0]?.make} ${vehicles[0]?.model}` : 'Loading...'}
-                </Text>
-              </View>
-            )}
-
-            {/* Vehicle Selection - Hidden for walk-in */}
-            {!isWalkIn && (
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Select Vehicle *</Text>
-                <View style={styles.pickerContainer}>
-                  <Ionicons name="car-sport-outline" size={20} color="#666" style={styles.pickerIcon} />
-                  <Picker
-                    selectedValue={selectedVehicleId}
-                    onValueChange={(value) => setSelectedVehicleId(value)}
-                    style={styles.picker}
-                  >
-                    {vehicles.map((vehicle) => (
-                      <Picker.Item
-                        key={vehicle.id}
-                        label={`${vehicle.year || ''} ${vehicle.make} ${vehicle.model} - ${vehicle.plate_number}`}
-                        value={vehicle.id}
-                      />
-                    ))}
-                  </Picker>
-                </View>
-              </View>
-            )}
-
-            {/* Service Category (Dropdown) */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Service Type *</Text>
-              <View style={styles.pickerContainer}>
-                <Ionicons name="clipboard-outline" size={20} color="#666" style={styles.pickerIcon} />
-                <Picker
-                  selectedValue={serviceCategory}
-                  onValueChange={(value) => setServiceCategory(value)}
-                  style={styles.picker}
-                  testID="service-category-picker"
-                >
-                  {SERVICE_CATEGORIES.map((cat) => (
-                    <Picker.Item key={cat} label={cat} value={cat} />
-                  ))}
-                </Picker>
-              </View>
+            <Text style={styles.searchHint}>
+              Enter mobile number, VIN, or plate number
+            </Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="Mobile • VIN • Plate"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCapitalize="characters"
+                testID="unified-search-input"
+              />
             </View>
-
-            {/* Oil Service Reminder (conditional) */}
-            {isOilService && (
-              <View style={styles.oilCard}>
-                <OilReminderForm
-                  value={oilReminder}
-                  onChange={setOilReminder}
-                  make={selectedVehicle?.make}
-                  model={selectedVehicle?.model}
-                />
-              </View>
-            )}
-
-            {/* Battery Replacement (conditional) */}
-            {isBatteryService && (
-              <View style={styles.batteryCard}>
-                <BatteryReplacementForm
-                  value={batteryReplacement}
-                  onChange={setBatteryReplacement}
-                />
-              </View>
-            )}
-
-            {/* HVAC Services (conditional) */}
-            {isHvacService && (
-              <View style={styles.hvacCard}>
-                <HvacServiceForm value={hvacService} onChange={setHvacService} />
-              </View>
-            )}
-
-            {/* Additional Info / Description */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Notes / Description</Text>
-              <View style={[styles.inputContainer, styles.textAreaContainer]}>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  placeholder="e.g., oil filter replaced, brake pads worn..."
-                  value={additionalInfo}
-                  onChangeText={setAdditionalInfo}
-                  multiline
-                  numberOfLines={4}
-                  textAlignVertical="top"
-                />
-              </View>
-            </View>
-
-            {/* Inventory Products Used */}
-            <InventoryPicker value={pickedItems} onChange={setPickedItems} />
-
-            {/* Dashboard Warning Lights */}
-            <View style={styles.dashCard}>
-              <DashLightsPicker value={dashLights} onChange={setDashLights} />
-            </View>
-
-            {/* Cost */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Labor / Service Fee *</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="cash-outline" size={20} color="#666" style={styles.inputIcon} />
-                <Text style={styles.currencySymbol}>$</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="0.00"
-                  value={cost}
-                  onChangeText={setCost}
-                  keyboardType="decimal-pad"
-                />
-              </View>
-              {productsSubtotal > 0 && (
-                <View style={styles.totalBreakdown}>
-                  <Text style={styles.totalLine}>Labor: ${laborCost.toFixed(2)}</Text>
-                  <Text style={styles.totalLine}>Parts (retail): ${productsSubtotal.toFixed(2)}</Text>
-                  <Text style={styles.totalGrand}>Grand Total: ${grandTotal.toFixed(2)}</Text>
-                </View>
-              )}
-            </View>
-
-            {/* Outsource Cost (PRIVATE, Reports-only) */}
-            <View style={styles.outsourceCard}>
-              <View style={styles.outsourceHeaderRow}>
-                <Ionicons name="lock-closed" size={14} color="#6b21a8" />
-                <Text style={styles.outsourceHeader}>Outsource Cost (Private)</Text>
-              </View>
-              <Text style={styles.outsourceHint}>
-                Money paid to a 3rd party for this job. Subtracted from your cash-flow in
-                the Reports screen only — never shown on receipts, invoices or stickers.
-              </Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="cash-outline" size={20} color="#6b21a8" style={styles.inputIcon} />
-                <Text style={[styles.currencySymbol, { color: '#6b21a8' }]}>$</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="0.00"
-                  value={outsourceCost}
-                  onChangeText={(t) => setOutsourceCost(t.replace(/[^\d.]/g, ''))}
-                  keyboardType="decimal-pad"
-                  testID="outsource-cost-input"
-                />
-              </View>
-            </View>
-
-            {/* Paid Checkbox */}
             <TouchableOpacity
-              style={styles.paidCheckbox}
-              onPress={() => {
-                const next = !isPaid;
-                setIsPaid(next);
-                if (next) {
-                  setIsPending(false);
-                  setPartialAmount('');
-                }
-              }}
-              testID="paid-checkbox"
-            >
-              <View style={[styles.checkbox, isPaid && styles.checkboxChecked]}>
-                {isPaid && <Ionicons name="checkmark" size={18} color="#fff" />}
-              </View>
-              <View style={styles.paidCheckboxLabel}>
-                <Text style={styles.paidCheckboxText}>Invoice Paid</Text>
-                <Text style={styles.paidCheckboxSubtext}>
-                  {isPaid ? 'Marked as paid' : 'Will show as unpaid in red'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Pending Payment Checkbox + partial amount */}
-            <View style={styles.pendingRow}>
-              <TouchableOpacity
-                style={[styles.paidCheckbox, { flex: 1, marginTop: 0 }]}
-                onPress={() => {
-                  const next = !isPending;
-                  setIsPending(next);
-                  if (next) setIsPaid(false);
-                  else setPartialAmount('');
-                }}
-                testID="pending-checkbox"
-              >
-                <View
-                  style={[
-                    styles.checkbox,
-                    isPending && { backgroundColor: '#eab308', borderColor: '#eab308' },
-                  ]}
-                >
-                  {isPending && <Ionicons name="time" size={16} color="#fff" />}
-                </View>
-                <View style={styles.paidCheckboxLabel}>
-                  <Text style={styles.paidCheckboxText}>Pending Payment</Text>
-                  <Text style={styles.paidCheckboxSubtext}>
-                    {isPending ? 'Will show as pending in yellow' : 'Partial or awaiting payment'}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-              {isPending && (
-                <View style={styles.partialInputWrap} testID="partial-input-wrap">
-                  <Text style={styles.currencySymbol}>$</Text>
-                  <TextInput
-                    style={styles.partialInput}
-                    placeholder="0.00"
-                    value={partialAmount}
-                    onChangeText={setPartialAmount}
-                    keyboardType="decimal-pad"
-                    testID="partial-input"
-                  />
-                </View>
-              )}
-            </View>
-
-            <TouchableOpacity
-              style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-              onPress={handleSubmit}
+              style={[styles.searchButton, loading && styles.searchButtonDisabled]}
+              onPress={handleSearch}
               disabled={loading}
+              testID="unified-search-button"
             >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="checkmark-circle" size={24} color="#fff" />
-                  <Text style={styles.submitButtonText}>Add Service</Text>
-                </>
-              )}
+              <Ionicons name="search" size={isSmallScreen ? 16 : 20} color="#fff" />
+              <Text style={styles.searchButtonText}>Search</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Walk-in Customer Button */}
+          <TouchableOpacity
+            style={styles.walkinCard}
+            onPress={() => router.push({
+              pathname: '/add-service',
+              params: { walkin: 'true' }
+            })}
+            activeOpacity={0.7}
+            testID="walkin-button"
+          >
+            <View style={styles.walkinIconContainer}>
+              <Ionicons name="walk-outline" size={40} color="#fff" />
+            </View>
+            <View style={styles.walkinContent}>
+              <Text style={styles.walkinTitle}>Walk-in Customer</Text>
+              <Text style={styles.walkinSubtitle}>Quick service without customer profile</Text>
+              <View style={styles.walkinBadge}>
+                <Text style={styles.walkinBadgeText}>Add Service</Text>
+                <Ionicons name="arrow-forward" size={16} color="#fff" />
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* Add New Customer */}
+          <TouchableOpacity
+            style={[styles.addCustomerButton, { paddingVertical: buttonPadding }]}
+            onPress={() => router.push('/add-customer')}
+            testID="add-customer-button"
+          >
+            <Ionicons name="person-add-outline" size={isSmallScreen ? 16 : 20} color="#2563eb" />
+            <Text style={styles.addCustomerButtonText}>Add New Customer</Text>
+          </TouchableOpacity>
+
+          {/* Backend Management */}
+          <TouchableOpacity
+            style={[styles.reportButton, styles.managementButton, { paddingVertical: buttonPadding }]}
+            onPress={() => router.push('/management')}
+            testID="management-button"
+          >
+            <Ionicons name="construct-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
+            <Text style={styles.reportButtonText}>Backend Management</Text>
+          </TouchableOpacity>
+
+          {/* Build timestamp */}
+          <Text style={styles.buildStamp} testID="build-timestamp">
+            {Updates.createdAt
+              ? `Last update: ${new Date(Updates.createdAt).toLocaleString()}`
+              : 'Local Dev Mode'}
+          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -440,226 +298,213 @@ export default function AddServiceScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  keyboardView: { flex: 1 },
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  keyboardView: {
+    flex: 1,
+  },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 24,
     paddingVertical: 16,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
-  backButton: { padding: 8 },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#1e293b' },
-  content: { flex: 1, paddingHorizontal: 24 },
-  form: { paddingTop: 24 },
-  iconContainer: {
-    alignSelf: 'center',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#d1fae5',
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  headerAddButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#2563eb',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  inputGroup: { marginBottom: 20 },
-  label: { fontSize: 14, fontWeight: '600', color: '#1e293b', marginBottom: 8 },
-  pickerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingLeft: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+  headerLogo: {
+    width: 52,
+    height: 52,
+    marginRight: 12,
+    borderRadius: 26,
   },
-  pickerIcon: { marginRight: 12 },
-  picker: { flex: 1, height: 56 },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1e293b',
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  content: {
+    flex: 1,
+  },
+  contentContainer: {
     paddingHorizontal: 16,
-    height: 56,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    paddingTop: 12,
+    paddingBottom: 24,
   },
-  textAreaContainer: { height: 100, alignItems: 'flex-start', paddingVertical: 12 },
-  inputIcon: { marginRight: 12 },
-  input: { flex: 1, fontSize: 16, color: '#1e293b' },
-  textArea: { height: '100%' },
-  currencySymbol: { fontSize: 16, fontWeight: '600', color: '#1e293b', marginRight: 4 },
-  dashCard: {
+  searchCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    marginBottom: 20,
   },
-  oilCard: {
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1.5,
-    borderColor: '#fcd34d',
-    backgroundColor: '#fffbeb',
-    marginBottom: 20,
-  },
-  batteryCard: {
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1.5,
-    borderColor: '#6ee7b7',
-    backgroundColor: '#ecfdf5',
-    marginBottom: 20,
-  },
-  hvacCard: {
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1.5,
-    borderColor: '#7dd3fc',
-    backgroundColor: '#f0f9ff',
-    marginBottom: 20,
-  },
-  outsourceCard: {
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1.5,
-    borderColor: '#c4b5fd',
-    backgroundColor: '#faf5ff',
-    marginBottom: 20,
-  },
-  outsourceHeaderRow: {
+  searchHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
     marginBottom: 4,
   },
-  outsourceHeader: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#6b21a8',
-    letterSpacing: 0.3,
+  searchTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginLeft: 12,
   },
-  outsourceHint: {
-    fontSize: 11,
-    color: '#7c3aed',
-    marginBottom: 10,
-    lineHeight: 15,
+  searchHint: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginBottom: 12,
+    marginLeft: 36,
   },
-  submitButton: {
-    backgroundColor: '#10b981',
+  inputContainer: {
+    backgroundColor: '#f8fafc',
     borderRadius: 12,
-    height: 56,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 32,
-  },
-  paidCheckbox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    marginBottom: 16,
   },
-  checkbox: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#cbd5e1',
+  input: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#1e293b',
+  },
+  searchButton: {
+    backgroundColor: '#2563eb',
+    borderRadius: 12,
+    paddingVertical: 12,
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
   },
-  checkboxChecked: { backgroundColor: '#10b981', borderColor: '#10b981' },
-  paidCheckboxLabel: { marginLeft: 12, flex: 1 },
-  paidCheckboxText: { fontSize: 16, fontWeight: '600', color: '#1e293b' },
-  paidCheckboxSubtext: { fontSize: 12, color: '#64748b', marginTop: 2 },
-  pendingRow: {
+  searchButtonDisabled: {
+    opacity: 0.6,
+  },
+  searchButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  walkinCard: {
+    backgroundColor: '#2563eb',
+    borderRadius: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 12,
-  },
-  partialInputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fef3c7',
-    borderRadius: 10,
+    padding: 20,
     borderWidth: 1,
-    borderColor: '#eab308',
-    paddingHorizontal: 10,
-    height: 46,
-    minWidth: 120,
-    flexGrow: 1,
-    flexBasis: 120,
+    borderColor: '#1d4ed8',
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+    marginBottom: 16,
   },
-  partialInput: {
+  walkinIconContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  walkinContent: {
     flex: 1,
-    fontSize: 15,
-    color: '#0f172a',
-    fontWeight: '700',
-    minWidth: 60,
   },
-  submitButtonDisabled: { opacity: 0.6 },
-  submitButtonText: { color: '#fff', fontSize: 18, fontWeight: '600', marginLeft: 8 },
-  totalBreakdown: {
-    backgroundColor: '#f1f5f9',
-    borderRadius: 10,
-    padding: 10,
-    marginTop: 8,
+  walkinTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
   },
-  totalLine: { fontSize: 12, color: '#475569', marginBottom: 2 },
-  totalGrand: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0f766e',
-    marginTop: 4,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
+  walkinSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
   },
   walkinBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#eff6ff',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
+    marginTop: 6,
+    alignSelf: 'flex-start',
   },
   walkinBadgeText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#2563eb',
-    marginLeft: 10,
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    marginRight: 4,
   },
-  walkinBadgeSubtext: {
-    marginLeft: 'auto',
-    fontSize: 14,
-    color: '#64748b',
-  },
-  loadingContainer: {
-    flex: 1,
+  addCustomerButton: {
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#2563eb',
+    backgroundColor: '#fff',
+    marginTop: 8,
   },
-  loadingText: {
-    marginTop: 12,
+  addCustomerButtonText: {
+    color: '#2563eb',
     fontSize: 16,
-    color: '#64748b',
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  reportButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#10b981',
+    marginTop: 12,
+  },
+  reportButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  managementButton: {
+    backgroundColor: '#0f172a',
+  },
+  buildStamp: {
+    marginTop: 20,
+    marginBottom: 8,
+    textAlign: 'center',
+    fontSize: 11,
+    color: '#94a3b8',
   },
 });
