@@ -1,6 +1,5 @@
 import * as SQLite from 'expo-sqlite';
 import seedData from './seed.json';
-import { Alert } from 'react-native';
 
 const DB_NAME = 'mass_power.db';
 
@@ -1755,6 +1754,34 @@ export async function getLowStockBySupplier(
 }
 
 // ==================== WALK-IN SERVICES ====================
+
+export const getWalkInCustomerId = async (): Promise<string | null> => {
+  const db = await getDb();
+  try {
+    const result = await db.getFirstAsync<{ id: string }>(
+      `SELECT id FROM customers WHERE name = 'Walk-in Customer' LIMIT 1`
+    );
+    return result ? result.id : null;
+  } catch (error) {
+    console.warn('Error getting walk-in customer:', error);
+    return null;
+  }
+};
+
+export const getWalkInVehicleId = async (customerId: string): Promise<string | null> => {
+  const db = await getDb();
+  try {
+    const result = await db.getFirstAsync<{ id: string }>(
+      `SELECT id FROM vehicles WHERE customer_id = ? AND vin = 'WALKIN' LIMIT 1`,
+      customerId
+    );
+    return result ? result.id : null;
+  } catch (error) {
+    console.warn('Error getting walk-in vehicle:', error);
+    return null;
+  }
+};
+
 export const getOrCreateWalkInVehicle = async (): Promise<Vehicle> => {
   const db = await getDb();
   const now = new Date().toISOString();
@@ -1791,4 +1818,3 @@ export const getOrCreateWalkInVehicle = async (): Promise<Vehicle> => {
 
   return vehicle;
 };
-        
