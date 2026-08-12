@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import {
   createService,
@@ -26,7 +26,6 @@ import {
   OilReminder,
   BatteryReplacement,
   HvacService,
-  getOrCreateWalkInVehicle,
 } from '../src/db/database';
 import { triggerAutoPush } from '../src/utils/autoSync';
 import DashLightsPicker from '../src/components/DashLightsPicker';
@@ -46,12 +45,9 @@ interface Vehicle {
 
 export default function AddServiceScreen() {
   const params = useLocalSearchParams();
-  const vehiclesParam: Vehicle[] = params.vehicles ? JSON.parse(params.vehicles as string) : [];
-  const isWalkIn = params.walkin === 'true';
+  const vehicles: Vehicle[] = params.vehicles ? JSON.parse(params.vehicles as string) : [];
 
-  const [vehicles, setVehicles] = useState<Vehicle[]>(vehiclesParam);
-  const [selectedVehicleId, setSelectedVehicleId] = useState(vehiclesParam[0]?.id || '');
-  const [loadingVehicles, setLoadingVehicles] = useState(isWalkIn);
+  const [selectedVehicleId, setSelectedVehicleId] = useState(vehicles[0]?.id || '');
   const [serviceCategory, setServiceCategory] = useState<string>(SERVICE_CATEGORIES[0]);
   const [additionalInfo, setAdditionalInfo] = useState('');
   const [cost, setCost] = useState('');
@@ -68,24 +64,6 @@ export default function AddServiceScreen() {
   const [pickedItems, setPickedItems] = useState<PickedItem[]>([]);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-
-  // Load walk-in vehicle if needed
-  useEffect(() => {
-    if (isWalkIn && vehicles.length === 0) {
-      const loadWalkInVehicle = async () => {
-        try {
-          const walkInVehicle = await getOrCreateWalkInVehicle();
-          setVehicles([walkInVehicle]);
-          setSelectedVehicleId(walkInVehicle.id);
-        } catch (error) {
-          Alert.alert('Error', 'Failed to load walk-in vehicle');
-        } finally {
-          setLoadingVehicles(false);
-        }
-      };
-      loadWalkInVehicle();
-    }
-  }, [isWalkIn, vehicles.length]);
 
   const isOilService = serviceCategory === 'Oil Services';
   const isBatteryService = serviceCategory === 'Battery Replacement';
@@ -123,8 +101,10 @@ export default function AddServiceScreen() {
       Alert.alert('Error', 'Please enter a valid labor cost');
       return;
     }
+    // Grand total = labor + parts retail
     const costNumber = laborNumber + productsSubtotal;
 
+    // Pending payment validation
     let partialPaidNumber = 0;
     if (isPending) {
       partialPaidNumber = parseFloat(partialAmount) || 0;
@@ -167,17 +147,6 @@ export default function AddServiceScreen() {
     }
   };
 
-  if (loadingVehicles) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2563eb" />
-          <Text style={styles.loadingText}>Loading walk-in vehicle...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -198,41 +167,28 @@ export default function AddServiceScreen() {
               <Ionicons name="construct" size={48} color="#10b981" />
             </View>
 
-            {/* Walk-in Badge */}
-            {isWalkIn && (
-              <View style={styles.walkinBadge}>
-                <Ionicons name="walk-outline" size={20} color="#2563eb" />
-                <Text style={styles.walkinBadgeText}>Walk-in Customer</Text>
-                <Text style={styles.walkinBadgeSubtext}>
-                  {vehicles.length > 0 ? `${vehicles[0]?.make} ${vehicles[0]?.model}` : 'Loading...'}
-                </Text>
+            {/* Vehicle Selection */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Select Vehicle *</Text>
+              <View style={styles.pickerContainer}>
+                <Ionicons name="car-sport-outline" size={20} color="#666" style={styles.pickerIcon} />
+                <Picker
+                  selectedValue={selectedVehicleId}
+                  onValueChange={(value) => setSelectedVehicleId(value)}
+                  style={styles.picker}
+                >
+                  {vehicles.map((vehicle) => (
+                    <Picker.Item
+                      key={vehicle.id}
+                      label={`${vehicle.year || ''} ${vehicle.make} ${vehicle.model} - ${vehicle.plate_number}`}
+                      value={vehicle.id}
+                    />
+                  ))}
+                </Picker>
               </View>
-            )}
+            </View>
 
-            {/* Vehicle Selection - Hidden for walk-in */}
-            {!isWalkIn && (
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Select Vehicle *</Text>
-                <View style={styles.pickerContainer}>
-                  <Ionicons name="car-sport-outline" size={20} color="#666" style={styles.pickerIcon} />
-                  <Picker
-                    selectedValue={selectedVehicleId}
-                    onValueChange={(value) => setSelectedVehicleId(value)}
-                    style={styles.picker}
-                  >
-                    {vehicles.map((vehicle) => (
-                      <Picker.Item
-                        key={vehicle.id}
-                        label={`${vehicle.year || ''} ${vehicle.make} ${vehicle.model} - ${vehicle.plate_number}`}
-                        value={vehicle.id}
-                      />
-                    ))}
-                  </Picker>
-                </View>
-              </View>
-            )}
-
-            {/* Service Category */}
+            {/* Service Category (Dropdown) */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Service Type *</Text>
               <View style={styles.pickerContainer}>
@@ -250,7 +206,7 @@ export default function AddServiceScreen() {
               </View>
             </View>
 
-            {/* Oil Service Reminder */}
+            {/* Oil Service Reminder (conditional) */}
             {isOilService && (
               <View style={styles.oilCard}>
                 <OilReminderForm
@@ -262,7 +218,7 @@ export default function AddServiceScreen() {
               </View>
             )}
 
-            {/* Battery Replacement */}
+            {/* Battery Replacement (conditional) */}
             {isBatteryService && (
               <View style={styles.batteryCard}>
                 <BatteryReplacementForm
@@ -272,14 +228,14 @@ export default function AddServiceScreen() {
               </View>
             )}
 
-            {/* HVAC Services */}
+            {/* HVAC Services (conditional) */}
             {isHvacService && (
               <View style={styles.hvacCard}>
                 <HvacServiceForm value={hvacService} onChange={setHvacService} />
               </View>
             )}
 
-            {/* Notes */}
+            {/* Additional Info / Description */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Notes / Description</Text>
               <View style={[styles.inputContainer, styles.textAreaContainer]}>
@@ -295,10 +251,10 @@ export default function AddServiceScreen() {
               </View>
             </View>
 
-            {/* Products */}
+            {/* Inventory Products Used */}
             <InventoryPicker value={pickedItems} onChange={setPickedItems} />
 
-            {/* Dash Lights */}
+            {/* Dashboard Warning Lights */}
             <View style={styles.dashCard}>
               <DashLightsPicker value={dashLights} onChange={setDashLights} />
             </View>
@@ -326,7 +282,7 @@ export default function AddServiceScreen() {
               )}
             </View>
 
-            {/* Outsource Cost */}
+            {/* Outsource Cost (PRIVATE, Reports-only) */}
             <View style={styles.outsourceCard}>
               <View style={styles.outsourceHeaderRow}>
                 <Ionicons name="lock-closed" size={14} color="#6b21a8" />
@@ -350,7 +306,7 @@ export default function AddServiceScreen() {
               </View>
             </View>
 
-            {/* Paid */}
+            {/* Paid Checkbox */}
             <TouchableOpacity
               style={styles.paidCheckbox}
               onPress={() => {
@@ -374,7 +330,7 @@ export default function AddServiceScreen() {
               </View>
             </TouchableOpacity>
 
-            {/* Pending */}
+            {/* Pending Payment Checkbox + partial amount */}
             <View style={styles.pendingRow}>
               <TouchableOpacity
                 style={[styles.paidCheckbox, { flex: 1, marginTop: 0 }]}
@@ -416,7 +372,6 @@ export default function AddServiceScreen() {
               )}
             </View>
 
-            {/* Submit */}
             <TouchableOpacity
               style={[styles.submitButton, loading && styles.submitButtonDisabled]}
               onPress={handleSubmit}
@@ -629,36 +584,5 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
-  },
-  walkinBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#eff6ff',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-  },
-  walkinBadgeText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#2563eb',
-    marginLeft: 10,
-  },
-  walkinBadgeSubtext: {
-    marginLeft: 'auto',
-    fontSize: 14,
-    color: '#64748b',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#64748b',
   },
 });
