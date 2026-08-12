@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import {
   createService,
@@ -123,10 +123,8 @@ export default function AddServiceScreen() {
       Alert.alert('Error', 'Please enter a valid labor cost');
       return;
     }
-    // Grand total = labor + parts retail
     const costNumber = laborNumber + productsSubtotal;
 
-    // Pending payment validation
     let partialPaidNumber = 0;
     if (isPending) {
       partialPaidNumber = parseFloat(partialAmount) || 0;
@@ -234,7 +232,7 @@ export default function AddServiceScreen() {
               </View>
             )}
 
-            {/* Service Category (Dropdown) */}
+            {/* Service Category */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Service Type *</Text>
               <View style={styles.pickerContainer}>
@@ -252,7 +250,7 @@ export default function AddServiceScreen() {
               </View>
             </View>
 
-            {/* Oil Service Reminder (conditional) */}
+            {/* Oil Service Reminder */}
             {isOilService && (
               <View style={styles.oilCard}>
                 <OilReminderForm
@@ -264,7 +262,7 @@ export default function AddServiceScreen() {
               </View>
             )}
 
-            {/* Battery Replacement (conditional) */}
+            {/* Battery Replacement */}
             {isBatteryService && (
               <View style={styles.batteryCard}>
                 <BatteryReplacementForm
@@ -274,14 +272,14 @@ export default function AddServiceScreen() {
               </View>
             )}
 
-            {/* HVAC Services (conditional) */}
+            {/* HVAC Services */}
             {isHvacService && (
               <View style={styles.hvacCard}>
                 <HvacServiceForm value={hvacService} onChange={setHvacService} />
               </View>
             )}
 
-            {/* Additional Info / Description */}
+            {/* Notes */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Notes / Description</Text>
               <View style={[styles.inputContainer, styles.textAreaContainer]}>
@@ -297,10 +295,10 @@ export default function AddServiceScreen() {
               </View>
             </View>
 
-            {/* Inventory Products Used */}
+            {/* Products */}
             <InventoryPicker value={pickedItems} onChange={setPickedItems} />
 
-            {/* Dashboard Warning Lights */}
+            {/* Dash Lights */}
             <View style={styles.dashCard}>
               <DashLightsPicker value={dashLights} onChange={setDashLights} />
             </View>
@@ -328,7 +326,7 @@ export default function AddServiceScreen() {
               )}
             </View>
 
-            {/* Outsource Cost (PRIVATE, Reports-only) */}
+            {/* Outsource Cost */}
             <View style={styles.outsourceCard}>
               <View style={styles.outsourceHeaderRow}>
                 <Ionicons name="lock-closed" size={14} color="#6b21a8" />
@@ -352,7 +350,7 @@ export default function AddServiceScreen() {
               </View>
             </View>
 
-            {/* Paid Checkbox */}
+            {/* Paid */}
             <TouchableOpacity
               style={styles.paidCheckbox}
               onPress={() => {
@@ -376,7 +374,7 @@ export default function AddServiceScreen() {
               </View>
             </TouchableOpacity>
 
-            {/* Pending Payment Checkbox + partial amount */}
+            {/* Pending */}
             <View style={styles.pendingRow}>
               <TouchableOpacity
                 style={[styles.paidCheckbox, { flex: 1, marginTop: 0 }]}
@@ -418,6 +416,7 @@ export default function AddServiceScreen() {
               )}
             </View>
 
+            {/* Submit */}
             <TouchableOpacity
               style={[styles.submitButton, loading && styles.submitButtonDisabled]}
               onPress={handleSubmit}
