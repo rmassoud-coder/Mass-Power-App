@@ -28,9 +28,7 @@ export default function ManagementScreen() {
       try {
         setLoading(true);
         const today = new Date().toISOString().slice(0, 10);
-        
         const summary = await getDailyCashSummary(today);
-        
         setRevenue(summary.revenue);
         setNetCash(summary.netDrawer);
         setTotalDebt(summary.totalOutstandingDebt);
@@ -42,15 +40,6 @@ export default function ManagementScreen() {
     };
     loadFinances();
   }, []);
-
-  // Placeholder functions for Push/Pull until we fix dbSync.ts
-  const handlePush = () => {
-    Alert.alert("Push", "Push function triggered!");
-  };
-
-  const handlePull = () => {
-    Alert.alert("Pull", "Pull function triggered!");
-  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -68,15 +57,15 @@ export default function ManagementScreen() {
         showsVerticalScrollIndicator={true}
       >
         
-        {/* Cloud Sync Section */}
+        {/* --- 1. Cloud Sync Section --- */}
         <View style={styles.syncCard}>
           <Text style={styles.syncTitle}>Cloud Sync</Text>
           <View style={styles.syncButtonsRow}>
-            <TouchableOpacity style={styles.pushBtn} onPress={handlePush}>
+            <TouchableOpacity style={styles.pushBtn}>
               <Ionicons name="cloud-upload" size={20} color="#fff" />
               <Text style={styles.syncBtnText}>Push</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.pullBtn} onPress={handlePull}>
+            <TouchableOpacity style={styles.pullBtn}>
               <Ionicons name="cloud-download" size={20} color="#fff" />
               <Text style={styles.syncBtnText}>Pull</Text>
             </TouchableOpacity>
@@ -84,7 +73,7 @@ export default function ManagementScreen() {
           <Text style={styles.syncHint}>Push uploads data. Pull merges cloud copy.</Text>
         </View>
 
-        {/* Walk-in Cleanup */}
+        {/* --- 2. Walk-in Cleanup --- */}
         <View style={styles.cleanupCard}>
           <Text style={styles.cleanupTitle}>Walk-in Data Cleanup</Text>
           <View style={styles.cleanupRow}>
@@ -97,9 +86,7 @@ export default function ManagementScreen() {
           </View>
         </View>
 
-        {/* =========================================== */}
-        {/* 🔥 NEW LIVE CASH FLOW CARD                 */}
-        {/* =========================================== */}
+        {/* --- 3. NEW LIVE CASH FLOW CARD --- */}
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#5b21b6" />
@@ -135,15 +122,40 @@ export default function ManagementScreen() {
                 ${netCash.toFixed(2)}
               </Text>
             </View>
-            
-            <Text style={styles.cashSubtext}>
-              *Outstanding debt is deducted from your daily revenue.
-            </Text>
           </View>
         )}
-        {/* =========================================== */}
 
-        {/* Dashboard Buttons */}
+        {/* --- 4. Your Original Dashboard Buttons (Restored!) --- */}
+        <View style={styles.dashboardGrid}>
+          {/* Report */}
+          <TouchableOpacity style={[styles.dashCard, styles.reportCard]} onPress={() => router.push('/report')}>
+            <Ionicons name="document-text-outline" size={32} color="#fff" />
+            <Text style={styles.dashTitle}>Report</Text>
+          </TouchableOpacity>
+
+          {/* Settings */}
+          <TouchableOpacity style={[styles.dashCard, styles.settingsCard]} onPress={() => router.push('/settings')}>
+            <Ionicons name="settings-outline" size={32} color="#fff" />
+            <Text style={styles.dashTitle}>Settings</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* --- 5. Second Row of Buttons --- */}
+        <View style={styles.dashboardGrid}>
+          {/* Warranty Stickers */}
+          <TouchableOpacity style={[styles.dashCard, styles.warrantyCard]} onPress={() => router.push('/warranty-stickers')}>
+            <Ionicons name="shield-checkmark-outline" size={32} color="#fff" />
+            <Text style={styles.dashTitle}>Warranty Stickers</Text>
+          </TouchableOpacity>
+
+          {/* Cat Printer */}
+          <TouchableOpacity style={[styles.dashCard, styles.catPrinterCard]} onPress={() => router.push('/cat-printer')}>
+            <Ionicons name="print-outline" size={32} color="#fff" />
+            <Text style={styles.dashTitle}>Cat Printer</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* --- 6. Your Original Buttons (Inventory & Price Stickers) --- */}
         <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.inventoryCard]} onPress={() => router.push('/inventory')}>
             <Ionicons name="cube-outline" size={32} color="#fff" />
@@ -162,10 +174,7 @@ export default function ManagementScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
+  container: { flex: 1, backgroundColor: '#f8fafc' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -179,14 +188,11 @@ const styles = StyleSheet.create({
   backButton: { padding: 8 },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#1e293b' },
   
-  // 🚀 Layout Fix applied here
-  content: { 
-    flex: 1, 
-  },
+  content: { flex: 1 },
   contentContainer: {
     padding: 16,
     paddingBottom: 40,
-    alignItems: 'stretch', // Forces cards to expand horizontally
+    alignItems: 'stretch',
   },
 
   // Sync Section
@@ -224,7 +230,7 @@ const styles = StyleSheet.create({
   loadingContainer: { alignItems: 'center', padding: 20 },
   loadingText: { color: '#64748b', marginTop: 8 },
 
-  // 🔥 New Cash Flow Card styles
+  // Cash Flow Card
   cashCard: {
     backgroundColor: '#f3e8ff',
     borderRadius: 16,
@@ -239,56 +245,24 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   cashHeader: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#5b21b6',
-    marginLeft: 8,
-    flex: 1,
+    fontSize: 16, fontWeight: '800', color: '#5b21b6', marginLeft: 8, flex: 1,
   },
   viewBtn: {
-    backgroundColor: '#7c3aed',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 20,
+    backgroundColor: '#7c3aed', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20,
   },
-  viewBtnText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '700',
-  },
+  viewBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   cashRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
+    flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4,
   },
-  cashLabel: {
-    fontSize: 15,
-    color: '#1e293b',
-    fontWeight: '500',
-  },
-  cashValue: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1e293b',
-  },
-  cashDivider: {
-    height: 1,
-    backgroundColor: '#c4b5fd',
-    marginVertical: 8,
-  },
-  cashSubtext: {
-    fontSize: 11,
-    color: '#6b21a8',
-    fontStyle: 'italic',
-    marginTop: 8,
-  },
+  cashLabel: { fontSize: 15, color: '#1e293b', fontWeight: '500' },
+  cashValue: { fontSize: 15, fontWeight: '700', color: '#1e293b' },
+  cashDivider: { height: 1, backgroundColor: '#c4b5fd', marginVertical: 8 },
 
-  // Dashboard Button Grid
+  // Dashboard Grid
   dashboardGrid: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 8,
-    marginBottom: 20,
+    marginBottom: 12,
   },
   dashCard: {
     flex: 1,
@@ -298,17 +272,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     height: 100,
   },
-  inventoryCard: {
-    backgroundColor: '#0f766e',
-  },
-  stickerCard: {
-    backgroundColor: '#9333ea',
-  },
-  dashTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginTop: 8,
-    textAlign: 'center',
-  },
+  dashTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginTop: 8, textAlign: 'center' },
+
+  // Card Colors (Restored from your original file)
+  reportCard: { backgroundColor: '#10b981' },
+  settingsCard: { backgroundColor: '#2563eb' },
+  warrantyCard: { backgroundColor: '#d97706' },
+  catPrinterCard: { backgroundColor: '#0ea5e9' },
+  inventoryCard: { backgroundColor: '#0f766e' },
+  stickerCard: { backgroundColor: '#9333ea' },
 });
