@@ -86,12 +86,16 @@ export default function HomeScreen() {
   // Oil-change reminders
   useEffect(() => {
     if (oilReminderShown) return;
-    oilReminderShown = true;
-
+    
     const checkDueReminders = async () => {
       try {
         const due = await listDueOilReminders();
-        if (due.length === 0) return;
+        
+        // If empty, we stop here and mark it as done
+        if (due.length === 0) {
+          oilReminderShown = true;
+          return;
+        }
 
         const preview = due
           .slice(0, 6)
@@ -117,9 +121,14 @@ export default function HomeScreen() {
             ],
             { cancelable: true }
           );
+          oilReminderShown = true;
         }, 900);
       } catch (e) {
         console.warn('Oil reminder check failed:', e);
+        
+        // ⚠️ CRITICAL FIX: If an error happens, we MUST mark this as true
+        // so the app NEVER retries this in an infinite loop.
+        oilReminderShown = true; 
       }
     };
 
