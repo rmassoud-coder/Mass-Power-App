@@ -22,8 +22,8 @@ import {
   searchVehiclesByPlate,
   listInventory,
   listDueOilReminders,
-} from 'src/db/database';
-import SyncStatusPill from 'src/components/SyncStatusPill';
+} from '@/src/db/database';
+import SyncStatusPill from '@/src/components/SyncStatusPill';
 
 // Module-level flag so the out-of-stock + reminder alerts only trigger once per app session
 let outOfStockReminderShown = false;
