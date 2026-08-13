@@ -13,9 +13,6 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getReport, getDailyCashSummary } from '../src/db/database';
 
-// This assumes you have a "Clean Walk-ins" section in your management.
-// If you already have functions for cleanups/sync, import them here.
-
 export default function ManagementScreen() {
   const router = useRouter();
 
@@ -32,7 +29,6 @@ export default function ManagementScreen() {
         setLoading(true);
         const today = new Date().toISOString().slice(0, 10);
         
-        // Get the math from the database engine we built
         const summary = await getDailyCashSummary(today);
         
         setRevenue(summary.revenue);
@@ -47,6 +43,15 @@ export default function ManagementScreen() {
     loadFinances();
   }, []);
 
+  // Placeholder functions for Push/Pull until we fix dbSync.ts
+  const handlePush = () => {
+    Alert.alert("Push", "Push function triggered! (Connect dbSync.ts to make this real)");
+  };
+
+  const handlePull = () => {
+    Alert.alert("Pull", "Pull function triggered! (Connect dbSync.ts to make this real)");
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -57,17 +62,17 @@ export default function ManagementScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         
-        {/* Cloud Sync Section (Keep your existing buttons here) */}
+        {/* Cloud Sync Section */}
         <View style={styles.syncCard}>
           <Text style={styles.syncTitle}>Cloud Sync</Text>
           <View style={styles.syncButtonsRow}>
-            <TouchableOpacity style={styles.pushBtn}>
+            <TouchableOpacity style={styles.pushBtn} onPress={handlePush}>
               <Ionicons name="cloud-upload" size={20} color="#fff" />
               <Text style={styles.syncBtnText}>Push</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.pullBtn}>
+            <TouchableOpacity style={styles.pullBtn} onPress={handlePull}>
               <Ionicons name="cloud-download" size={20} color="#fff" />
               <Text style={styles.syncBtnText}>Pull</Text>
             </TouchableOpacity>
@@ -75,7 +80,7 @@ export default function ManagementScreen() {
           <Text style={styles.syncHint}>Push uploads data. Pull merges cloud copy.</Text>
         </View>
 
-        {/* Walk-in Cleanup (Keep your existing buttons here) */}
+        {/* Walk-in Cleanup */}
         <View style={styles.cleanupCard}>
           <Text style={styles.cleanupTitle}>Walk-in Data Cleanup</Text>
           <View style={styles.cleanupRow}>
@@ -106,13 +111,11 @@ export default function ManagementScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Revenue */}
             <View style={styles.cashRow}>
               <Text style={styles.cashLabel}>Revenue</Text>
               <Text style={styles.cashValue}>${revenue.toFixed(2)}</Text>
             </View>
 
-            {/* Outstanding Debt (Subtracted) */}
             <View style={styles.cashRow}>
               <Text style={[styles.cashLabel, { color: '#dc2626' }]}>− Outstanding Debt</Text>
               <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${totalDebt.toFixed(2)}</Text>
@@ -120,7 +123,6 @@ export default function ManagementScreen() {
 
             <View style={styles.cashDivider} />
 
-            {/* Net Cash Drawer */}
             <View style={styles.cashRow}>
               <Text style={[styles.cashLabel, { fontWeight: '800', color: '#5b21b6' }]}>
                 Net Cash Drawer
@@ -137,7 +139,7 @@ export default function ManagementScreen() {
         )}
         {/* =========================================== */}
 
-        {/* Existing Dashboard Buttons */}
+        {/* Dashboard Buttons */}
         <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.inventoryCard]} onPress={() => router.push('/inventory')}>
             <Ionicons name="cube-outline" size={32} color="#fff" />
@@ -172,7 +174,15 @@ const styles = StyleSheet.create({
   },
   backButton: { padding: 8 },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#1e293b' },
-  content: { flex: 1, padding: 16 },
+  
+  // 🚨 THIS IS THE FIX: Removing flex: 1 and adding paddingBottom
+  content: { 
+    flex: 1, 
+    padding: 16,
+  },
+  contentContainer: {
+    paddingBottom: 80, // Gives you extra space at the bottom to scroll
+  },
 
   // Sync Section
   syncCard: {
