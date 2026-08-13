@@ -1,1 +1,1 @@
-export { default } from 'src/QuickWalkinScreen';
+export { default } from '/src/QuickWalkinScreen';
