@@ -22,8 +22,8 @@ import {
   searchVehiclesByPlate,
   listInventory,
   listDueOilReminders,
-} from '../src/db/database';
-import SyncStatusPill from '../src/components/SyncStatusPill';
+} from '../db/database';
+import SyncStatusPill from '../components/SyncStatusPill';
 
 // Module-level flag so the out-of-stock + reminder alerts only trigger once per app session
 let outOfStockReminderShown = false;
@@ -198,7 +198,7 @@ export default function HomeScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const db = await import('../src/db/database');
+              const db = await import('../db/database');
               const success = await db.emergencyNukeDatabase();
               if (success) {
                 Alert.alert('Success', 'Database deleted. Please CLOSE the app completely and reopen it.');
@@ -289,7 +289,7 @@ export default function HomeScreen() {
             <Text style={styles.addCustomerButtonText}>Add New Customer</Text>
           </TouchableOpacity>
 
-          {/* 🔥 NEW: Quick Walk-in Button */}
+          {/* Quick Walk-in Button */}
           <TouchableOpacity
             style={[styles.walkinButton, { paddingVertical: buttonPadding }]}
             onPress={() => router.push('/quick-walkin')}
@@ -297,6 +297,15 @@ export default function HomeScreen() {
           >
             <Ionicons name="walk-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
             <Text style={styles.walkinButtonText}>Quick Walk-in</Text>
+          </TouchableOpacity>
+
+          {/* Supplier Debts Button - NEW */}
+          <TouchableOpacity
+            style={[styles.debtButton, { paddingVertical: buttonPadding }]}
+            onPress={() => router.push('/supplier-debt')}
+          >
+            <Ionicons name="receipt-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
+            <Text style={styles.debtButtonText}>Supplier Debts</Text>
           </TouchableOpacity>
 
           {/* Backend Management */}
@@ -468,7 +477,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
-  // 🔥 New styles for Quick Walk-in Button
+  // New styles for Quick Walk-in Button
   walkinButton: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -479,6 +488,22 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   walkinButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  // 🔥 New styles for Supplier Debts Button
+  debtButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#8b5cf6',
+    marginTop: 8,
+  },
+  debtButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
