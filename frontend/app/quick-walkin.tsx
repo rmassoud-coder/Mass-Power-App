@@ -1,1 +1,1 @@
-export { default } from '../src/components/QuickWalkinScreen';
+export { default } from '../components/QuickWalkinScreen';
