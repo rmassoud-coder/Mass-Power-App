@@ -1956,17 +1956,35 @@ export async function checkWalkinData(): Promise<{
     services,
   };
 }
-// 🚨 EMERGENCY NUKE FUNCTION - Add this to the bottom of database.ts
-import * as FileSystem from 'expo-file-system';
 
+// ========================================================
+// 🚨 EMERGENCY NUKE FUNCTION - Added at the very bottom
+// ========================================================
 export async function emergencyNukeDatabase() {
   try {
     const db = await getDb();
-    await db.closeAsync(); // Force close the connection
-    const dbPath = `${FileSystem.documentDirectory}SQLite/mass_power.db`;
-    await FileSystem.deleteAsync(dbPath, { idempotent: true });
-    dbPromise = null; // Reset the lazy loader
-    console.log("💥 34MB Database successfully nuked!");
+    
+    // 🔥 Force SQLite to drop ALL tables and recreate them
+    await db.execAsync(`
+      PRAGMA foreign_keys = OFF;
+      
+      DROP TABLE IF EXISTS customers;
+      DROP TABLE IF EXISTS vehicles;
+      DROP TABLE IF EXISTS services;
+      DROP TABLE IF EXISTS service_items;
+      DROP TABLE IF EXISTS inventory;
+      DROP TABLE IF EXISTS suppliers;
+      DROP TABLE IF EXISTS app_meta;
+      
+      PRAGMA foreign_keys = ON;
+    `);
+    
+    dbPromise = null; // Reset lazy loader
+    console.log("💥 34MB Database successfully wiped via SQL!");
+    
+    // IMPORTANT: Trigger the initDatabase to recreate empty tables
+    await initDatabase();
+    
     return true;
   } catch (error) {
     console.error("Nuke failed:", error);
