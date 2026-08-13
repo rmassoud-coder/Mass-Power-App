@@ -186,6 +186,34 @@ export default function HomeScreen() {
     }
   };
 
+  // 🔥 Function to handle the database nuke
+  const handleNukeDatabase = async () => {
+    Alert.alert(
+      '⚠️ DANGER',
+      'This will permanently delete your 34MB local database. Make sure you have exported a backup first!\n\nProceed?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'NUKE DATABASE',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const db = await import('../src/db/database');
+              const success = await db.emergencyNukeDatabase();
+              if (success) {
+                Alert.alert('Success', 'Database deleted. Please CLOSE the app completely and reopen it.');
+              } else {
+                Alert.alert('Error', 'Failed to delete database.');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Could not import database module.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -276,8 +304,17 @@ export default function HomeScreen() {
             {Updates.createdAt
               ? `Last update: ${new Date(Updates.createdAt).toLocaleString()}`
               : 'Local Dev Mode'}
-            
           </Text>
+
+          {/* 🔥 NUKE DATABASE BUTTON - Added here correctly */}
+          <TouchableOpacity
+            style={styles.nukeButton}
+            onPress={handleNukeDatabase}
+          >
+            <Ionicons name="trash-bin" size={20} color="#fff" />
+            <Text style={styles.nukeButtonText}>🗑️ NUKE 34MB DATABASE</Text>
+          </TouchableOpacity>
+
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -342,7 +379,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 24,
+    paddingBottom: 30, // Increased padding to make room for the nuke button
   },
   searchCard: {
     backgroundColor: '#fff',
@@ -440,5 +477,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 11,
     color: '#94a3b8',
+  },
+  // 🔥 New style for the Nuke Button
+  nukeButton: {
+    backgroundColor: '#dc2626',
+    borderRadius: 12,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  nukeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    marginLeft: 8,
   },
 });
