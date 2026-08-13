@@ -21,6 +21,11 @@ import {
   getLocalSafetySnapshotTime,
 } from '../src/utils/dbSync';
 import { getReport } from '../src/db/database';
+import {
+  deleteAllWalkinData,
+  checkWalkinData,
+  type CleanupResult,
+} from '../src/db/database';
 
 type Tile = {
   label: string;
@@ -118,6 +123,14 @@ export default function ManagementScreen() {
     net: number;
   } | null>(null);
   const [cashFlowLoading, setCashFlowLoading] = useState(false);
+
+  // ===== Walk-in cleanup state =====
+  const [cleaning, setCleaning] = useState(false);
+  const [walkinCount, setWalkinCount] = useState<{
+    customers: number;
+    vehicles: number;
+    services: number;
+  } | null>(null);
 
   const refreshLast = useCallback(async () => {
     setLastSyncAt(await getLastSyncAt());
@@ -244,6 +257,51 @@ export default function ManagementScreen() {
     );
   };
 
+  // ===== Walk-in cleanup functions =====
+  const checkWalkins = async () => {
+    try {
+      const count = await checkWalkinData();
+      setWalkinCount(count);
+      Alert.alert(
+        'Walk-in Data Found',
+        `Customers: ${count.customers}\nVehicles: ${count.vehicles}\nServices: ${count.services}\n\nTap "Clean Walk-ins" to delete them.`
+      );
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    }
+  };
+
+  const confirmCleanWalkins = () => {
+    Alert.alert(
+      '⚠️ Delete All Walk-in Data',
+      `This will permanently delete ${walkinCount?.customers || 0} customers, ${walkinCount?.vehicles || 0} vehicles, and ${walkinCount?.services || 0} services.\n\nThis cannot be undone!`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete All',
+          style: 'destructive',
+          onPress: performCleanWalkins,
+        },
+      ]
+    );
+  };
+
+  const performCleanWalkins = async () => {
+    setCleaning(true);
+    try {
+      const result = await deleteAllWalkinData();
+      setWalkinCount(null);
+      Alert.alert(
+        '✅ Cleanup Complete',
+        `Deleted:\n• ${result.customersDeleted} customers\n• ${result.vehiclesDeleted} vehicles\n• ${result.servicesDeleted} services\n• ${result.serviceItemsDeleted} service items\n\nDon't forget to PUSH to clean the cloud!`
+      );
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setCleaning(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
@@ -307,6 +365,33 @@ export default function ManagementScreen() {
               </Text>
             </TouchableOpacity>
           ) : null}
+
+          {/* ===== Walk-in Cleanup Button - TEMPORARY ===== */}
+          <View style={styles.divider} />
+          <Text style={styles.walkinLabel}>🧹 Walk-in Data Cleanup</Text>
+          <View style={styles.walkinRow}>
+            <TouchableOpacity
+              style={[styles.walkinBtn, styles.walkinCheckBtn]}
+              onPress={checkWalkins}
+              disabled={cleaning}
+            >
+              <Text style={styles.walkinBtnText}>Check</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.walkinBtn, styles.walkinDeleteBtn, cleaning && styles.syncBtnDisabled]}
+              onPress={confirmCleanWalkins}
+              disabled={cleaning}
+            >
+              <Text style={styles.walkinBtnText}>
+                {cleaning ? 'Cleaning...' : 'Clean Walk-ins'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {walkinCount && (
+            <Text style={styles.walkinCount}>
+              Found: {walkinCount.customers} customers, {walkinCount.vehicles} vehicles, {walkinCount.services} services
+            </Text>
+          )}
         </View>
 
         {/* Cash Flow Card */}
@@ -535,5 +620,47 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '900',
     color: '#059669',
+  },
+  // ===== Walk-in cleanup styles =====
+  divider: {
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+    marginTop: 14,
+    paddingTop: 14,
+  },
+  walkinLabel: {
+    color: '#94a3b8',
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  walkinRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  walkinBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  walkinCheckBtn: {
+    backgroundColor: '#334155',
+  },
+  walkinDeleteBtn: {
+    backgroundColor: '#dc2626',
+  },
+  walkinBtnText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  walkinCount: {
+    color: '#fca5a5',
+    fontSize: 11,
+    marginTop: 6,
   },
 });
