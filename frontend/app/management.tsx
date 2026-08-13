@@ -45,11 +45,11 @@ export default function ManagementScreen() {
 
   // Placeholder functions for Push/Pull until we fix dbSync.ts
   const handlePush = () => {
-    Alert.alert("Push", "Push function triggered! (Connect dbSync.ts to make this real)");
+    Alert.alert("Push", "Push function triggered!");
   };
 
   const handlePull = () => {
-    Alert.alert("Pull", "Pull function triggered! (Connect dbSync.ts to make this real)");
+    Alert.alert("Pull", "Pull function triggered!");
   };
 
   return (
@@ -62,7 +62,11 @@ export default function ManagementScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+      <ScrollView 
+        style={styles.content} 
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={true}
+      >
         
         {/* Cloud Sync Section */}
         <View style={styles.syncCard}>
@@ -175,13 +179,14 @@ const styles = StyleSheet.create({
   backButton: { padding: 8 },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#1e293b' },
   
-  // 🚨 THIS IS THE FIX: Removing flex: 1 and adding paddingBottom
+  // 🚀 Layout Fix applied here
   content: { 
     flex: 1, 
-    padding: 16,
   },
   contentContainer: {
-    paddingBottom: 80, // Gives you extra space at the bottom to scroll
+    padding: 16,
+    paddingBottom: 40,
+    alignItems: 'stretch', // Forces cards to expand horizontally
   },
 
   // Sync Section
@@ -283,6 +288,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     marginTop: 8,
+    marginBottom: 20,
   },
   dashCard: {
     flex: 1,
