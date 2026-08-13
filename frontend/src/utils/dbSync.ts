@@ -310,7 +310,7 @@ export async function pushToCloud(settings: AppSettings): Promise<SyncResult> {
   
   const startedAt = new Date().toISOString();
   const snap = await exportFullDatabase();
-  const json = JSON.stringify(snap, null, 2);
+const json = JSON.stringify(snap);  // ← no spaces (much smaller)
   
   // Upload with retry logic
   await retryWithBackoff(async () => {
