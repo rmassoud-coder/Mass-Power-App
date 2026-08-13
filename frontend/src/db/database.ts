@@ -293,6 +293,18 @@ export async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_service_items_inventory ON service_items(inventory_id);
   `);
 
+  // 🔥 NEW: Add the supplier_balances table
+  try {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS supplier_balances (
+        supplier_id TEXT PRIMARY KEY,
+        balance REAL NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE
+      );
+    `);
+  } catch (e) { /* Table already exists */ }
+
   try {
     await db.execAsync(`ALTER TABLE services ADD COLUMN is_paid INTEGER NOT NULL DEFAULT 1`);
   } catch {}
@@ -1958,7 +1970,7 @@ export async function checkWalkinData(): Promise<{
 }
 
 // ========================================================
-// 🚀 QUICK WALK-IN SYSTEM (Add this to the bottom)
+// 🚀 QUICK WALK-IN SYSTEM
 // ========================================================
 
 /**
@@ -2053,7 +2065,7 @@ export async function createQuickWalkinService(
 }
 
 // ========================================================
-// 🚨 EMERGENCY NUKE FUNCTION (Kept from earlier)
+// 🚨 EMERGENCY NUKE FUNCTION
 // ========================================================
 export async function emergencyNukeDatabase() {
   try {
@@ -2069,6 +2081,7 @@ export async function emergencyNukeDatabase() {
       DROP TABLE IF EXISTS service_items;
       DROP TABLE IF EXISTS inventory;
       DROP TABLE IF EXISTS suppliers;
+      DROP TABLE IF EXISTS supplier_balances;
       DROP TABLE IF EXISTS app_meta;
       
       PRAGMA foreign_keys = ON;
@@ -2085,4 +2098,65 @@ export async function emergencyNukeDatabase() {
     console.error("Nuke failed:", error);
     return false;
   }
+}
+
+// ========================================================
+// 💰 SUPPLIER FINANCE OPERATIONS (Math Engine)
+// ========================================================
+
+// 1. Get a list of all suppliers with their current outstanding balances
+export async function getSupplierBalances(): Promise<{ id: string; name: string; balance: number }[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ id: string; name: string; balance: number }>(
+    `SELECT s.id, s.name, COALESCE(b.balance, 0) as balance
+     FROM suppliers s
+     LEFT JOIN supplier_balances b ON s.id = b.supplier_id
+     ORDER BY s.name ASC`
+  );
+  return rows;
+}
+
+// 2. Update a supplier's balance (Positive means you OWE them)
+export async function updateSupplierBalance(supplierId: string, newBalance: number): Promise<void> {
+  const db = await getDb();
+  const now = new Date().toISOString();
+  
+  await db.runAsync(
+    `INSERT INTO supplier_balances (supplier_id, balance, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(supplier_id) DO UPDATE SET balance = ?, updated_at = ?`,
+    [supplierId, newBalance, now, newBalance, now]
+  );
+}
+
+// 3. Get today's total cash drawer summary (Revenue, Debt, and Net Drawer)
+export async function getDailyCashSummary(dateStr: string): Promise<{
+  revenue: number;
+  totalOutstandingDebt: number;
+  netDrawer: number;
+}> {
+  const db = await getDb();
+  
+  // Today's revenue from services (only fully paid or partially paid counts as cash in hand)
+  const revenueResult = await db.getFirstAsync<{ total: number }>(
+    `SELECT COALESCE(SUM(cost), 0) as total FROM services 
+     WHERE DATE(service_date) = ? AND (is_paid = 1 OR partial_paid > 0)`,
+    [dateStr]
+  );
+  const revenue = revenueResult?.total || 0;
+
+  // Total outstanding debt across all suppliers (Positive = what you owe)
+  const debtResult = await db.getFirstAsync<{ total: number }>(
+    `SELECT COALESCE(SUM(balance), 0) as total FROM supplier_balances WHERE balance > 0`
+  );
+  const totalDebt = debtResult?.total || 0;
+
+  // Net Drawer = Today's Revenue minus Total Outstanding Debt
+  // Since you haven't physically paid the debt yet, we calculate your true net standing.
+  const netDrawer = revenue - totalDebt;
+
+  return {
+    revenue,
+    totalOutstandingDebt: totalDebt,
+    netDrawer,
+  };
 }
