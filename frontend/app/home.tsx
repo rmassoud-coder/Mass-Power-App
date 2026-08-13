@@ -186,11 +186,11 @@ export default function HomeScreen() {
     }
   };
 
-  // 🔥 Function to handle the database nuke
+  // 🔥 Safety function kept inside the file just in case you ever need it again
   const handleNukeDatabase = async () => {
     Alert.alert(
       '⚠️ DANGER',
-      'This will permanently delete your 34MB local database. Make sure you have exported a backup first!\n\nProceed?',
+      'This will permanently delete your local database. Make sure you have exported a backup first!\n\nProceed?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -289,6 +289,16 @@ export default function HomeScreen() {
             <Text style={styles.addCustomerButtonText}>Add New Customer</Text>
           </TouchableOpacity>
 
+          {/* 🔥 NEW: Quick Walk-in Button */}
+          <TouchableOpacity
+            style={[styles.walkinButton, { paddingVertical: buttonPadding }]}
+            onPress={() => router.push('/quick-walkin')}
+            testID="quick-walkin-button"
+          >
+            <Ionicons name="walk-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
+            <Text style={styles.walkinButtonText}>Quick Walk-in</Text>
+          </TouchableOpacity>
+
           {/* Backend Management */}
           <TouchableOpacity
             style={[styles.reportButton, styles.managementButton, { paddingVertical: buttonPadding }]}
@@ -306,7 +316,11 @@ export default function HomeScreen() {
               : 'Local Dev Mode'}
           </Text>
 
-          {/* 🔥 NUKE DATABASE BUTTON - Added here correctly */}
+          {/* 
+           ****************************************************
+           * NUKE DATABASE BUTTON - HIDDEN (Commented out)    *
+           * If you ever need it, just uncomment this block.   *
+           ****************************************************
           <TouchableOpacity
             style={styles.nukeButton}
             onPress={handleNukeDatabase}
@@ -314,6 +328,7 @@ export default function HomeScreen() {
             <Ionicons name="trash-bin" size={20} color="#fff" />
             <Text style={styles.nukeButtonText}>🗑️ NUKE 34MB DATABASE</Text>
           </TouchableOpacity>
+          */}
 
         </ScrollView>
       </KeyboardAvoidingView>
@@ -379,7 +394,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 30, // Increased padding to make room for the nuke button
+    paddingBottom: 30,
   },
   searchCard: {
     backgroundColor: '#fff',
@@ -453,6 +468,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
+  // 🔥 New styles for Quick Walk-in Button
+  walkinButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#d97706',
+    marginTop: 8,
+  },
+  walkinButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
   reportButton: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -478,7 +509,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#94a3b8',
   },
-  // 🔥 New style for the Nuke Button
+  // 🔥 Hidden nuke styles - kept just in case
   nukeButton: {
     backgroundColor: '#dc2626',
     borderRadius: 12,
