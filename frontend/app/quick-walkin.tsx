@@ -1,1 +1,1 @@
-export { default } from '../quick-walkin';
+export { default } from '@/quick-walkin';
