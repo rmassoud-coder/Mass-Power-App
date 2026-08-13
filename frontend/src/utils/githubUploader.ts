@@ -1,9 +1,14 @@
+// src/utils/githubUploader.ts
 import * as FileSystem from 'expo-file-system/legacy';
 import type { Customer, Service, Vehicle } from '../db/database';
 import { buildVehicleHistoryHtml } from './htmlBuilder';
 import type { AppSettings } from './settings';
 
 const GITHUB_API = 'https://api.github.com';
+
+// ===== UPDATED: Increased timeouts =====
+const UPLOAD_TIMEOUT_MS = 120000; // 2 minutes for upload
+const GET_TIMEOUT_MS = 15000;      // 15 seconds for GET requests
 
 interface FetchFileResponse {
   sha?: string;
@@ -68,9 +73,12 @@ function authHeaders(token: string) {
   };
 }
 
-/** Wrap fetch with a hard timeout so a hung request becomes a visible error
- *  instead of an indefinite spinner. */
-async function timedFetch(url: string, init: RequestInit, timeoutMs = 20000): Promise<Response> {
+/** ===== UPDATED: Wrap fetch with a configurable timeout, default 120s ===== */
+async function timedFetch(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number = UPLOAD_TIMEOUT_MS
+): Promise<Response> {
   // eslint-disable-next-line no-undef
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
@@ -89,7 +97,8 @@ async function timedFetch(url: string, init: RequestInit, timeoutMs = 20000): Pr
 /** GETs the current file's SHA so we can overwrite. Returns undefined if file doesn't exist. */
 async function fetchCurrentSha(settings: AppSettings, fileName: string): Promise<string | undefined> {
   const url = buildContentsUrl(settings, fileName, settings.githubBranch);
-  const res = await timedFetch(url, { method: 'GET', headers: authHeaders(settings.githubToken) });
+  // Use a shorter timeout for GET (15s)
+  const res = await timedFetch(url, { method: 'GET', headers: authHeaders(settings.githubToken) }, GET_TIMEOUT_MS);
   if (res.status === 404) return undefined;
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as FetchFileResponse;
@@ -111,28 +120,42 @@ export async function uploadFileToGithub(
   if (!settings.githubToken) {
     throw new Error('GitHub token not configured. Open Settings to add one.');
   }
+
+  // Log file size for debugging
+  const sizeKB = Math.round(html.length / 1024);
+  console.log(`📤 Uploading ${fileName} (${sizeKB} KB)`);
+
   const base64 = await utf8ToBase64(html);
+  console.log(`✅ Base64 encoded, length: ${base64.length} chars`);
 
   const tryPut = async (sha: string | undefined) => {
     const url = buildContentsUrl(settings, fileName);
-    return timedFetch(url, {
-      method: 'PUT',
-      headers: { ...authHeaders(settings.githubToken), 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: commitMessage,
-        content: base64,
-        branch: settings.githubBranch,
-        ...(sha ? { sha } : {}),
-      }),
-    });
+    // Use the longer timeout for PUT
+    return timedFetch(
+      url,
+      {
+        method: 'PUT',
+        headers: { ...authHeaders(settings.githubToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: commitMessage,
+          content: base64,
+          branch: settings.githubBranch,
+          ...(sha ? { sha } : {}),
+        }),
+      },
+      UPLOAD_TIMEOUT_MS // 120 seconds
+    );
   };
 
   // First attempt with the SHA we currently know about
+  console.log('🔍 Fetching current SHA...');
   let sha = await fetchCurrentSha(settings, fileName);
+  console.log(`📄 SHA: ${sha ? 'exists' : 'new file'}`);
   let res = await tryPut(sha);
 
   // Retry once on SHA conflict (409 / 422) — fetch latest sha and overwrite
   if (res.status === 409 || res.status === 422) {
+    console.warn(`⚠️ SHA conflict (${res.status}), refetching...`);
     const freshSha = await fetchCurrentSha(settings, fileName);
     if (freshSha && freshSha !== sha) {
       res = await tryPut(freshSha);
@@ -152,6 +175,7 @@ export async function uploadFileToGithub(
     }
     throw new Error(`Upload failed (${res.status}): ${msg}`);
   }
+  console.log(`✅ Upload successful: ${fileName}`);
   const commitUrl: string = body?.commit?.html_url || '';
   const pagesUrl = `https://${settings.githubOwner}.github.io/${settings.githubRepo}/${encodePath(
     settings.githubFolder
@@ -179,7 +203,11 @@ export async function testGithubConnection(
   try {
     if (!settings.githubToken) return { ok: false, message: 'No token configured' };
     // 1. Validate the token itself
-    const meRes = await timedFetch(`${GITHUB_API}/user`, { method: 'GET', headers: authHeaders(settings.githubToken) });
+    const meRes = await timedFetch(
+      `${GITHUB_API}/user`,
+      { method: 'GET', headers: authHeaders(settings.githubToken) },
+      15000
+    );
     if (!meRes.ok) {
       const body = await meRes.json().catch(() => ({}));
       return { ok: false, message: `Token check failed (${meRes.status}): ${body.message || meRes.statusText}` };
@@ -189,7 +217,7 @@ export async function testGithubConnection(
     const repoUrl = `${GITHUB_API}/repos/${encodeURIComponent(settings.githubOwner)}/${encodeURIComponent(
       settings.githubRepo
     )}/branches/${encodeURIComponent(settings.githubBranch)}`;
-    const repoRes = await timedFetch(repoUrl, { method: 'GET', headers: authHeaders(settings.githubToken) });
+    const repoRes = await timedFetch(repoUrl, { method: 'GET', headers: authHeaders(settings.githubToken) }, 15000);
     if (!repoRes.ok) {
       const body = await repoRes.json().catch(() => ({}));
       return { ok: false, message: `Repo/branch check failed (${repoRes.status}): ${body.message || repoRes.statusText}` };
