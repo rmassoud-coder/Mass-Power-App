@@ -1763,20 +1763,21 @@ export interface CleanupResult {
 
 /**
  * Delete ALL walk-in related data from the database
- * Returns counts of what was deleted
+ * ONLY checks by NAME, NOT by ID (to prevent false positives)
+ * Processes in batches to avoid "too many SQL variables" error
  */
 export async function deleteAllWalkinData(): Promise<CleanupResult> {
   const db = await getDb();
+  const BATCH_SIZE = 500;
   
   console.log('🗑️ Starting walk-in data cleanup...');
   
-  // 1. Find all walk-in customer IDs
+  // 1. Find all walk-in customer IDs - ONLY by NAME!
   const walkinCustomers = await db.getAllAsync<{ id: string }>(
     `SELECT id FROM customers 
      WHERE LOWER(name) LIKE '%walkin%' 
      OR LOWER(name) LIKE '%walk-in%'
-     OR LOWER(name) LIKE '%walk in%'
-     OR id LIKE '%walkin%'`
+     OR LOWER(name) LIKE '%walk in%'`
   );
   
   const customerIds = walkinCustomers.map(c => c.id);
@@ -1787,77 +1788,107 @@ export async function deleteAllWalkinData(): Promise<CleanupResult> {
   }
   
   // 2. Find vehicles belonging to walk-in customers
-  const placeholders = customerIds.map(() => '?').join(',');
-  const walkinVehicles = await db.getAllAsync<{ id: string }>(
-    `SELECT id FROM vehicles WHERE customer_id IN (${placeholders})`,
-    customerIds
-  );
-  const vehicleIds = walkinVehicles.map(v => v.id);
+  let vehicleIds: string[] = [];
+  if (customerIds.length > 0) {
+    for (let i = 0; i < customerIds.length; i += BATCH_SIZE) {
+      const batch = customerIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const vehicles = await db.getAllAsync<{ id: string }>(
+        `SELECT id FROM vehicles WHERE customer_id IN (${placeholders})`,
+        batch
+      );
+      vehicleIds = vehicleIds.concat(vehicles.map(v => v.id));
+    }
+  }
   console.log(`🔍 Found ${vehicleIds.length} walk-in vehicles`);
   
   // 3. Find services belonging to walk-in vehicles or customers
   let serviceIds: string[] = [];
+  
   if (vehicleIds.length > 0) {
-    const vPlaceholders = vehicleIds.map(() => '?').join(',');
-    const walkinServices = await db.getAllAsync<{ id: string }>(
-      `SELECT id FROM services WHERE vehicle_id IN (${vPlaceholders}) OR customer_id IN (${placeholders})`,
-      [...vehicleIds, ...customerIds]
-    );
-    serviceIds = walkinServices.map(s => s.id);
-  } else {
-    const walkinServices = await db.getAllAsync<{ id: string }>(
-      `SELECT id FROM services WHERE customer_id IN (${placeholders})`,
-      customerIds
-    );
-    serviceIds = walkinServices.map(s => s.id);
+    for (let i = 0; i < vehicleIds.length; i += BATCH_SIZE) {
+      const batch = vehicleIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const services = await db.getAllAsync<{ id: string }>(
+        `SELECT id FROM services WHERE vehicle_id IN (${placeholders})`,
+        batch
+      );
+      serviceIds = serviceIds.concat(services.map(s => s.id));
+    }
   }
+  
+  if (customerIds.length > 0) {
+    for (let i = 0; i < customerIds.length; i += BATCH_SIZE) {
+      const batch = customerIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const services = await db.getAllAsync<{ id: string }>(
+        `SELECT id FROM services WHERE customer_id IN (${placeholders})`,
+        batch
+      );
+      serviceIds = serviceIds.concat(services.map(s => s.id));
+    }
+  }
+  
+  serviceIds = [...new Set(serviceIds)];
   console.log(`🔍 Found ${serviceIds.length} walk-in services`);
   
-  // 4. Delete service_items for walk-in services
+  // 4. Delete service_items
   let serviceItemsDeleted = 0;
   if (serviceIds.length > 0) {
-    const sPlaceholders = serviceIds.map(() => '?').join(',');
-    const result = await db.runAsync(
-      `DELETE FROM service_items WHERE service_id IN (${sPlaceholders})`,
-      serviceIds
-    );
-    serviceItemsDeleted = result.changes || 0;
+    for (let i = 0; i < serviceIds.length; i += BATCH_SIZE) {
+      const batch = serviceIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const result = await db.runAsync(
+        `DELETE FROM service_items WHERE service_id IN (${placeholders})`,
+        batch
+      );
+      serviceItemsDeleted += result.changes || 0;
+    }
     console.log(`🗑️ Deleted ${serviceItemsDeleted} service items`);
   }
   
   // 5. Delete services
   let servicesDeleted = 0;
   if (serviceIds.length > 0) {
-    const sPlaceholders = serviceIds.map(() => '?').join(',');
-    const result = await db.runAsync(
-      `DELETE FROM services WHERE id IN (${sPlaceholders})`,
-      serviceIds
-    );
-    servicesDeleted = result.changes || 0;
+    for (let i = 0; i < serviceIds.length; i += BATCH_SIZE) {
+      const batch = serviceIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const result = await db.runAsync(
+        `DELETE FROM services WHERE id IN (${placeholders})`,
+        batch
+      );
+      servicesDeleted += result.changes || 0;
+    }
     console.log(`🗑️ Deleted ${servicesDeleted} services`);
   }
   
   // 6. Delete vehicles
   let vehiclesDeleted = 0;
   if (vehicleIds.length > 0) {
-    const vPlaceholders = vehicleIds.map(() => '?').join(',');
-    const result = await db.runAsync(
-      `DELETE FROM vehicles WHERE id IN (${vPlaceholders})`,
-      vehicleIds
-    );
-    vehiclesDeleted = result.changes || 0;
+    for (let i = 0; i < vehicleIds.length; i += BATCH_SIZE) {
+      const batch = vehicleIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const result = await db.runAsync(
+        `DELETE FROM vehicles WHERE id IN (${placeholders})`,
+        batch
+      );
+      vehiclesDeleted += result.changes || 0;
+    }
     console.log(`🗑️ Deleted ${vehiclesDeleted} vehicles`);
   }
   
   // 7. Delete customers
   let customersDeleted = 0;
   if (customerIds.length > 0) {
-    const cPlaceholders = customerIds.map(() => '?').join(',');
-    const result = await db.runAsync(
-      `DELETE FROM customers WHERE id IN (${cPlaceholders})`,
-      customerIds
-    );
-    customersDeleted = result.changes || 0;
+    for (let i = 0; i < customerIds.length; i += BATCH_SIZE) {
+      const batch = customerIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const result = await db.runAsync(
+        `DELETE FROM customers WHERE id IN (${placeholders})`,
+        batch
+      );
+      customersDeleted += result.changes || 0;
+    }
     console.log(`🗑️ Deleted ${customersDeleted} customers`);
   }
   
@@ -1872,7 +1903,7 @@ export async function deleteAllWalkinData(): Promise<CleanupResult> {
 }
 
 /**
- * Check if walk-in data exists (for debugging)
+ * Check if walk-in data exists - ONLY by NAME, NOT by ID
  */
 export async function checkWalkinData(): Promise<{
   customers: number;
@@ -1881,39 +1912,47 @@ export async function checkWalkinData(): Promise<{
 }> {
   const db = await getDb();
   
+  // ONLY check by NAME!
   const customers = await db.getAllAsync<{ count: number }>(
     `SELECT COUNT(*) as count FROM customers 
      WHERE LOWER(name) LIKE '%walkin%' 
      OR LOWER(name) LIKE '%walk-in%'
-     OR LOWER(name) LIKE '%walk in%'
-     OR id LIKE '%walkin%'`
+     OR LOWER(name) LIKE '%walk in%'`
   );
   
-  const vehicles = await db.getAllAsync<{ count: number }>(
-    `SELECT COUNT(*) as count FROM vehicles 
-     WHERE customer_id IN (
-       SELECT id FROM customers 
-       WHERE LOWER(name) LIKE '%walkin%' 
-       OR LOWER(name) LIKE '%walk-in%'
-       OR LOWER(name) LIKE '%walk in%'
-       OR id LIKE '%walkin%'
-     )`
-  );
+  const customerResult = customers[0]?.count || 0;
   
-  const services = await db.getAllAsync<{ count: number }>(
-    `SELECT COUNT(*) as count FROM services 
-     WHERE customer_id IN (
-       SELECT id FROM customers 
-       WHERE LOWER(name) LIKE '%walkin%' 
-       OR LOWER(name) LIKE '%walk-in%'
-       OR LOWER(name) LIKE '%walk in%'
-       OR id LIKE '%walkin%'
-     )`
-  );
+  let vehicles = 0;
+  let services = 0;
+  
+  // Only count vehicles/services if there are walk-in customers
+  if (customerResult > 0) {
+    const vehicleResult = await db.getAllAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM vehicles 
+       WHERE customer_id IN (
+         SELECT id FROM customers 
+         WHERE LOWER(name) LIKE '%walkin%' 
+         OR LOWER(name) LIKE '%walk-in%'
+         OR LOWER(name) LIKE '%walk in%'
+       )`
+    );
+    vehicles = vehicleResult[0]?.count || 0;
+    
+    const serviceResult = await db.getAllAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM services 
+       WHERE customer_id IN (
+         SELECT id FROM customers 
+         WHERE LOWER(name) LIKE '%walkin%' 
+         OR LOWER(name) LIKE '%walk-in%'
+         OR LOWER(name) LIKE '%walk in%'
+       )`
+    );
+    services = serviceResult[0]?.count || 0;
+  }
   
   return {
-    customers: customers[0]?.count || 0,
-    vehicles: vehicles[0]?.count || 0,
-    services: services[0]?.count || 0,
+    customers: customerResult,
+    vehicles,
+    services,
   };
 }
