@@ -1956,3 +1956,20 @@ export async function checkWalkinData(): Promise<{
     services,
   };
 }
+// 🚨 EMERGENCY NUKE FUNCTION - Add this to the bottom of database.ts
+import * as FileSystem from 'expo-file-system';
+
+export async function emergencyNukeDatabase() {
+  try {
+    const db = await getDb();
+    await db.closeAsync(); // Force close the connection
+    const dbPath = `${FileSystem.documentDirectory}SQLite/mass_power.db`;
+    await FileSystem.deleteAsync(dbPath, { idempotent: true });
+    dbPromise = null; // Reset the lazy loader
+    console.log("💥 34MB Database successfully nuked!");
+    return true;
+  } catch (error) {
+    console.error("Nuke failed:", error);
+    return false;
+  }
+}
