@@ -276,6 +276,7 @@ export default function HomeScreen() {
             {Updates.createdAt
               ? `Last update: ${new Date(Updates.createdAt).toLocaleString()}`
               : 'Local Dev Mode'}
+            
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
