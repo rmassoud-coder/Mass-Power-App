@@ -119,10 +119,16 @@ export function getRasterizerHostHtml(): string {
   };
 
   function boldText(ctx, text, x, y, weight) {
+    // 🔥 ULTIMATE BLACK: Draw the text four times overlapping to kill anti-aliasing
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#000000';
+    
     ctx.fillText(text, x, y);
-    ctx.strokeStyle = ctx.fillStyle;
-    ctx.lineWidth = 1; // 🔥 FIXED: Absolute 1px stroke, no thinning
-    ctx.strokeText(text, x, y);
+    ctx.fillText(text, x + 0.5, y);
+    ctx.fillText(text, x, y + 0.5);
+    ctx.fillText(text, x, y);
+    
+    // No stroke - pure black fill only
   }
 
   function measureOps(ctx, ops, width) {
