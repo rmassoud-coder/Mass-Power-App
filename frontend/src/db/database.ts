@@ -1708,7 +1708,6 @@ export async function addSupplier(
 }
 
 export async function updateSupplier(
-export async function updateSupplier(
   id: string,
   name: string,
   contactInfo?: string,
