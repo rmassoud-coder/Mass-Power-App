@@ -14,8 +14,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { createQuickWalkinService } from './db/database';
-import { triggerAutoPush } from './utils/autoSync';
+import { createQuickWalkinService, createWalkinProductSale } from '../db/database';
+import { triggerAutoPush } from '../utils/autoSync';
+import InventoryPicker, { PickedItem } from './InventoryPicker';
+
 export default function QuickWalkinScreen() {
   const [serviceDesc, setServiceDesc] = useState('');
   const [cost, setCost] = useState('');
@@ -23,13 +25,40 @@ export default function QuickWalkinScreen() {
   const [isPartial, setIsPartial] = useState(false);
   const [partialAmount, setPartialAmount] = useState('');
   const [outsourceCost, setOutsourceCost] = useState('');
+  const [pickedItems, setPickedItems] = useState<PickedItem[]>([]);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  const productsSubtotal = pickedItems.reduce(
+    (sum, it) => sum + it.quantity * it.unit_price,
+    0
+  );
+
   const handleSubmit = async () => {
+    // If products were picked, we use the special Product Sale logic
+    if (pickedItems.length > 0) {
+      setLoading(true);
+      try {
+        // Process the first picked item as a sale
+        // (If they picked multiple, they'd just add them one by one via the picker)
+        const item = pickedItems[0];
+        await createWalkinProductSale(item.inventory_id, item.quantity);
+        
+        triggerAutoPush();
+        Alert.alert('Success', 'Product sold and deducted from inventory!');
+        router.back();
+      } catch (error: any) {
+        Alert.alert('Error', error.message || 'Failed to sell product.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Otherwise, fallback to regular Walk-in Service
     const totalCost = parseFloat(cost) || 0;
     if (totalCost <= 0) {
-      Alert.alert('Error', 'Please enter a valid price.');
+      Alert.alert('Error', 'Please enter a valid price or pick a product.');
       return;
     }
 
@@ -49,9 +78,9 @@ export default function QuickWalkinScreen() {
     setLoading(true);
     try {
       await createQuickWalkinService(
-        serviceDesc.trim() || 'Quick Walk-in',
-        totalCost,
-        isPaid || isPartial, // If partial, we treat it as partially paid
+        serviceDesc.trim() || 'Quick Walk-in Service',
+        totalCost + productsSubtotal, // Combines labor + parts
+        isPaid || isPartial,
         partialPaidNumber,
         parseFloat(outsourceCost) || 0
       );
@@ -84,16 +113,21 @@ export default function QuickWalkinScreen() {
             <View style={styles.inputContainer}>
               <TextInput
                 style={styles.input}
-                placeholder="e.g. Oil Change, Tire Fix..."
+                placeholder="e.g. Oil Change, Product Sale..."
                 value={serviceDesc}
                 onChangeText={setServiceDesc}
               />
             </View>
           </View>
 
+          {/* 🔥 NEW: Inventory Products Used */}
+          <View style={styles.productsCard}>
+            <InventoryPicker value={pickedItems} onChange={setPickedItems} />
+          </View>
+
           {/* Total Price */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Total Price *</Text>
+            <Text style={styles.label}>Total Price (Labor + Parts)</Text>
             <View style={styles.inputContainer}>
               <Text style={styles.currencySymbol}>$</Text>
               <TextInput
@@ -104,6 +138,11 @@ export default function QuickWalkinScreen() {
                 keyboardType="decimal-pad"
               />
             </View>
+            {productsSubtotal > 0 && (
+              <Text style={styles.autoCalcText}>
+                + ${productsSubtotal.toFixed(2)} in parts (auto-calculated)
+              </Text>
+            )}
           </View>
 
           {/* Payment Status */}
@@ -155,7 +194,9 @@ export default function QuickWalkinScreen() {
             {loading ? <ActivityIndicator color="#fff" /> : (
               <>
                 <Ionicons name="cash-outline" size={24} color="#fff" />
-                <Text style={styles.submitText}>Add to Cash Drawer</Text>
+                <Text style={styles.submitText}>
+                  {pickedItems.length > 0 ? 'Sell Product' : 'Add to Cash Drawer'}
+                </Text>
               </>
             )}
           </TouchableOpacity>
@@ -185,6 +226,7 @@ const styles = StyleSheet.create({
   },
   input: { flex: 1, fontSize: 16, color: '#1e293b' },
   currencySymbol: { fontSize: 16, fontWeight: '600', color: '#1e293b', marginRight: 8 },
+  autoCalcText: { fontSize: 12, color: '#059669', marginTop: 6, fontStyle: 'italic' },
   paymentRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
   payBtn: {
     flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
@@ -200,4 +242,12 @@ const styles = StyleSheet.create({
   },
   disabled: { opacity: 0.6 },
   submitText: { color: '#fff', fontSize: 18, fontWeight: '600', marginLeft: 8 },
+  productsCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
 });
