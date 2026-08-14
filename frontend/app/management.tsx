@@ -108,7 +108,7 @@ export default function ManagementScreen() {
             </View>
 
             <View style={styles.cashRow}>
-              <Text style={[styles.cashLabel, { color: '#dc2626' }]}>− Outstanding Debt</Text>
+              <Text style={[styles.cashLabel, { color: '#dc2626' }]}>Total Debt Balance</Text>
               <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${totalDebt.toFixed(2)}</Text>
             </View>
 
