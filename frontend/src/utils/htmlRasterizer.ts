@@ -233,17 +233,36 @@ export function getRasterizerHostHtml(): string {
     }
   }
 
+  // 🔥 FIXED: Added auto-truncation for text that is too wide for 384px
   function drawSpacedText(ctx, text, x, y, spacing, isCenter, weight) {
     if (!text) return;
     var cx = x; 
+    var margin = DESIGN.margin + 4;
+    var maxWidth = ctx.canvas.width - (margin * 2);
+
     if (isCenter) {
       var totalW = 0; for (var i=0; i<text.length; i++) totalW += ctx.measureText(text[i]).width + (spacing||0);
       totalW -= (spacing||0);
+      if (totalW > maxWidth) {
+        // If too wide, shrink spacing to 0 and try again
+        totalW = 0; 
+        var tempSpacing = 0;
+        for (var i=0; i<text.length; i++) totalW += ctx.measureText(text[i]).width + tempSpacing;
+        totalW -= tempSpacing;
+      }
       cx = x - totalW / 2;
     }
+
+    // Check bounds while drawing
     for (var j=0; j<text.length; j++) {
+      var charW = ctx.measureText(text[j]).width;
+      if (cx + charW > ctx.canvas.width - margin) {
+        // If we run out of space, stop drawing and add an ellipsis
+        boldText(ctx, '…', cx, y, weight);
+        break; 
+      }
       boldText(ctx, text[j], cx, y, weight);
-      cx += ctx.measureText(text[j]).width + (spacing||0);
+      cx += charW + (spacing||0);
     }
   }
 
@@ -252,7 +271,9 @@ export function getRasterizerHostHtml(): string {
     var ctx = cv.getContext('2d');
     var img = ctx.getImageData(0, 0, w, h);
     var d = img.data;
-    var shift = ({1:-30, 2:-15, 3:0, 4:15, 5:30})[darkness] || 0;
+    
+    // 🔥 FIXED: Increased darkness shift to make blacks much darker
+    var shift = ({1:-60, 2:-40, 3:-20, 4:0, 5:20})[darkness] || -20;
     var threshold = 128 - shift;
 
     var bw = new Uint8Array(w * h);
