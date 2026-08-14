@@ -114,13 +114,14 @@ export function getRasterizerHostHtml(): string {
 
   var DESIGN = {
     margin: 12, frameThickness: 4, dividerThickness: 3,
-    titleSize: 29, headerSize: 31, labelSize: 21, valueSize: 23, checkboxSize: 19, smallSize: 18
+    // 🔥 Slightly shrank title/header sizes to sharpen pixels
+    titleSize: 27, headerSize: 28, labelSize: 20, valueSize: 22, checkboxSize: 18, smallSize: 17
   };
 
   function boldText(ctx, text, x, y, weight) {
     ctx.fillText(text, x, y);
     ctx.strokeStyle = ctx.fillStyle;
-    ctx.lineWidth = weight || 1;
+    ctx.lineWidth = 1; // 🔥 FIXED: Absolute 1px stroke, no thinning
     ctx.strokeText(text, x, y);
   }
 
@@ -298,6 +299,9 @@ export function getRasterizerHostHtml(): string {
     
     var shift = ({1:-60, 2:-40, 3:-20, 4:0, 5:20})[darkness] || -20;
     var threshold = 128 - shift;
+
+    // 🔥 FIX: Force the canvas to absolute high contrast to kill greys
+    ctx.filter = 'contrast(200)'; 
 
     var bw = new Uint8Array(w * h);
     for (var i = 0, p = 0; i < d.length; i += 4, p++) {
