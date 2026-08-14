@@ -12,17 +12,23 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getSupplierBalances, updateSupplierBalance, getDailyCashSummary, paySupplierDebt } from '../db/database';
+import { getSupplierBalances, updateSupplierBalance, getDailyCashSummary } from '../db/database';
 
 export default function SupplierDebtScreen() {
   const [suppliers, setSuppliers] = useState<{ id: string; name: string; balance: number }[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState<string>('');
+  const [payTodayValue, setPayTodayValue] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [summary, setSummary] = useState<{ totalDebt: number; todayRevenue: number; drawer: number }>({
+  const [summary, setSummary] = useState<{ 
+    totalDebt: number; 
+    todayRevenue: number; 
+    paidToday: number;
+    drawer: number 
+  }>({
     totalDebt: 0,
     todayRevenue: 0,
+    paidToday: 0,
     drawer: 0,
   });
   const router = useRouter();
@@ -39,6 +45,7 @@ export default function SupplierDebtScreen() {
       setSummary({
         totalDebt: cashSummary.totalOutstandingDebt,
         todayRevenue: cashSummary.revenue,
+        paidToday: cashSummary.paidTowardsDebtToday,
         drawer: cashSummary.netDrawer,
       });
     } catch (error) {
@@ -52,24 +59,35 @@ export default function SupplierDebtScreen() {
     loadData();
   }, [loadData]);
 
-  const handleEditPress = (id: string, currentBalance: number) => {
+  const handleEditPress = (id: string) => {
     setEditingId(id);
-    setEditValue(String(currentBalance));
+    setPayTodayValue('');
   };
 
   const handleSavePress = async () => {
     if (!editingId) return;
-    const newBalance = parseFloat(editValue);
-    if (isNaN(newBalance) || newBalance < 0) {
-      Alert.alert('Error', 'Please enter a valid number.');
+    const amountPaid = parseFloat(payTodayValue);
+    if (isNaN(amountPaid) || amountPaid <= 0) {
+      Alert.alert('Error', 'Please enter a valid amount paid today.');
+      return;
+    }
+
+    // Find the supplier
+    const supplier = suppliers.find(s => s.id === editingId);
+    if (!supplier) return;
+
+    // Prevent paying more than what is owed
+    if (amountPaid > supplier.balance) {
+      Alert.alert('Error', 'You cannot pay more than the outstanding balance.');
       return;
     }
 
     setSaving(true);
     try {
+      const newBalance = supplier.balance - amountPaid;
       await updateSupplierBalance(editingId, newBalance);
       setEditingId(null);
-      setEditValue('');
+      setPayTodayValue('');
       loadData(); // Reload to update math
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to update balance.');
@@ -80,7 +98,7 @@ export default function SupplierDebtScreen() {
 
   const cancelEdit = () => {
     setEditingId(null);
-    setEditValue('');
+    setPayTodayValue('');
   };
 
   if (loading) {
@@ -102,7 +120,8 @@ export default function SupplierDebtScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+        
         {/* Summary Card */}
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Cash Drawer Summary</Text>
@@ -113,6 +132,10 @@ export default function SupplierDebtScreen() {
           <View style={styles.summaryRow}>
             <Text style={[styles.summaryLabel, { color: '#dc2626' }]}>Total Outstanding Debt</Text>
             <Text style={[styles.summaryValue, { color: '#dc2626' }]}>- ${summary.totalDebt.toFixed(2)}</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={[styles.summaryLabel, { color: '#eab308' }]}>Paid Towards Debt Today</Text>
+            <Text style={[styles.summaryValue, { color: '#eab308' }]}>- ${summary.paidToday.toFixed(2)}</Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.summaryRow}>
@@ -132,18 +155,22 @@ export default function SupplierDebtScreen() {
             <View key={s.id} style={styles.supplierItem}>
               <View style={styles.supplierInfo}>
                 <Text style={styles.supplierName}>{s.name}</Text>
-                <Text style={styles.supplierBalanceLabel}>Current Debt</Text>
+                <Text style={styles.supplierBalanceLabel}>
+                  {s.balance > 0 ? `Current Debt: $${s.balance.toFixed(2)}` : 'Debt Cleared'}
+                </Text>
               </View>
 
               {editingId === s.id ? (
                 <View style={styles.editRow}>
+                  <Text style={styles.payLabel}>Pay Today:</Text>
                   <Text style={styles.currencySymbol}>$</Text>
                   <TextInput
                     style={styles.editInput}
-                    value={editValue}
-                    onChangeText={setEditValue}
+                    value={payTodayValue}
+                    onChangeText={setPayTodayValue}
                     keyboardType="decimal-pad"
                     autoFocus
+                    placeholder="0.00"
                   />
                   <TouchableOpacity onPress={handleSavePress} disabled={saving} style={styles.saveBtn}>
                     <Ionicons name="checkmark" size={20} color="#fff" />
@@ -154,11 +181,8 @@ export default function SupplierDebtScreen() {
                 </View>
               ) : (
                 <View style={styles.displayRow}>
-                  <Text style={[styles.balanceText, { color: s.balance > 0 ? '#dc2626' : '#059669' }]}>
-                    ${s.balance.toFixed(2)}
-                  </Text>
-                  <TouchableOpacity onPress={() => handleEditPress(s.id, s.balance)} style={styles.editBtn}>
-                    <Ionicons name="pencil" size={18} color="#2563eb" />
+                  <TouchableOpacity onPress={() => handleEditPress(s.id)} style={styles.payBtn}>
+                    <Text style={styles.payBtnText}>Pay Today</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -186,7 +210,8 @@ const styles = StyleSheet.create({
   },
   backButton: { padding: 8 },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#1e293b' },
-  content: { flex: 1, padding: 16 },
+  content: { flex: 1 },
+  contentContainer: { padding: 16, paddingBottom: 40 },
   summaryCard: {
     backgroundColor: '#fff', borderRadius: 16, padding: 20, marginBottom: 20,
     borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4,
@@ -207,18 +232,21 @@ const styles = StyleSheet.create({
   },
   supplierInfo: { flex: 1 },
   supplierName: { fontSize: 16, fontWeight: '600', color: '#0f172a', marginBottom: 2 },
-  supplierBalanceLabel: { fontSize: 12, color: '#94a3b8' },
+  supplierBalanceLabel: { fontSize: 13, color: '#64748b', fontWeight: '500' },
   displayRow: { flexDirection: 'row', alignItems: 'center' },
-  balanceText: { fontSize: 18, fontWeight: '700', marginRight: 12 },
-  editRow: { flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-end' },
-  editInput: {
-    borderWidth: 1, borderColor: '#2563eb', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6,
-    fontSize: 16, minWidth: 80, marginHorizontal: 8, backgroundColor: '#eff6ff',
+  payBtn: {
+    backgroundColor: '#2563eb', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8,
   },
-  currencySymbol: { fontSize: 16, fontWeight: '600', color: '#475569' },
-  saveBtn: { backgroundColor: '#059669', borderRadius: 8, padding: 8, marginRight: 6 },
+  payBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  editRow: { flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-end', flexWrap: 'wrap' },
+  payLabel: { fontSize: 13, fontWeight: '600', color: '#0f172a', marginRight: 6 },
+  editInput: {
+    borderWidth: 1, borderColor: '#2563eb', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
+    fontSize: 15, minWidth: 60, marginHorizontal: 4, backgroundColor: '#eff6ff',
+  },
+  currencySymbol: { fontSize: 15, fontWeight: '600', color: '#475569' },
+  saveBtn: { backgroundColor: '#059669', borderRadius: 8, padding: 8, marginRight: 4 },
   cancelBtn: { backgroundColor: '#f1f5f9', borderRadius: 8, padding: 8 },
-  editBtn: { backgroundColor: '#eff6ff', borderRadius: 8, padding: 8 },
   refreshBtn: {
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
     backgroundColor: '#0f172a', borderRadius: 12, paddingVertical: 14, marginTop: 20,
