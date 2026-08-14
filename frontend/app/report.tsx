@@ -192,6 +192,7 @@ export default function ReportScreen() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [supplierName, setSupplierName] = useState('');
   const [supplierContact, setSupplierContact] = useState('');
+  const [supplierDebt, setSupplierDebt] = useState(''); // 🔥 NEW: Debt input
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [savingSupplier, setSavingSupplier] = useState(false);
   const [suppliersOpen, setSuppliersOpen] = useState(false);
@@ -235,16 +236,26 @@ export default function ReportScreen() {
       Alert.alert('Error', 'Supplier name is required');
       return;
     }
+    
+    // 🔥 Parse the debt amount (defaults to 0 if empty)
+    const debt = parseFloat(supplierDebt) || 0;
+
     setSavingSupplier(true);
     try {
       if (editingSupplier) {
-        await updateSupplier(editingSupplier.id, name, supplierContact.trim());
+        // Pass the debt amount to the update function
+        await updateSupplier(editingSupplier.id, name, supplierContact.trim(), debt);
       } else {
-        await addSupplier(name, supplierContact.trim());
+        // For new suppliers, start them with the debt you entered
+        const newSupplier = await addSupplier(name, supplierContact.trim());
+        if (debt > 0) {
+          await updateSupplier(newSupplier.id, name, supplierContact.trim(), debt);
+        }
       }
       triggerAutoPush();
       setSupplierName('');
       setSupplierContact('');
+      setSupplierDebt(''); // 🔥 Reset the debt field
       setEditingSupplier(null);
       await loadSuppliers();
     } catch (e: any) {
@@ -258,12 +269,14 @@ export default function ReportScreen() {
     setEditingSupplier(s);
     setSupplierName(s.name);
     setSupplierContact(s.contact_info || '');
+    setSupplierDebt(''); // 🔥 Reset debt when editing
   };
 
   const handleCancelEditSupplier = () => {
     setEditingSupplier(null);
     setSupplierName('');
     setSupplierContact('');
+    setSupplierDebt('');
   };
 
   const handleDeleteSupplier = (s: Supplier) => {
@@ -701,6 +714,17 @@ export default function ReportScreen() {
                     onChangeText={setSupplierContact}
                     testID="supplier-contact-input"
                   />
+                  
+                  {/* 🔥 NEW: Debt Input Field */}
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Current Debt ($). Leave blank for 0"
+                    value={supplierDebt}
+                    onChangeText={setSupplierDebt}
+                    keyboardType="decimal-pad"
+                    testID="supplier-debt-input"
+                  />
+
                   <View style={styles.supplierBtnRow}>
                     {editingSupplier && (
                       <TouchableOpacity
