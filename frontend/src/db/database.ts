@@ -2128,15 +2128,17 @@ export async function updateSupplierBalance(supplierId: string, newBalance: numb
   );
 }
 
-// 3. Get today's total cash drawer summary (Revenue, Debt, and Net Drawer)
+// 3. Get today's total cash drawer summary 
+// (Revenue, Total Debt, and exactly how much cash left the drawer today)
 export async function getDailyCashSummary(dateStr: string): Promise<{
   revenue: number;
   totalOutstandingDebt: number;
+  paidTowardsDebtToday: number;
   netDrawer: number;
 }> {
   const db = await getDb();
   
-  // Today's revenue from services (only fully paid or partially paid counts as cash in hand)
+  // 1. Today's revenue from services
   const revenueResult = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(cost), 0) as total FROM services 
      WHERE DATE(service_date) = ? AND (is_paid = 1 OR partial_paid > 0)`,
@@ -2144,19 +2146,50 @@ export async function getDailyCashSummary(dateStr: string): Promise<{
   );
   const revenue = revenueResult?.total || 0;
 
-  // Total outstanding debt across all suppliers (Positive = what you owe)
+  // 2. Total outstanding debt across all suppliers (Positive = what you owe)
   const debtResult = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(balance), 0) as total FROM supplier_balances WHERE balance > 0`
   );
   const totalDebt = debtResult?.total || 0;
 
-  // Net Drawer = Today's Revenue minus Total Outstanding Debt
-  // Since you haven't physically paid the debt yet, we calculate your true net standing.
-  const netDrawer = revenue - totalDebt;
+  // 3. Calculate how much cash was physically paid towards debt TODAY
+  // We look at the difference between the previous balance and the current balance
+  // for records updated today.
+  let paidToday = 0;
+  try {
+    const paidResult = await db.getFirstAsync<{ total: number }>(
+      `SELECT COALESCE(SUM(
+        CASE 
+          WHEN DATE(updated_at) = ? THEN balance - COALESCE(prev_balance, 0)
+          ELSE 0 
+        END
+      ), 0) as total 
+      FROM (
+        SELECT 
+          supplier_id,
+          balance,
+          updated_at,
+          LAG(balance, 1) OVER (PARTITION BY supplier_id ORDER BY updated_at) as prev_balance
+        FROM supplier_balances
+      ) 
+      WHERE balance < prev_balance`,
+      [dateStr]
+    );
+    paidToday = Math.abs(paidResult?.total || 0);
+  } catch (e) {
+    // If the SQLite version doesn't support LAG, we fallback to 0
+    // The UI will handle manual payment entries via the "Pay Today" input
+    paidToday = 0;
+  }
+
+  // 4. Net Drawer = Today's Revenue MINUS what you actually paid towards debt today
+  // We do NOT subtract the entire debt history!
+  const netDrawer = revenue - paidToday;
 
   return {
     revenue,
     totalOutstandingDebt: totalDebt,
+    paidTowardsDebtToday: paidToday,
     netDrawer,
   };
 }
