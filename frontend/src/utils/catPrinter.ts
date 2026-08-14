@@ -45,7 +45,7 @@ const MAGIC = [0x51, 0x78];
 const CMD_RETRACT_PAPER = 0xa0;
 const CMD_FEED_PAPER = 0xa1;
 const CMD_DRAW_BITMAP = 0xa2;
-const DIRECTION_HOST_TO_PRINTER = 0x02; // 0x00=Lighter, 0x02=Dark, 0x03=Darkest
+const DIRECTION_HOST_TO_PRINTER = 0x00; // 0x00=Lighter, 0x02=Dark, 0x03=Darkest
 
 let _manager: BleManager | null = null;
 function getManager(): BleManager {
