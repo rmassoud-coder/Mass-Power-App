@@ -1708,19 +1708,25 @@ export async function addSupplier(
 }
 
 export async function updateSupplier(
+export async function updateSupplier(
   id: string,
   name: string,
-  contactInfo?: string
+  contactInfo?: string,
+  newDebt?: number // 🔥 NEW: Allows you to update debt at the same time
 ): Promise<void> {
   const db = await getDb();
   const clean = (name || '').trim();
   if (!clean) throw new Error('Supplier name is required');
+  
   const existing = await db.getFirstAsync<{ id: string }>(
     `SELECT id FROM suppliers WHERE LOWER(name) = LOWER(?) AND id != ? LIMIT 1`,
     [clean, id]
   );
   if (existing) throw new Error(`Another supplier already uses "${clean}".`);
+  
   const prev = await db.getFirstAsync<Supplier>(`SELECT * FROM suppliers WHERE id = ?`, [id]);
+  
+  // Update the supplier's name and contact info
   await db.runAsync(
     `UPDATE suppliers SET name = ?, contact_info = ? WHERE id = ?`,
     [clean, (contactInfo || '').trim() || null, id]
@@ -1729,6 +1735,16 @@ export async function updateSupplier(
     await db.runAsync(
       `UPDATE inventory SET item_supplier = ? WHERE item_supplier = ?`,
       [clean, prev.name]
+    );
+  }
+
+  // 🔥 NEW: If a newDebt was passed, update the supplier_balances table
+  if (newDebt !== undefined && newDebt >= 0) {
+    const now = new Date().toISOString();
+    await db.runAsync(
+      `INSERT INTO supplier_balances (supplier_id, balance, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(supplier_id) DO UPDATE SET balance = ?, updated_at = ?`,
+      [id, newDebt, now, newDebt, now]
     );
   }
 }
