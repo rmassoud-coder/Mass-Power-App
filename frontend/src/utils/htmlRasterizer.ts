@@ -7,6 +7,7 @@ import type { ThermalDoc } from './thermalDoc';
 export interface RasterizeOptions {
   width?: number;
   darkness?: number;
+  doublePass?: boolean; // 🔥 New option for extra heat/depth
   timeoutMs?: number;
 }
 
@@ -58,6 +59,7 @@ export function isRasterizerReady(): boolean {
 export function rasterizeThermalDoc(doc: ThermalDoc, opts: RasterizeOptions = {}): Promise<MonoBitmap> {
   const width = opts.width ?? 384;
   const darkness = Math.max(1, Math.min(5, Math.round(opts.darkness ?? 3)));
+  const doublePass = opts.doublePass ?? true; // 🔥 Default to true for extra heat
   const timeoutMs = opts.timeoutMs ?? 25000;
 
   if (!_injectJs) return Promise.reject(new Error('Rasterizer host not mounted'));
@@ -73,7 +75,7 @@ export function rasterizeThermalDoc(doc: ThermalDoc, opts: RasterizeOptions = {}
     _pending.set(id, { resolve, reject, timer });
   });
 
-  const payload = JSON.stringify({ id, doc, width, darkness });
+  const payload = JSON.stringify({ id, doc, width, darkness, doublePass });
   const js = `window.__rasterizeDoc__(${JSON.stringify(payload)}); true;`;
   try {
     _injectJs(js);
@@ -233,27 +235,69 @@ export function getRasterizerHostHtml(): string {
     }
   }
 
+  // 🔥 SMART WRAP + SHRINK FUNCTION
   function drawSpacedText(ctx, text, x, y, spacing, isCenter, weight) {
     if (!text) return;
-    var cx = x; 
-    if (isCenter) {
-      var totalW = 0; for (var i=0; i<text.length; i++) totalW += ctx.measureText(text[i]).width + (spacing||0);
-      totalW -= (spacing||0);
-      cx = x - totalW / 2;
+    var margin = DESIGN.margin + 4;
+    var maxWidth = ctx.canvas.width - (margin * 2);
+
+    var attemptDraw = function(txt, fontSize, sp) {
+      ctx.font = fontFor(fontSize, true, 'sans');
+      var totalW = 0; 
+      for (var i=0; i<txt.length; i++) totalW += ctx.measureText(txt[i]).width + (sp||0);
+      totalW -= (sp||0);
+      return { width: totalW, height: fontSize };
+    };
+
+    // Try original size first
+    var size = DESIGN.headerSize;
+    var res = attemptDraw(text, size, spacing);
+    
+    // If too wide, shrink font size until it fits
+    while (res.width > maxWidth && size > 10) {
+      size -= 2;
+      res = attemptDraw(text, size, spacing);
     }
+
+    // If it still doesn't fit after shrinking, split into two lines
+    if (res.width > maxWidth) {
+      var half = Math.floor(text.length / 2);
+      var bestSplit = half;
+      for (var k = 1; k < text.length; k++) {
+        if (text[k] === ' ' || text[k] === '-') {
+          if (Math.abs(k - half) < Math.abs(bestSplit - half)) bestSplit = k;
+        }
+      }
+      var line1 = text.substring(0, bestSplit).trim();
+      var line2 = text.substring(bestSplit).trim();
+      
+      var res1 = attemptDraw(line1, size, spacing);
+      var res2 = attemptDraw(line2, size, spacing);
+      var cx1 = isCenter ? (x - res1.width / 2) : x;
+      var cx2 = isCenter ? (x - res2.width / 2) : x;
+      
+      ctx.font = fontFor(size, true, 'sans');
+      for (var j=0; j<line1.length; j++) { boldText(ctx, line1[j], cx1, y, weight); cx1 += ctx.measureText(line1[j]).width + (spacing||0); }
+      var line2Y = y + size + 4;
+      for (var j=0; j<line2.length; j++) { boldText(ctx, line2[j], cx2, line2Y, weight); cx2 += ctx.measureText(line2[j]).width + (spacing||0); }
+      return;
+    }
+
+    // Draw normal (shrunk or original)
+    var cx = isCenter ? (x - res.width / 2) : x;
+    ctx.font = fontFor(size, true, 'sans');
     for (var j=0; j<text.length; j++) {
       boldText(ctx, text[j], cx, y, weight);
       cx += ctx.measureText(text[j]).width + (spacing||0);
     }
   }
 
-  function ditherAndPack(cv, darkness) {
+  function ditherAndPack(cv, darkness, doublePass) {
     var w = cv.width, h = cv.height;
     var ctx = cv.getContext('2d');
     var img = ctx.getImageData(0, 0, w, h);
     var d = img.data;
     
-    // 🔥 FIXED: Increased darkness shift to make blacks much darker
     var shift = ({1:-60, 2:-40, 3:-20, 4:0, 5:20})[darkness] || -20;
     var threshold = 128 - shift;
 
@@ -273,6 +317,20 @@ export function getRasterizerHostHtml(): string {
           (xx > 0 && bw[idx - 1]) || (xx < w - 1 && bw[idx + 1]) ||
           (yy > 0 && bw[idx - w]) || (yy < h - 1 && bw[idx + w]);
         bold[idx] = hit ? 1 : 0;
+      }
+    }
+
+    // 🔥 Double Pass for Extra Heat / Color Depth
+    if (doublePass) {
+      for (var yy = 0; yy < h; yy++) {
+        for (var xx = 0; xx < w; xx++) {
+          var idx = yy * w + xx;
+          if (bold[idx]) { bold[idx] = 1; continue; }
+          var hit =
+            (xx > 0 && bold[idx - 1]) || (xx < w - 1 && bold[idx + 1]) ||
+            (yy > 0 && bold[idx - w]) || (yy < h - 1 && bold[idx + w]);
+          bold[idx] = hit ? 1 : 0;
+        }
       }
     }
 
@@ -314,8 +372,6 @@ export function getRasterizerHostHtml(): string {
         ctx = cv.getContext('2d');
         ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, width, canvasH);
 
-        // Frame is drawn around the CONTENT area only, not the blank lead-in
-        // space at the top.
         if (doc.frame) {
           ctx.fillStyle = '#000';
           var thick = DESIGN.frameThickness;
@@ -328,7 +384,8 @@ export function getRasterizerHostHtml(): string {
 
         drawOps(ctx, ops, width, leadRows + DESIGN.margin);
 
-        var bmp = ditherAndPack(cv, payload.darkness || 3);
+        // 🔥 Pass doublePass to the dithering engine for extra color depth
+        var bmp = ditherAndPack(cv, payload.darkness || 3, payload.doublePass === true);
         send({ id: id, ok: true, width: bmp.width, height: bmp.height, rowsBase64: bmp.rowsBase64 });
       } catch (e) {
         send({ id: id, ok: false, error: 'Rasterizer error: ' + (e && e.message || e) });
