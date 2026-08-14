@@ -45,7 +45,7 @@ const MAGIC = [0x51, 0x78];
 const CMD_RETRACT_PAPER = 0xa0;
 const CMD_FEED_PAPER = 0xa1;
 const CMD_DRAW_BITMAP = 0xa2;
-const DIRECTION_HOST_TO_PRINTER = 0x00; // 0x00=Lighter, 0x02=Dark, 0x03=Darkest
+const DIRECTION_HOST_TO_PRINTER = 0x00;
 
 let _manager: BleManager | null = null;
 function getManager(): BleManager {
@@ -206,10 +206,20 @@ async function sendBitmap(deviceId: string, bmp: MonoBitmap): Promise<void> {
     }
     const maxChunk = Math.max(20, mtu - 3);
 
-    const totalLen = rowFrames.reduce((s, f) => s + f.length, 0) + feedFrame.length;
+    // 🔥 HEAT BOOST: Pre-heat the print head before sending the image
+    const warmupFeed = buildFrame(CMD_FEED_PAPER, Uint8Array.from([15]));
+
+    const totalLen = rowFrames.reduce((s, f) => s + f.length, 0) + feedFrame.length + warmupFeed.length;
     const stream = new Uint8Array(totalLen);
     let off = 0;
+    
+    // Write the warmup frame first
+    stream.set(warmupFeed, off); off += warmupFeed.length;
+    
+    // Write the image frames
     for (const f of rowFrames) { stream.set(f, off); off += f.length; }
+    
+    // Write the final feed
     stream.set(feedFrame, off);
 
     for (let i = 0; i < stream.length; i += maxChunk) {
@@ -221,7 +231,8 @@ async function sendBitmap(deviceId: string, bmp: MonoBitmap): Promise<void> {
         WRITE_CHAR_UUID,
         b64
       );
-      await new Promise((res) => setTimeout(res, 20));
+      // 🔥 Slightly increased delay to ensure the printer absorbs the heat command
+      await new Promise((res) => setTimeout(res, 50));
     }
   } finally {
     await manager.cancelDeviceConnection(device.id).catch(() => {});
