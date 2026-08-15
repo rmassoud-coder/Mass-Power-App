@@ -19,6 +19,7 @@ import { triggerAutoPush } from './utils/autoSync';
 import InventoryPicker, { PickedItem } from './components/InventoryPicker';
 
 export default function QuickWalkinScreen() {
+  const [customerName, setCustomerName] = useState(''); // 🔥 NEW: Optional name field
   const [serviceDesc, setServiceDesc] = useState('');
   const [cost, setCost] = useState('');
   const [isPaid, setIsPaid] = useState(true);
@@ -39,11 +40,8 @@ export default function QuickWalkinScreen() {
     if (pickedItems.length > 0) {
       setLoading(true);
       try {
-        // Process the first picked item as a sale
-        // (If they picked multiple, they'd just add them one by one via the picker)
         const item = pickedItems[0];
         await createWalkinProductSale(item.inventory_id, item.quantity);
-        
         triggerAutoPush();
         Alert.alert('Success', 'Product sold and deducted from inventory!');
         router.back();
@@ -77,9 +75,11 @@ export default function QuickWalkinScreen() {
 
     setLoading(true);
     try {
+      // 🔥 Pass the customer name into the database (If blank, database defaults to 'Walk-in')
       await createQuickWalkinService(
+        customerName.trim() || undefined, // 🔥 NEW: Passing the name
         serviceDesc.trim() || 'Quick Walk-in Service',
-        totalCost + productsSubtotal, // Combines labor + parts
+        totalCost + productsSubtotal,
         isPaid || isPartial,
         partialPaidNumber,
         parseFloat(outsourceCost) || 0
@@ -107,6 +107,20 @@ export default function QuickWalkinScreen() {
         </View>
 
         <ScrollView style={styles.content}>
+          {/* 🔥 NEW: Customer Name (Optional) */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Customer Name (Optional)</Text>
+            <View style={styles.inputContainer}>
+              <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Leave blank for generic walk-in"
+                value={customerName}
+                onChangeText={setCustomerName}
+              />
+            </View>
+          </View>
+
           {/* Service Description */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Service Description (Optional)</Text>
@@ -120,7 +134,7 @@ export default function QuickWalkinScreen() {
             </View>
           </View>
 
-          {/* 🔥 NEW: Inventory Products Used */}
+          {/* Inventory Products Used */}
           <View style={styles.productsCard}>
             <InventoryPicker value={pickedItems} onChange={setPickedItems} />
           </View>
@@ -224,6 +238,7 @@ const styles = StyleSheet.create({
     borderRadius: 12, paddingHorizontal: 16, height: 56, borderWidth: 1,
     borderColor: '#e2e8f0',
   },
+  inputIcon: { marginRight: 12 },
   input: { flex: 1, fontSize: 16, color: '#1e293b' },
   currencySymbol: { fontSize: 16, fontWeight: '600', color: '#1e293b', marginRight: 8 },
   autoCalcText: { fontSize: 12, color: '#059669', marginTop: 6, fontStyle: 'italic' },
