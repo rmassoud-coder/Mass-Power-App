@@ -94,7 +94,7 @@ export default function ManagementScreen() {
             <View style={styles.cashDivider} />
             <View style={styles.cashRow}>
               <Text style={[styles.cashLabel, { fontWeight: '800', color: '#5b21b6' }]}>
-                Net Cash Drawer
+                Net Cash (After Wages)
               </Text>
               <Text style={[styles.cashValue, { fontWeight: '900', color: netCash >= 0 ? '#059669' : '#dc2626' }]}>
                 ${netCash.toFixed(2)}
@@ -106,7 +106,7 @@ export default function ManagementScreen() {
           </View>
         )}
 
-        {/* ===== FULL BUTTON GRID (6 BUTTONS) ===== */}
+        {/* Full Button Grid (6 Buttons) */}
         <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.reportCard]} onPress={() => router.push('/report')}>
             <Ionicons name="document-text-outline" size={32} color="#fff" />
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
   },
   dashTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginTop: 8, textAlign: 'center' },
 
-  // 🔥 ALL 6 BUTTON COLORS RESTORED
+  // All 6 Button Colors
   reportCard: { backgroundColor: '#10b981' },
   settingsCard: { backgroundColor: '#2563eb' },
   warrantyCard: { backgroundColor: '#d97706' },
