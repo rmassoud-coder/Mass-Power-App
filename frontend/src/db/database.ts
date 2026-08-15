@@ -215,6 +215,8 @@ export interface ReportItem {
   service_date: string;
 }
 
+/////////////// BLOCK 1: INIT & CORE TABLES ///////////////
+
 // Initialize database tables and seed data on first run
 export async function initDatabase() {
   const db = await getDb();
@@ -411,7 +413,8 @@ export async function initDatabase() {
   }
 }
 
-// ============ Customer Operations ============
+/////////////// BLOCK 2: CUSTOMER, VEHICLE, SERVICE CRUD ///////////////
+
 export async function createCustomer(name: string, mobileNumber: string): Promise<Customer> {
   const db = await getDb();
   const existing = await db.getFirstAsync<Customer>(
@@ -514,7 +517,6 @@ export async function getCustomerDetails(customerId: string): Promise<CustomerDe
   return { customer, vehicles, services };
 }
 
-// ============ Vehicle Operations ============
 export async function searchVehiclesByVin(vin: string): Promise<SearchResult[]> {
   const db = await getDb();
   const q = `%${vin}%`;
@@ -636,7 +638,6 @@ export async function deleteVehicle(id: string): Promise<void> {
   await db.runAsync(`DELETE FROM vehicles WHERE id = ?`, [id]);
 }
 
-// ============ Service Operations ============
 export async function createService(
   vehicleId: string,
   serviceDescription: string,
@@ -811,7 +812,8 @@ export async function deleteService(id: string): Promise<void> {
   await db.runAsync(`DELETE FROM services WHERE id = ?`, [id]);
 }
 
-// ============ Inventory Operations ============
+/////////////// BLOCK 3: INVENTORY ///////////////
+
 async function generateInventoryItemNumber(): Promise<string> {
   const db = await getDb();
   const row = await db.getFirstAsync<{ max_num: number | null }>(
@@ -1169,7 +1171,8 @@ async function restoreInventoryFromServiceItems(serviceId: string): Promise<void
   await db.runAsync(`DELETE FROM service_items WHERE service_id = ?`, [serviceId]);
 }
 
-// ============ Report ============
+/////////////// BLOCK 4: REPORT, EXPORT, IMPORT, SYNC ///////////////
+
 export async function getReport(
   startDate?: string,
   endDate?: string,
@@ -1277,7 +1280,6 @@ export async function getReport(
   };
 }
 
-// ============ Export / Import ============
 export async function exportAllData(): Promise<string> {
   const db = await getDb();
   const customers = await db.getAllAsync<Customer>(`SELECT * FROM customers`);
@@ -1406,7 +1408,6 @@ export async function importData(jsonString: string, mergeMode: boolean): Promis
   return { customers: customersAdded, vehicles: vehiclesAdded, services: servicesAdded };
 }
 
-// ============ Full Sync Export / Replace ============
 export interface FullDbSnapshot {
   version: number;
   exported_at: string;
@@ -1539,7 +1540,6 @@ export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
   }
 }
 
-// ============ Merge Sync (safe, non-destructive) ============
 export interface MergeResult {
   customers: { inserted: number; updated: number };
   vehicles: { inserted: number; updated: number };
@@ -1677,7 +1677,8 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
   return result;
 }
 
-// ============ Supplier Operations ============
+/////////////// BLOCK 5: SUPPLIER, WALK-IN, PRODUCT SALE, NUKE ///////////////
+
 export async function listSuppliers(): Promise<Supplier[]> {
   const db = await getDb();
   return await db.getAllAsync<Supplier>(
@@ -1736,7 +1737,7 @@ export async function updateSupplier(
     );
   }
 
-  // 🔥 If a newDebt was passed, update the supplier_balances table
+  // If a newDebt was passed, update the supplier_balances table
   if (newDebt !== undefined && newDebt >= 0) {
     const now = new Date().toISOString();
     await db.runAsync(
@@ -1759,7 +1760,6 @@ export async function deleteSupplier(id: string): Promise<void> {
   }
 }
 
-// ============ Reorder / Low-Stock Report ============
 export async function getLowStockBySupplier(
   threshold: number = 5
 ): Promise<LowStockItemBySupplier[]> {
@@ -1779,7 +1779,6 @@ export async function getLowStockBySupplier(
     .map(([supplier_name, items]) => ({ supplier_name, items }));
 }
 
-// ============ Walk-in Cleanup ============
 export interface CleanupResult {
   customersDeleted: number;
   vehiclesDeleted: number;
@@ -1928,9 +1927,6 @@ export async function deleteAllWalkinData(): Promise<CleanupResult> {
   };
 }
 
-/**
- * Check if walk-in data exists - ONLY by NAME, NOT by ID
- */
 export async function checkWalkinData(): Promise<{
   customers: number;
   vehicles: number;
@@ -1983,9 +1979,96 @@ export async function checkWalkinData(): Promise<{
   };
 }
 
-// ========================================================
-// 🚀 QUICK WALK-IN SYSTEM
-// ========================================================
+export async function createQuickWalkinService(
+  customerName: string | undefined,
+  description: string,
+  totalCost: number,
+  isPaid: boolean,
+  partialPaid: number = 0,
+  outsourceCost: number = 0
+): Promise<Service> {
+  const db = await getDb();
+  const now = new Date().toISOString();
+  
+  // 🔥 Use the provided name, or fall back to 'Walk-in'
+  const finalName = (customerName && customerName.trim()) 
+    ? customerName.trim() 
+    : 'Walk-in';
+
+  // 1. Find or create the customer
+  let walkinCustomer = await db.getFirstAsync<Customer>(
+    `SELECT * FROM customers WHERE name = ? AND mobile_number = 'N/A' LIMIT 1`,
+    [finalName]
+  );
+
+  if (!walkinCustomer) {
+    const walkinId = generateId();
+    await db.runAsync(
+      `INSERT INTO customers (id, name, mobile_number, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      [walkinId, finalName, 'N/A', now, now]
+    );
+    walkinCustomer = await db.getFirstAsync<Customer>(
+      `SELECT * FROM customers WHERE id = ?`, [walkinId]
+    );
+  }
+
+  // 2. Find or create the generic "Walk-in Vehicle" for that customer
+  let walkinVehicle = await db.getFirstAsync<Vehicle>(
+    `SELECT * FROM vehicles WHERE customer_id = ? AND plate_number = 'WALK-IN' LIMIT 1`,
+    [walkinCustomer!.id]
+  );
+
+  if (!walkinVehicle) {
+    const vehicleId = generateId();
+    await db.runAsync(
+      `INSERT INTO vehicles (id, customer_id, vin, plate_number, make, model, year, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [vehicleId, walkinCustomer!.id, 'N/A', 'WALK-IN', 'Walk-in', 'Vehicle', null, now]
+    );
+    walkinVehicle = await db.getFirstAsync<Vehicle>(
+      `SELECT * FROM vehicles WHERE id = ?`, [vehicleId]
+    );
+  }
+
+  // 3. Create the Service
+  const serviceId = generateId();
+  const pp = Math.max(0, Number(partialPaid) || 0);
+  const oc = Math.max(0, Number(outsourceCost) || 0);
+  const finalCost = Math.max(0, Number(totalCost) || 0);
+
+  await db.runAsync(
+    `INSERT INTO services (
+      id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, partial_paid, 
+      service_date, created_at, outsource_cost
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      serviceId,
+      walkinVehicle!.id,
+      walkinCustomer!.id,
+      description.trim() || 'Quick Walk-in Service',
+      null,
+      finalCost,
+      isPaid ? 1 : 0,
+      pp,
+      now,
+      now,
+      oc
+    ]
+  );
+
+  return {
+    id: serviceId,
+    vehicle_id: walkinVehicle!.id,
+    customer_id: walkinCustomer!.id,
+    service_description: description.trim() || 'Quick Walk-in Service',
+    additional_info: undefined,
+    cost: finalCost,
+    is_paid: isPaid,
+    service_date: now,
+    created_at: now,
+    partial_paid: pp,
+    outsource_cost: oc,
+  };
+}
 
 export async function createWalkinProductSale(
   inventoryId: string,
@@ -2090,151 +2173,6 @@ export async function createWalkinProductSale(
   };
 }
 
-  return {
-    id: serviceId,
-    vehicle_id: walkinVehicle!.id,
-    customer_id: walkinCustomer!.id,
-    service_description: description.trim() || 'Quick Walk-in Service',
-    additional_info: undefined,
-    cost: finalCost,
-    is_paid: isPaid,
-    service_date: now,
-    created_at: now,
-    partial_paid: pp,
-    outsource_cost: oc,
-  };
-}
-
-// ========================================================
-// 🛒 WALK-IN PRODUCT COUNTER SALE
-// ========================================================
- * Sell a product directly from the counter to a walk-in customer.
- * - Deducts the item from inventory immediately.
- * - Creates a Service record attached to the Walk-in customer.
- */
-export async function createWalkinProductSale(
-  inventoryId: string,
-  quantity: number,
-): Promise<Service> {
-  const db = await getDb();
-  const now = new Date().toISOString();
-
-  // ... (rest of the stock check) ...
-
-  // 🔥 When creating the customer for a pure product sale, we default to 'Walk-in'
-  let walkinCustomer = await db.getFirstAsync<Customer>(
-    `SELECT * FROM customers WHERE name = 'Walk-in' AND mobile_number = 'N/A' LIMIT 1`
-  );
-  // ... (rest of the function stays exactly the same) ...
-  // 1. Verify the product exists and has enough stock
-  const inv = await db.getFirstAsync<InventoryItem>(
-    `SELECT * FROM inventory WHERE id = ?`,
-    [inventoryId]
-  );
-  if (!inv) {
-    throw new Error('Product not found in inventory.');
-  }
-  if (inv.item_quantity < quantity) {
-    throw new Error(`Insufficient stock. Only ${inv.item_quantity} available.`);
-  }
-
-  // 2. Find or create the generic "Walk-in" customer & vehicle
-  let walkinCustomer = await db.getFirstAsync<Customer>(
-    `SELECT * FROM customers WHERE name = 'Walk-in' AND mobile_number = 'N/A' LIMIT 1`
-  );
-  if (!walkinCustomer) {
-    const walkinId = generateId();
-    await db.runAsync(
-      `INSERT INTO customers (id, name, mobile_number, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
-      [walkinId, 'Walk-in', 'N/A', now, now]
-    );
-    walkinCustomer = await db.getFirstAsync<Customer>(`SELECT * FROM customers WHERE id = ?`, [walkinId]);
-  }
-
-  let walkinVehicle = await db.getFirstAsync<Vehicle>(
-    `SELECT * FROM vehicles WHERE customer_id = ? AND plate_number = 'WALK-IN' LIMIT 1`,
-    [walkinCustomer!.id]
-  );
-  if (!walkinVehicle) {
-    const vehicleId = generateId();
-    await db.runAsync(
-      `INSERT INTO vehicles (id, customer_id, vin, plate_number, make, model, year, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [vehicleId, walkinCustomer!.id, 'N/A', 'WALK-IN', 'Walk-in', 'Vehicle', null, now]
-    );
-    walkinVehicle = await db.getFirstAsync<Vehicle>(`SELECT * FROM vehicles WHERE id = ?`, [vehicleId]);
-  }
-
-  // 5. Deduct the quantity from inventory
-  const newQty = Math.max(0, inv.item_quantity - quantity);
-  await db.runAsync(
-    `UPDATE inventory SET item_quantity = ?, updated_at = ? WHERE id = ?`,
-    [newQty, now, inv.id]
-  );
-
-  // 6. Link the product to the service (for history tracking)
-  const rowId = generateId();
-  await db.runAsync(
-    `INSERT INTO service_items (id, service_id, inventory_id, item_type, quantity, unit_price, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [rowId, serviceId, inv.id, inv.item_type, quantity, unitPrice, now]
-  );
-
-  return {
-    id: serviceId,
-    vehicle_id: walkinVehicle!.id,
-    customer_id: walkinCustomer!.id,
-    service_description: `Product Sale: ${inv.item_type}`,
-    additional_info: undefined,
-    cost: totalCost,
-    is_paid: true,
-    service_date: now,
-    created_at: now,
-    partial_paid: 0,
-    outsource_cost: 0,
-  };
-}
-
-// ========================================================
-// 🚨 EMERGENCY NUKE FUNCTION
-// ========================================================
-export async function emergencyNukeDatabase() {
-  try {
-    const db = await getDb();
-    
-    // 🔥 Force SQLite to drop ALL tables and recreate them
-    await db.execAsync(`
-      PRAGMA foreign_keys = OFF;
-      
-      DROP TABLE IF EXISTS customers;
-      DROP TABLE IF EXISTS vehicles;
-      DROP TABLE IF EXISTS services;
-      DROP TABLE IF EXISTS service_items;
-      DROP TABLE IF EXISTS inventory;
-      DROP TABLE IF EXISTS suppliers;
-      DROP TABLE IF EXISTS supplier_balances;
-      DROP TABLE IF EXISTS app_meta;
-      
-      PRAGMA foreign_keys = ON;
-    `);
-    
-    dbPromise = null; // Reset lazy loader
-    console.log("💥 34MB Database successfully wiped via SQL!");
-    
-    // IMPORTANT: Trigger the initDatabase to recreate empty tables
-    await initDatabase();
-    
-    return true;
-  } catch (error) {
-    console.error("Nuke failed:", error);
-    return false;
-  }
-}
-
-// ========================================================
-// 💰 SUPPLIER FINANCE OPERATIONS (Math Engine)
-// ========================================================
-
-// 1. Get a list of all suppliers with their current outstanding balances
 export async function getSupplierBalances(): Promise<{ id: string; name: string; balance: number }[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<{ id: string; name: string; balance: number }>(
@@ -2246,7 +2184,6 @@ export async function getSupplierBalances(): Promise<{ id: string; name: string;
   return rows;
 }
 
-// 2. Update a supplier's balance (Positive means you OWE them)
 export async function updateSupplierBalance(supplierId: string, newBalance: number): Promise<void> {
   const db = await getDb();
   const now = new Date().toISOString();
@@ -2258,8 +2195,6 @@ export async function updateSupplierBalance(supplierId: string, newBalance: numb
   );
 }
 
-// 3. Get today's total cash drawer summary 
-// (Revenue, Total Debt, and exactly how much cash left the drawer today)
 export async function getDailyCashSummary(dateStr: string): Promise<{
   revenue: number;
   totalOutstandingDebt: number;
@@ -2317,4 +2252,37 @@ export async function getDailyCashSummary(dateStr: string): Promise<{
     paidTowardsDebtToday: paidToday,
     netDrawer,
   };
+}
+
+export async function emergencyNukeDatabase() {
+  try {
+    const db = await getDb();
+    
+    // 🔥 Force SQLite to drop ALL tables and recreate them
+    await db.execAsync(`
+      PRAGMA foreign_keys = OFF;
+      
+      DROP TABLE IF EXISTS customers;
+      DROP TABLE IF EXISTS vehicles;
+      DROP TABLE IF EXISTS services;
+      DROP TABLE IF EXISTS service_items;
+      DROP TABLE IF EXISTS inventory;
+      DROP TABLE IF EXISTS suppliers;
+      DROP TABLE IF EXISTS supplier_balances;
+      DROP TABLE IF EXISTS app_meta;
+      
+      PRAGMA foreign_keys = ON;
+    `);
+    
+    dbPromise = null; // Reset lazy loader
+    console.log("💥 34MB Database successfully wiped via SQL!");
+    
+    // IMPORTANT: Trigger the initDatabase to recreate empty tables
+    await initDatabase();
+    
+    return true;
+  } catch (error) {
+    console.error("Nuke failed:", error);
+    return false;
+  }
 }
