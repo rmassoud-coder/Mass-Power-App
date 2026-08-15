@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getReport, getDailyCashSummary } from '../src/db/database';
+import { getWeeklyCashSummary } from '../src/db/database';
 
 export default function ManagementScreen() {
   const router = useRouter();
@@ -27,8 +27,10 @@ export default function ManagementScreen() {
     const loadFinances = async () => {
       try {
         setLoading(true);
-        const today = new Date().toISOString().slice(0, 10);
-        const summary = await getDailyCashSummary(today);
+        
+        // 🔥 Switching to Weekly Cash Summary
+        const summary = await getWeeklyCashSummary();
+        
         setRevenue(summary.revenue);
         setNetCash(summary.netDrawer);
         setTotalDebt(summary.totalOutstandingDebt);
@@ -51,13 +53,9 @@ export default function ManagementScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView 
-        style={styles.content} 
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={true}
-      >
+      <ScrollView style={styles.content}>
         
-        {/* --- 1. Cloud Sync Section --- */}
+        {/* Cloud Sync Section (Keep your existing buttons here) */}
         <View style={styles.syncCard}>
           <Text style={styles.syncTitle}>Cloud Sync</Text>
           <View style={styles.syncButtonsRow}>
@@ -73,7 +71,7 @@ export default function ManagementScreen() {
           <Text style={styles.syncHint}>Push uploads data. Pull merges cloud copy.</Text>
         </View>
 
-        {/* --- 2. Walk-in Cleanup --- */}
+        {/* Walk-in Cleanup (Keep your existing buttons here) */}
         <View style={styles.cleanupCard}>
           <Text style={styles.cleanupTitle}>Walk-in Data Cleanup</Text>
           <View style={styles.cleanupRow}>
@@ -86,34 +84,39 @@ export default function ManagementScreen() {
           </View>
         </View>
 
-        {/* --- 3. NEW LIVE CASH FLOW CARD --- */}
+        {/* =========================================== */}
+        {/* 🔥 NEW LIVE WEEKLY CASH FLOW CARD          */}
+        {/* =========================================== */}
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#5b21b6" />
-            <Text style={styles.loadingText}>Calculating daily cash...</Text>
+            <Text style={styles.loadingText}>Calculating weekly cash...</Text>
           </View>
         ) : (
           <View style={styles.cashCard}>
             <View style={styles.cashHeaderRow}>
               <Ionicons name="cash-outline" size={22} color="#5b21b6" />
-              <Text style={styles.cashHeader}>TODAY'S CASH FLOW</Text>
+              <Text style={styles.cashHeader}>WEEKLY CASH FLOW</Text>
               <TouchableOpacity style={styles.viewBtn} onPress={() => router.push('/report')}>
                 <Text style={styles.viewBtnText}>Details</Text>
               </TouchableOpacity>
             </View>
 
+            {/* Revenue */}
             <View style={styles.cashRow}>
               <Text style={styles.cashLabel}>Revenue</Text>
               <Text style={styles.cashValue}>${revenue.toFixed(2)}</Text>
             </View>
 
+            {/* Outstanding Debt (Subtracted) */}
             <View style={styles.cashRow}>
-              <Text style={[styles.cashLabel, { color: '#dc2626' }]}>Total Debt Balance</Text>
+              <Text style={[styles.cashLabel, { color: '#dc2626' }]}>− Outstanding Debt</Text>
               <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${totalDebt.toFixed(2)}</Text>
             </View>
 
             <View style={styles.cashDivider} />
 
+            {/* Net Cash Drawer */}
             <View style={styles.cashRow}>
               <Text style={[styles.cashLabel, { fontWeight: '800', color: '#5b21b6' }]}>
                 Net Cash Drawer
@@ -122,40 +125,15 @@ export default function ManagementScreen() {
                 ${netCash.toFixed(2)}
               </Text>
             </View>
+            
+            <Text style={styles.cashSubtext}>
+              *Outstanding debt is deducted from your weekly revenue.
+            </Text>
           </View>
         )}
+        {/* =========================================== */}
 
-        {/* --- 4. Your Original Dashboard Buttons (Restored!) --- */}
-        <View style={styles.dashboardGrid}>
-          {/* Report */}
-          <TouchableOpacity style={[styles.dashCard, styles.reportCard]} onPress={() => router.push('/report')}>
-            <Ionicons name="document-text-outline" size={32} color="#fff" />
-            <Text style={styles.dashTitle}>Report</Text>
-          </TouchableOpacity>
-
-          {/* Settings */}
-          <TouchableOpacity style={[styles.dashCard, styles.settingsCard]} onPress={() => router.push('/settings')}>
-            <Ionicons name="settings-outline" size={32} color="#fff" />
-            <Text style={styles.dashTitle}>Settings</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* --- 5. Second Row of Buttons --- */}
-        <View style={styles.dashboardGrid}>
-          {/* Warranty Stickers */}
-          <TouchableOpacity style={[styles.dashCard, styles.warrantyCard]} onPress={() => router.push('/warranty-stickers')}>
-            <Ionicons name="shield-checkmark-outline" size={32} color="#fff" />
-            <Text style={styles.dashTitle}>Warranty Stickers</Text>
-          </TouchableOpacity>
-
-          {/* Cat Printer */}
-          <TouchableOpacity style={[styles.dashCard, styles.catPrinterCard]} onPress={() => router.push('/cat-printer')}>
-            <Ionicons name="print-outline" size={32} color="#fff" />
-            <Text style={styles.dashTitle}>Cat Printer</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* --- 6. Your Original Buttons (Inventory & Price Stickers) --- */}
+        {/* Existing Dashboard Buttons */}
         <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.inventoryCard]} onPress={() => router.push('/inventory')}>
             <Ionicons name="cube-outline" size={32} color="#fff" />
@@ -174,7 +152,10 @@ export default function ManagementScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -187,13 +168,7 @@ const styles = StyleSheet.create({
   },
   backButton: { padding: 8 },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#1e293b' },
-  
-  content: { flex: 1 },
-  contentContainer: {
-    padding: 16,
-    paddingBottom: 40,
-    alignItems: 'stretch',
-  },
+  content: { flex: 1, padding: 16 },
 
   // Sync Section
   syncCard: {
@@ -230,7 +205,7 @@ const styles = StyleSheet.create({
   loadingContainer: { alignItems: 'center', padding: 20 },
   loadingText: { color: '#64748b', marginTop: 8 },
 
-  // Cash Flow Card
+  // 🔥 New Weekly Cash Flow Card styles
   cashCard: {
     backgroundColor: '#f3e8ff',
     borderRadius: 16,
@@ -245,24 +220,55 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   cashHeader: {
-    fontSize: 16, fontWeight: '800', color: '#5b21b6', marginLeft: 8, flex: 1,
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#5b21b6',
+    marginLeft: 8,
+    flex: 1,
   },
   viewBtn: {
-    backgroundColor: '#7c3aed', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20,
+    backgroundColor: '#7c3aed',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
   },
-  viewBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  viewBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   cashRow: {
-    flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
   },
-  cashLabel: { fontSize: 15, color: '#1e293b', fontWeight: '500' },
-  cashValue: { fontSize: 15, fontWeight: '700', color: '#1e293b' },
-  cashDivider: { height: 1, backgroundColor: '#c4b5fd', marginVertical: 8 },
+  cashLabel: {
+    fontSize: 15,
+    color: '#1e293b',
+    fontWeight: '500',
+  },
+  cashValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  cashDivider: {
+    height: 1,
+    backgroundColor: '#c4b5fd',
+    marginVertical: 8,
+  },
+  cashSubtext: {
+    fontSize: 11,
+    color: '#6b21a8',
+    fontStyle: 'italic',
+    marginTop: 8,
+  },
 
-  // Dashboard Grid
+  // Dashboard Button Grid
   dashboardGrid: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 12,
+    marginTop: 8,
   },
   dashCard: {
     flex: 1,
@@ -272,13 +278,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     height: 100,
   },
-  dashTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginTop: 8, textAlign: 'center' },
-
-  // Card Colors (Restored from your original file)
-  reportCard: { backgroundColor: '#10b981' },
-  settingsCard: { backgroundColor: '#2563eb' },
-  warrantyCard: { backgroundColor: '#d97706' },
-  catPrinterCard: { backgroundColor: '#0ea5e9' },
-  inventoryCard: { backgroundColor: '#0f766e' },
-  stickerCard: { backgroundColor: '#9333ea' },
+  inventoryCard: {
+    backgroundColor: '#0f766e',
+  },
+  stickerCard: {
+    backgroundColor: '#9333ea',
+  },
+  dashTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginTop: 8,
+    textAlign: 'center',
+  },
 });
