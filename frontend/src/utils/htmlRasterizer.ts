@@ -114,21 +114,16 @@ export function getRasterizerHostHtml(): string {
 
   var DESIGN = {
     margin: 12, frameThickness: 4, dividerThickness: 3,
-    // 🔥 Slightly shrank title/header sizes to sharpen pixels
     titleSize: 27, headerSize: 28, labelSize: 20, valueSize: 22, checkboxSize: 18, smallSize: 17
   };
 
+  // 🔥 FORCE DEEP BLACK: Removed thin strokes, replaced with multi-layer overlapping fill
   function boldText(ctx, text, x, y, weight) {
-    // 🔥 ULTIMATE BLACK: Draw the text four times overlapping to kill anti-aliasing
-    ctx.shadowBlur = 0;
     ctx.fillStyle = '#000000';
-    
     ctx.fillText(text, x, y);
     ctx.fillText(text, x + 0.5, y);
     ctx.fillText(text, x, y + 0.5);
     ctx.fillText(text, x, y);
-    
-    // No stroke - pure black fill only
   }
 
   function measureOps(ctx, ops, width) {
