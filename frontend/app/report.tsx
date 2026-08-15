@@ -179,10 +179,18 @@ function buildReorderHtml(
 export default function ReportScreen() {
   const router = useRouter();
 
-  // Default the date range to TODAY so the mechanic sees "today's sales" the
-  // moment they open the screen. They can widen the range afterwards.
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const [startDate, setStartDate] = useState(todayIso);
+  // 🔥 NEW: Default to THIS WEEK (Monday to Today) for wage tracking
+  const today = new Date();
+  const todayIso = today.toISOString().slice(0, 10);
+
+  // Calculate the Monday of this week
+  const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+  const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1); // Days to subtract to get to Monday
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - diffToMonday);
+  const mondayIso = monday.toISOString().slice(0, 10);
+
+  const [startDate, setStartDate] = useState(mondayIso);
   const [endDate, setEndDate] = useState(todayIso);
   const [filterType, setFilterType] = useState<FilterType>('mobile');
   const [filterValue, setFilterValue] = useState('');
@@ -220,7 +228,7 @@ export default function ReportScreen() {
   }, [loadSuppliers]);
 
   // Auto-run today's sales report on first mount so the mechanic sees the
-  // daily total straight away without having to tap "Generate".
+  // weekly cash flow straight away without having to tap "Generate".
   const didAutoRun = React.useRef(false);
   useEffect(() => {
     if (didAutoRun.current) return;
@@ -383,11 +391,17 @@ export default function ReportScreen() {
   };
 
   const handleClear = () => {
-    // Reset to today's range (matches the initial "daily sales" default) so
-    // the daily view stays sticky rather than blanking out.
-    const today = new Date().toISOString().slice(0, 10);
-    setStartDate(today);
-    setEndDate(today);
+    // Reset to Monday of this week instead of today
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - diffToMonday);
+    const mondayIso = monday.toISOString().slice(0, 10);
+    const todayIso = today.toISOString().slice(0, 10);
+
+    setStartDate(mondayIso);
+    setEndDate(todayIso);
     setFilterValue('');
     setUnpaidOnly(false);
     setReport(null);
@@ -420,7 +434,7 @@ export default function ReportScreen() {
         >
           {/* Date Range */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Date Range</Text>
+            <Text style={styles.sectionTitle}>Weekly Range (Mon - Today)</Text>
             <View style={styles.row}>
               <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
                 <Text style={styles.label}>From</Text>
