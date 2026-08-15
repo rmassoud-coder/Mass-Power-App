@@ -2094,6 +2094,13 @@ export async function createWalkinProductSale(
   const db = await getDb();
   const now = new Date().toISOString();
 
+  // ... (rest of the stock check) ...
+
+  // 🔥 When creating the customer for a pure product sale, we default to 'Walk-in'
+  let walkinCustomer = await db.getFirstAsync<Customer>(
+    `SELECT * FROM customers WHERE name = 'Walk-in' AND mobile_number = 'N/A' LIMIT 1`
+  );
+  // ... (rest of the function stays exactly the same) ...
   // 1. Verify the product exists and has enough stock
   const inv = await db.getFirstAsync<InventoryItem>(
     `SELECT * FROM inventory WHERE id = ?`,
