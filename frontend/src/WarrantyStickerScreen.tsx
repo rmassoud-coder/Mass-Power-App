@@ -13,9 +13,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
-import { printJob } from '../utils/printService';
-import { buildWarrantyStickerDoc } from '../utils/thermalDoc';
-import { loadSettings } from '../utils/settings';
+import { printJob } from './utils/printService';
+import { buildWarrantyStickerDoc } from './utils/thermalDoc';
+import { loadSettings } from './utils/settings';
 
 const WARRANTY_TYPES = [
   { label: 'Select Item Type...', value: '' },
