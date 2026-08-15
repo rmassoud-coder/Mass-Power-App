@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { createQuickWalkinService, createWalkinProductSale } from '../db/database';
+import { createQuickWalkinService, createWalkinProductSale } from './db/database';
 import { triggerAutoPush } from '../utils/autoSync';
 import InventoryPicker, { PickedItem } from './InventoryPicker';
 
