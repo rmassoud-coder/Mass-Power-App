@@ -1680,6 +1680,7 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
   
 
 /////////////// BLOCK 5: SUPPLIER, WALK-IN, PRODUCT SALE, NUKE ///////////////
+/////////////// BLOCK 5 - SUPPLIER, WALK-IN, PRODUCT SALE, NUKE & MATH ///////////////
 
 export async function listSuppliers(): Promise<Supplier[]> {
   const db = await getDb();
@@ -2175,6 +2176,11 @@ export async function createWalkinProductSale(
   };
 }
 
+// ========================================================
+// 💰 SUPPLIER FINANCE OPERATIONS (Math Engine)
+// ========================================================
+
+// 1. Get a list of all suppliers with their current outstanding balances
 export async function getSupplierBalances(): Promise<{ id: string; name: string; balance: number }[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<{ id: string; name: string; balance: number }>(
@@ -2186,6 +2192,7 @@ export async function getSupplierBalances(): Promise<{ id: string; name: string;
   return rows;
 }
 
+// 2. Update a supplier's balance (Positive means you OWE them)
 export async function updateSupplierBalance(supplierId: string, newBalance: number): Promise<void> {
   const db = await getDb();
   const now = new Date().toISOString();
@@ -2197,7 +2204,8 @@ export async function updateSupplierBalance(supplierId: string, newBalance: numb
   );
 }
 
-export async function getDailyCashSummary(dateStr: string): Promise<{
+// 3. 🔥 UPDATED: Weekly Cash Summary (Mon - Today)
+export async function getWeeklyCashSummary(): Promise<{
   revenue: number;
   totalOutstandingDebt: number;
   paidTowardsDebtToday: number;
@@ -2205,11 +2213,20 @@ export async function getDailyCashSummary(dateStr: string): Promise<{
 }> {
   const db = await getDb();
   
-  // 1. Today's revenue from services
+  // Calculate Monday of the current week
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday
+  const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - diffToMonday);
+  const mondayStr = monday.toISOString().slice(0, 10);
+  const todayStr = today.toISOString().slice(0, 10);
+
+  // 1. Revenue from Monday to Today
   const revenueResult = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(cost), 0) as total FROM services 
-     WHERE DATE(service_date) = ? AND (is_paid = 1 OR partial_paid > 0)`,
-    [dateStr]
+     WHERE DATE(service_date) >= ? AND DATE(service_date) <= ? AND (is_paid = 1 OR partial_paid > 0)`,
+    [mondayStr, todayStr]
   );
   const revenue = revenueResult?.total || 0;
 
@@ -2219,13 +2236,13 @@ export async function getDailyCashSummary(dateStr: string): Promise<{
   );
   const totalDebt = debtResult?.total || 0;
 
-  // 3. Calculate how much cash was physically paid towards debt TODAY
+  // 3. Calculate cash paid towards debt this week
   let paidToday = 0;
   try {
     const paidResult = await db.getFirstAsync<{ total: number }>(
       `SELECT COALESCE(SUM(
         CASE 
-          WHEN DATE(updated_at) = ? THEN balance - COALESCE(prev_balance, 0)
+          WHEN DATE(updated_at) >= ? AND DATE(updated_at) <= ? THEN balance - COALESCE(prev_balance, 0)
           ELSE 0 
         END
       ), 0) as total 
@@ -2238,14 +2255,14 @@ export async function getDailyCashSummary(dateStr: string): Promise<{
         FROM supplier_balances
       ) 
       WHERE balance < prev_balance`,
-      [dateStr]
+      [mondayStr, todayStr]
     );
     paidToday = Math.abs(paidResult?.total || 0);
   } catch (e) {
     paidToday = 0;
   }
 
-  // 4. Net Drawer = Today's Revenue MINUS what you actually paid towards debt today
+  // 4. Net Drawer = Weekly Revenue - what you paid towards debt this week
   const netDrawer = revenue - paidToday;
 
   return {
@@ -2256,6 +2273,9 @@ export async function getDailyCashSummary(dateStr: string): Promise<{
   };
 }
 
+// ========================================================
+// 🚨 EMERGENCY NUKE FUNCTION
+// ========================================================
 export async function emergencyNukeDatabase() {
   try {
     const db = await getDb();
@@ -2269,6 +2289,7 @@ export async function emergencyNukeDatabase() {
       DROP TABLE IF EXISTS services;
       DROP TABLE IF EXISTS service_items;
       DROP TABLE IF EXISTS inventory;
+      DROP TABLE IF EXISTS sinventory;
       DROP TABLE IF EXISTS suppliers;
       DROP TABLE IF EXISTS supplier_balances;
       DROP TABLE IF EXISTS app_meta;
