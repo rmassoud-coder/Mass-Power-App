@@ -293,7 +293,6 @@ export async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_service_items_inventory ON service_items(inventory_id);
   `);
 
-  // 🔥 NEW: Add the supplier_balances table
   try {
     await db.execAsync(`
       CREATE TABLE IF NOT EXISTS supplier_balances (
@@ -1711,7 +1710,7 @@ export async function updateSupplier(
   id: string,
   name: string,
   contactInfo?: string,
-  newDebt?: number // 🔥 NEW: Allows you to update debt at the same time
+  newDebt?: number
 ): Promise<void> {
   const db = await getDb();
   const clean = (name || '').trim();
@@ -1737,7 +1736,7 @@ export async function updateSupplier(
     );
   }
 
-  // 🔥 NEW: If a newDebt was passed, update the supplier_balances table
+  // 🔥 If a newDebt was passed, update the supplier_balances table
   if (newDebt !== undefined && newDebt >= 0) {
     const now = new Date().toISOString();
     await db.runAsync(
@@ -1985,6 +1984,101 @@ export async function checkWalkinData(): Promise<{
 }
 
 // ========================================================
+// 🚀 QUICK WALK-IN SYSTEM
+// ========================================================
+
+/**
+ * Creates a quick walk-in service. 
+ * - Auto-creates a 'Walk-in' customer if one doesn't exist.
+ * - Auto-creates a 'Walk-in' vehicle.
+ * - Attaches the service with the exact cost, payment, and outsourced cost.
+ * - Permanent storage (never auto-deleted).
+ */
+export async function createQuickWalkinService(
+  description: string,
+  totalCost: number,
+  isPaid: boolean,
+  partialPaid: number = 0,
+  outsourceCost: number = 0
+): Promise<Service> {
+  const db = await getDb();
+  const now = new Date().toISOString();
+
+  // 1. Find or create the generic "Walk-in" customer
+  let walkinCustomer = await db.getFirstAsync<Customer>(
+    `SELECT * FROM customers WHERE name = 'Walk-in' AND mobile_number = 'N/A' LIMIT 1`
+  );
+
+  if (!walkinCustomer) {
+    const walkinId = generateId();
+    await db.runAsync(
+      `INSERT INTO customers (id, name, mobile_number, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      [walkinId, 'Walk-in', 'N/A', now, now]
+    );
+    walkinCustomer = await db.getFirstAsync<Customer>(
+      `SELECT * FROM customers WHERE id = ?`, [walkinId]
+    );
+  }
+
+  // 2. Find or create the generic "Walk-in Vehicle" for that customer
+  let walkinVehicle = await db.getFirstAsync<Vehicle>(
+    `SELECT * FROM vehicles WHERE customer_id = ? AND plate_number = 'WALK-IN' LIMIT 1`,
+    [walkinCustomer!.id]
+  );
+
+  if (!walkinVehicle) {
+    const vehicleId = generateId();
+    await db.runAsync(
+      `INSERT INTO vehicles (id, customer_id, vin, plate_number, make, model, year, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [vehicleId, walkinCustomer!.id, 'N/A', 'WALK-IN', 'Walk-in', 'Vehicle', null, now]
+    );
+    walkinVehicle = await db.getFirstAsync<Vehicle>(
+      `SELECT * FROM vehicles WHERE id = ?`, [vehicleId]
+    );
+  }
+
+  // 3. Create the Service
+  const serviceId = generateId();
+  const pp = Math.max(0, Number(partialPaid) || 0);
+  const oc = Math.max(0, Number(outsourceCost) || 0);
+  const finalCost = Math.max(0, Number(totalCost) || 0);
+
+  await db.runAsync(
+    `INSERT INTO services (
+      id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, partial_paid, 
+      service_date, created_at, outsource_cost
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      serviceId,
+      walkinVehicle!.id,
+      walkinCustomer!.id,
+      description.trim() || 'Quick Walk-in Service',
+      null,
+      finalCost,
+      isPaid ? 1 : 0,
+      pp,
+      now,
+      now,
+      oc
+    ]
+  );
+
+  return {
+    id: serviceId,
+    vehicle_id: walkinVehicle!.id,
+    customer_id: walkinCustomer!.id,
+    service_description: description.trim() || 'Quick Walk-in Service',
+    additional_info: undefined,
+    cost: finalCost,
+    is_paid: isPaid,
+    service_date: now,
+    created_at: now,
+    partial_paid: pp,
+    outsource_cost: oc,
+  };
+}
+
+// ========================================================
 // 🛒 WALK-IN PRODUCT COUNTER SALE
 // ========================================================
 
@@ -2096,64 +2190,6 @@ export async function createWalkinProductSale(
   };
 }
 
-  // 2. Find or create the generic "Walk-in Vehicle" for that customer
-  let walkinVehicle = await db.getFirstAsync<Vehicle>(
-    `SELECT * FROM vehicles WHERE customer_id = ? AND plate_number = 'WALK-IN' LIMIT 1`,
-    [walkinCustomer!.id]
-  );
-
-  if (!walkinVehicle) {
-    const vehicleId = generateId();
-    await db.runAsync(
-      `INSERT INTO vehicles (id, customer_id, vin, plate_number, make, model, year, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [vehicleId, walkinCustomer!.id, 'N/A', 'WALK-IN', 'Walk-in', 'Vehicle', null, now]
-    );
-    walkinVehicle = await db.getFirstAsync<Vehicle>(
-      `SELECT * FROM vehicles WHERE id = ?`, [vehicleId]
-    );
-  }
-
-  // 3. Create the Service
-  const serviceId = generateId();
-  const pp = Math.max(0, Number(partialPaid) || 0);
-  const oc = Math.max(0, Number(outsourceCost) || 0);
-  const finalCost = Math.max(0, Number(totalCost) || 0);
-
-  await db.runAsync(
-    `INSERT INTO services (
-      id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, partial_paid, 
-      service_date, created_at, outsource_cost
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      serviceId,
-      walkinVehicle!.id,
-      walkinCustomer!.id,
-      description.trim() || 'Quick Walk-in Service',
-      null,
-      finalCost,
-      isPaid ? 1 : 0,
-      pp,
-      now,
-      now,
-      oc
-    ]
-  );
-
-  return {
-    id: serviceId,
-    vehicle_id: walkinVehicle!.id,
-    customer_id: walkinCustomer!.id,
-    service_description: description.trim() || 'Quick Walk-in Service',
-    additional_info: undefined,
-    cost: finalCost,
-    is_paid: isPaid,
-    service_date: now,
-    created_at: now,
-    partial_paid: pp,
-    outsource_cost: oc,
-  };
-}
-
 // ========================================================
 // 🚨 EMERGENCY NUKE FUNCTION
 // ========================================================
@@ -2236,15 +2272,13 @@ export async function getDailyCashSummary(dateStr: string): Promise<{
   );
   const revenue = revenueResult?.total || 0;
 
-  // 2. Total outstanding debt across all suppliers (Positive = what you owe)
+  // 2. Total outstanding debt across all suppliers
   const debtResult = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(balance), 0) as total FROM supplier_balances WHERE balance > 0`
   );
   const totalDebt = debtResult?.total || 0;
 
   // 3. Calculate how much cash was physically paid towards debt TODAY
-  // We look at the difference between the previous balance and the current balance
-  // for records updated today.
   let paidToday = 0;
   try {
     const paidResult = await db.getFirstAsync<{ total: number }>(
@@ -2267,13 +2301,10 @@ export async function getDailyCashSummary(dateStr: string): Promise<{
     );
     paidToday = Math.abs(paidResult?.total || 0);
   } catch (e) {
-    // If the SQLite version doesn't support LAG, we fallback to 0
-    // The UI will handle manual payment entries via the "Pay Today" input
     paidToday = 0;
   }
 
   // 4. Net Drawer = Today's Revenue MINUS what you actually paid towards debt today
-  // We do NOT subtract the entire debt history!
   const netDrawer = revenue - paidToday;
 
   return {
