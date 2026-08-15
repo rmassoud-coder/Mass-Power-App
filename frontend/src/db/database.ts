@@ -1213,8 +1213,9 @@ export async function getReport(
     params.push(`%${plate}%`);
   }
   if (unpaidOnly) {
-    conditions.push('s.is_paid = 0');
-  }
+  // 🔥 Include both completely unpaid AND partially paid services
+  conditions.push('s.is_paid = 0 OR s.partial_paid > 0');
+}
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const sql = `
