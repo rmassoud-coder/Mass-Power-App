@@ -53,7 +53,11 @@ export default function ManagementScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView 
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer} // 🔥 FIXES SCROLLING
+        showsVerticalScrollIndicator={true}
+      >
         
         {/* Cloud Sync Section (Keep your existing buttons here) */}
         <View style={styles.syncCard}>
@@ -69,19 +73,6 @@ export default function ManagementScreen() {
             </TouchableOpacity>
           </View>
           <Text style={styles.syncHint}>Push uploads data. Pull merges cloud copy.</Text>
-        </View>
-
-        {/* Walk-in Cleanup (Keep your existing buttons here) */}
-        <View style={styles.cleanupCard}>
-          <Text style={styles.cleanupTitle}>Walk-in Data Cleanup</Text>
-          <View style={styles.cleanupRow}>
-            <TouchableOpacity style={styles.checkBtn}>
-              <Text style={styles.cleanupBtnText}>Check</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.cleanBtn}>
-              <Text style={styles.cleanupBtnText}>Clean Walk-ins</Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
         {/* =========================================== */}
@@ -168,7 +159,13 @@ const styles = StyleSheet.create({
   },
   backButton: { padding: 8 },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#1e293b' },
-  content: { flex: 1, padding: 16 },
+  content: { 
+    flex: 1, 
+  },
+  contentContainer: {
+    padding: 16,
+    paddingBottom: 40, // 🔥 FIXES SCROLLING CUTOFF
+  },
 
   // Sync Section
   syncCard: {
@@ -187,19 +184,6 @@ const styles = StyleSheet.create({
   },
   syncBtnText: { color: '#fff', fontWeight: '700', marginLeft: 6 },
   syncHint: { color: '#94a3b8', fontSize: 12, marginTop: 6 },
-
-  // Cleanup Section
-  cleanupCard: {
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-  },
-  cleanupTitle: { color: '#94a3b8', fontSize: 12, fontWeight: '700', letterSpacing: 1, marginBottom: 12 },
-  cleanupRow: { flexDirection: 'row', gap: 12 },
-  checkBtn: { flex: 1, backgroundColor: '#475569', paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
-  cleanBtn: { flex: 1, backgroundColor: '#dc2626', paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
-  cleanupBtnText: { color: '#fff', fontWeight: '700' },
 
   // Loading
   loadingContainer: { alignItems: 'center', padding: 20 },
