@@ -8,6 +8,7 @@ import {
   ScrollView,
   Modal,
   Platform,
+  KeyboardAvoidingView, // 🔥 ADD THIS
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import {
