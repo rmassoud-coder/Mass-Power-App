@@ -8,7 +8,8 @@ import {
   ScrollView,
   Modal,
   Platform,
-  KeyboardAvoidingView,
+  Keyboard,
+  Animated,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import {
@@ -40,6 +41,31 @@ export default function InventoryPicker({
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [search, setSearch] = useState('');
+  
+  // 🔥 NEW: Keyboard height animation
+  const keyboardHeight = useState(new Animated.Value(0))[0];
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
+      Animated.timing(keyboardHeight, {
+        toValue: e.endCoordinates.height,
+        duration: 200,
+        useNativeDriver: false,
+      }).start();
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      Animated.timing(keyboardHeight, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: false,
+      }).start();
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [keyboardHeight]);
 
   const refresh = async () => {
     const inv = await listInventory();
@@ -192,96 +218,96 @@ export default function InventoryPicker({
         onRequestClose={() => setModalOpen(false)}
       >
         <View style={styles.modalBackdrop}>
-          {/* 🔥 WRAPPED IN KEYBOARD AVOIDING VIEW */}
-          <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={{ width: '100%' }}
+          {/* 🔥 Animated View that pushes up exactly as high as the keyboard */}
+          <Animated.View
+            style={[
+              styles.modalCard,
+              { marginBottom: keyboardHeight },
+            ]}
           >
-            <View style={styles.modalCard}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Pick from Inventory</Text>
-                <TouchableOpacity onPress={() => setModalOpen(false)} style={styles.closeBtn}>
-                  <Ionicons name="close" size={22} color="#1e293b" />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.searchWrap}>
-                <Ionicons name="search" size={16} color="#64748b" />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search by name or item number"
-                  value={search}
-                  onChangeText={setSearch}
-                  autoCapitalize="none"
-                />
-              </View>
-
-              <ScrollView style={{ flex: 1 }}>
-                {filtered.length === 0 ? (
-                  <Text style={styles.modalEmpty}>
-                    {inventory.length === 0
-                      ? 'No inventory yet. Add items from Settings → Inventory.'
-                      : 'No matches.'}
-                  </Text>
-                ) : (
-                  filtered.map((inv) => {
-                    const lowStock = inv.item_quantity < 2;
-                    const inListQty =
-                      value.find((v) => v.inventory_id === inv.id)?.quantity || 0;
-                    const cap =
-                      inv.item_quantity + (preExistingByInventoryId?.[inv.id] || 0);
-                    const disabled = inListQty >= cap;
-                    const retail =
-                      inv.item_retail_price && inv.item_retail_price > 0
-                        ? inv.item_retail_price
-                        : inv.item_price;
-                    return (
-                      <TouchableOpacity
-                        key={inv.id}
-                        style={[styles.invRow, lowStock && styles.invRowLow]}
-                        onPress={() => !disabled && onPick(inv)}
-                        disabled={disabled}
-                      >
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={[styles.invTitle, lowStock && { color: '#b91c1c' }]}
-                            numberOfLines={1}
-                          >
-                            {inv.item_type}
-                          </Text>
-                          <Text style={[styles.invSub, lowStock && { color: '#b91c1c' }]}>
-                            {inv.item_number}
-                            {inv.item_code ? ` • Code: ${inv.item_code}` : ''} • Stock:{' '}
-                            <Text style={lowStock ? styles.lowStockText : undefined}>
-                              {inv.item_quantity}
-                            </Text>
-                          </Text>
-                          <Text style={styles.invPrice}>${retail.toFixed(2)}</Text>
-                        </View>
-                        {inListQty > 0 ? (
-                          <View style={styles.inCartBadge}>
-                            <Text style={styles.inCartText}>×{inListQty}</Text>
-                          </View>
-                        ) : (
-                          <Ionicons
-                            name="add-circle"
-                            size={26}
-                            color={disabled ? '#cbd5e1' : '#10b981'}
-                          />
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })
-                )}
-              </ScrollView>
-
-              <TouchableOpacity
-                style={styles.doneBtn}
-                onPress={() => setModalOpen(false)}
-              >
-                <Text style={styles.doneBtnText}>Done</Text>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Pick from Inventory</Text>
+              <TouchableOpacity onPress={() => setModalOpen(false)} style={styles.closeBtn}>
+                <Ionicons name="close" size={22} color="#1e293b" />
               </TouchableOpacity>
             </View>
-          </KeyboardAvoidingView>
+            <View style={styles.searchWrap}>
+              <Ionicons name="search" size={16} color="#64748b" />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search by name or item number"
+                value={search}
+                onChangeText={setSearch}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <ScrollView style={{ flex: 1 }}>
+              {filtered.length === 0 ? (
+                <Text style={styles.modalEmpty}>
+                  {inventory.length === 0
+                    ? 'No inventory yet. Add items from Settings → Inventory.'
+                    : 'No matches.'}
+                </Text>
+              ) : (
+                filtered.map((inv) => {
+                  const lowStock = inv.item_quantity < 2;
+                  const inListQty =
+                    value.find((v) => v.inventory_id === inv.id)?.quantity || 0;
+                  const cap =
+                    inv.item_quantity + (preExistingByInventoryId?.[inv.id] || 0);
+                  const disabled = inListQty >= cap;
+                  const retail =
+                    inv.item_retail_price && inv.item_retail_price > 0
+                      ? inv.item_retail_price
+                      : inv.item_price;
+                  return (
+                    <TouchableOpacity
+                      key={inv.id}
+                      style={[styles.invRow, lowStock && styles.invRowLow]}
+                      onPress={() => !disabled && onPick(inv)}
+                      disabled={disabled}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={[styles.invTitle, lowStock && { color: '#b91c1c' }]}
+                          numberOfLines={1}
+                        >
+                          {inv.item_type}
+                        </Text>
+                        <Text style={[styles.invSub, lowStock && { color: '#b91c1c' }]}>
+                          {inv.item_number}
+                          {inv.item_code ? ` • Code: ${inv.item_code}` : ''} • Stock:{' '}
+                          <Text style={lowStock ? styles.lowStockText : undefined}>
+                            {inv.item_quantity}
+                          </Text>
+                        </Text>
+                        <Text style={styles.invPrice}>${retail.toFixed(2)}</Text>
+                      </View>
+                      {inListQty > 0 ? (
+                        <View style={styles.inCartBadge}>
+                          <Text style={styles.inCartText}>×{inListQty}</Text>
+                        </View>
+                      ) : (
+                        <Ionicons
+                          name="add-circle"
+                          size={26}
+                          color={disabled ? '#cbd5e1' : '#10b981'}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.doneBtn}
+              onPress={() => setModalOpen(false)}
+            >
+              <Text style={styles.doneBtnText}>Done</Text>
+            </TouchableOpacity>
+          </Animated.View>
         </View>
       </Modal>
     </View>
@@ -379,7 +405,8 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
     maxHeight: '85%',
     minHeight: '50%',
-    marginBottom: 0, // 🔥 ADDED: Prevents it from being squashed against the bottom
+    width: '100%',
+    marginBottom: 0,
   },
   modalHeader: { flexDirection: 'row', alignItems: 'center' },
   modalTitle: { flex: 1, fontSize: 16, fontWeight: '700', color: '#0f172a' },
