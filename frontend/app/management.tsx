@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
@@ -19,6 +20,9 @@ export default function ManagementScreen() {
   const [netCash, setNetCash] = useState(0);
   const [totalDebt, setTotalDebt] = useState(0);
   const [loading, setLoading] = useState(true);
+  
+  // 🔥 NEW: Wages State
+  const [wagesInput, setWagesInput] = useState('');
 
   useEffect(() => {
     const loadFinances = async () => {
@@ -106,7 +110,30 @@ export default function ManagementScreen() {
           </View>
         )}
 
-        {/* Full Button Grid (6 Buttons) */}
+        {/* 🔥 NEW: Wages Input Section */}
+        <View style={styles.wagesCard}>
+          <View style={styles.wagesHeaderRow}>
+            <Ionicons name="people-outline" size={20} color="#2563eb" />
+            <Text style={styles.wagesHeader}>Weekly Wages Paid</Text>
+          </View>
+          <View style={styles.wagesRow}>
+            <Text style={styles.wagesLabel}>Enter total wages paid this week:</Text>
+            <TextInput
+              style={styles.wagesInput}
+              placeholder="0.00"
+              keyboardType="decimal-pad"
+              value={wagesInput}
+              onChangeText={(text) => {
+                setWagesInput(text);
+                // Auto-update Net Cash when typing wages
+                const wages = parseFloat(text) || 0;
+                setNetCash(revenue - wages);
+              }}
+            />
+          </View>
+        </View>
+
+        {/* 6-Button Grid - 100% Intact */}
         <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.reportCard]} onPress={() => router.push('/report')}>
             <Ionicons name="document-text-outline" size={32} color="#fff" />
@@ -213,6 +240,51 @@ const styles = StyleSheet.create({
   cashDivider: { height: 1, backgroundColor: '#c4b5fd', marginVertical: 8 },
   cashSubtext: { fontSize: 11, color: '#6b21a8', fontStyle: 'italic', marginTop: 8 },
 
+  // 🔥 NEW: Wages Card Styles
+  wagesCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  wagesHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  wagesHeader: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2563eb',
+    marginLeft: 8,
+  },
+  wagesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  wagesLabel: {
+    fontSize: 14,
+    color: '#475569',
+    flex: 1,
+    marginRight: 12,
+  },
+  wagesInput: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minWidth: 100,
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'right',
+    color: '#0f172a',
+  },
+
   dashboardGrid: {
     flexDirection: 'row',
     gap: 12,
@@ -228,7 +300,7 @@ const styles = StyleSheet.create({
   },
   dashTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginTop: 8, textAlign: 'center' },
 
-  // All 6 Button Colors
+  // ALL 6 BUTTONS PRESERVED
   reportCard: { backgroundColor: '#10b981' },
   settingsCard: { backgroundColor: '#2563eb' },
   warrantyCard: { backgroundColor: '#d97706' },
