@@ -16,7 +16,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { createQuickWalkinService, createWalkinProductSale } from './db/database';
 import { triggerAutoPush } from './utils/autoSync';
-import InventoryPicker, { PickedItem } from './InventoryPicker';
+import InventoryPicker, { PickedItem } from './components/InventoryPicker';
 
 export default function QuickWalkinScreen() {
   const [serviceDesc, setServiceDesc] = useState('');
