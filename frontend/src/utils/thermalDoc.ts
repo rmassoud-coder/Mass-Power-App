@@ -124,4 +124,53 @@ export function buildCombinedInvoiceDoc(...args: any[]): ThermalDoc { return { o
 export function buildPriceStickersDoc(...args: any[]): ThermalDoc { return { ops: [], feedRows: 0 }; }
 export function buildReorderDoc(...args: any[]): ThermalDoc { return { ops: [], feedRows: 0 }; }
 export function buildVehicleQrDoc(...args: any[]): ThermalDoc { return { ops: [], feedRows: 0 }; }
-export function buildGuaranteeStickerDoc(...args: any[]): ThermalDoc { return { ops: [], feedRows: 0 }; }
+export function buildWarrantyStickerDoc(
+  itemType: string,
+  description: string,
+  period: string,
+  issueDate: Date,
+  expiryDate: Date,
+  settings: AppSettings
+): ThermalDoc {
+  const ops: ThermalOp[] = [];
+
+  // Logo
+  const logoUrl = "https://rmassoud-coder.github.io/Mass-Power-App/vehicle%20profiles/mass-power-logo.png";
+  ops.push({ t: 'image', url: logoUrl, width: 143 });
+  ops.push({ t: 'space', h: 12 });
+
+  // Shop Name
+  ops.push({ t: 'shop_title', text: (settings.garageName || 'Mass Power Auto').toUpperCase() });
+  ops.push({ t: 'divider', style: 'solid', thick: 3 });
+  ops.push({ t: 'space', h: 6 });
+
+  // Main Title
+  ops.push({ t: 'header', text: 'WARRANTY STICKER', size: 22, letterSpacing: 2 });
+  ops.push({ t: 'divider', style: 'dashed' });
+  ops.push({ t: 'space', h: 8 });
+
+  // Item Type
+  ops.push({ t: 'label_value', label: 'ITEM:', value: itemType.toUpperCase() });
+  ops.push({ t: 'space', h: 4 });
+
+  // Description
+  ops.push({ t: 'divider', style: 'solid', thick: 2 });
+  ops.push({ t: 'header', text: description.toUpperCase(), size: 16, letterSpacing: 1 });
+  ops.push({ t: 'divider', style: 'solid', thick: 2 });
+  ops.push({ t: 'space', h: 8 });
+
+  // Dates
+  ops.push({ t: 'label_value', label: 'ISSUE DATE:', value: issueDate.toLocaleDateString() });
+  ops.push({ t: 'label_value', label: 'EXPIRY DATE:', value: expiryDate.toLocaleDateString() });
+  ops.push({ t: 'space', h: 6 });
+
+  // Ticker Box
+  ops.push({ t: 'divider', style: 'dashed' });
+  ops.push({ t: 'checkbox', checked: false, label: `VALID FOR ${period} MONTHS`, size: 16 });
+  ops.push({ t: 'space', h: 6 });
+
+  // Footer
+  ops.push({ t: 'footer', text: 'Keep this sticker with your receipt.', size: 10 });
+
+  return { ops, frame: true, feedRows: 0, leadRows: 0 };
+}
