@@ -30,6 +30,7 @@ import { buildReorderDoc } from '../src/utils/thermalDoc';
 import { triggerAutoPush } from '../src/utils/autoSync';
 import { MASS_POWER_LOGO_PNG_BASE64 } from '../src/utils/logoBase64';
 
+// 🔥 UPDATED: Added 'partial_paid' field
 interface ReportItem {
   service_id: string;
   customer_id: string;
@@ -45,6 +46,7 @@ interface ReportItem {
   additional_info?: string;
   cost: number;
   is_paid: boolean;
+  partial_paid: number; // 🔥 NEW FIELD
   service_date: string;
 }
 
