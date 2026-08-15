@@ -2204,11 +2204,12 @@ export async function updateSupplierBalance(supplierId: string, newBalance: numb
   );
 }
 
-// 3. 🔥 UPDATED: Weekly Cash Summary (Mon - Today)
+// 3. 🔥 UPDATED: Weekly Cash Summary (Mon - Today) with Wages
 export async function getWeeklyCashSummary(): Promise<{
   revenue: number;
   totalOutstandingDebt: number;
   paidTowardsDebtToday: number;
+  wages: number;
   netDrawer: number;
 }> {
   const db = await getDb();
@@ -2262,13 +2263,22 @@ export async function getWeeklyCashSummary(): Promise<{
     paidToday = 0;
   }
 
-  // 4. Net Drawer = Weekly Revenue - what you paid towards debt this week
-  const netDrawer = revenue - paidToday;
+  // 4. 🔥 NEW: Fetch total wages paid this week
+  const wagesResult = await db.getFirstAsync<{ total: number }>(
+    `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid 
+     WHERE DATE(date) >= ? AND DATE(date) <= ?`,
+    [mondayStr, todayStr]
+  );
+  const wages = wagesResult?.total || 0;
+
+  // 5. Net Drawer = Revenue - Debt Payments - Wages
+  const netDrawer = revenue - paidToday - wages;
 
   return {
     revenue,
     totalOutstandingDebt: totalDebt,
     paidTowardsDebtToday: paidToday,
+    wages,
     netDrawer,
   };
 }
