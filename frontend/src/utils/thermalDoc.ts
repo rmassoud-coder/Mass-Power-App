@@ -67,7 +67,7 @@ function fmtDate(iso?: string | null): string {
 }
 
 // ===============================================================
-// 🔥 FINAL UPDATED BATTERY STICKER LAYOUT
+// 🔥 FIXED BATTERY STICKER LAYOUT (With Solid Black Top Bar)
 // ===============================================================
 export function buildBatteryStickerDoc(
   customer: Customer,
@@ -77,6 +77,12 @@ export function buildBatteryStickerDoc(
 ): ThermalDoc {
   const ops: ThermalOp[] = [];
   const brand = [vehicle.make, vehicle.model].filter(Boolean).join(' ').trim().toUpperCase();
+
+  // 🔥 DUMMY BLACK BAR: Pushes the sticker down and warms the print head.
+  // This base64 string is a solid black 384x10 pixel image.
+  const blackBarBase64 = "iVBORw0KGgoAAAANSUhEUgAAAYAAAAAKCAYAAACL8uCjAAAAF0lEQVR42mNkYGBoYmBg+M8ABYx0NTU1AEgNBEzwyFwzAAAAAElFTkSuQmCC";
+  ops.push({ t: 'image', url: `data:image/png;base64,${blackBarBase64}`, width: 384 });
+  ops.push({ t: 'space', h: 4 });
 
   const logoUrl = "https://rmassoud-coder.github.io/Mass-Power-App/vehicle%20profiles/mass-power-logo.png";
   ops.push({ t: 'image', url: logoUrl, width: 143 });
@@ -109,12 +115,12 @@ export function buildBatteryStickerDoc(
   ops.push({ t: 'divider', style: 'solid', thick: 2 });
   ops.push({ t: 'footer', text: `${service.created_at.split('T')[0]}`, size: 12 });
 
-  // 🔥 FIX: Added leadRows: 8 to push the logo clear of the printer's lip
-  return { ops, frame: true, feedRows: 0, leadRows: 8 };
+  // 🔥 REMOVED leadRows. Replaced with actual black bar.
+  return { ops, frame: true, feedRows: 0 };
 }
 
 // ===============================================================
-// 🔥 UPDATED WARRANTY STICKER LAYOUT (For the new screen)
+// 🔥 FIXED WARRANTY STICKER LAYOUT (With Solid Black Top Bar)
 // ===============================================================
 export function buildWarrantyStickerDoc(
   itemType: string,
@@ -125,6 +131,11 @@ export function buildWarrantyStickerDoc(
   settings: AppSettings
 ): ThermalDoc {
   const ops: ThermalOp[] = [];
+
+  // 🔥 DUMMY BLACK BAR: Pushes the sticker down and warms the print head.
+  const blackBarBase64 = "iVBORw0KGgoAAAANSUhEUgAAAYAAAAAKCAYAAACL8uCjAAAAF0lEQVR42mNkYGBoYmBg+M8ABYx0NTU1AEgNBEzwyFwzAAAAAElFTkSuQmCC";
+  ops.push({ t: 'image', url: `data:image/png;base64,${blackBarBase64}`, width: 384 });
+  ops.push({ t: 'space', h: 4 });
 
   const logoUrl = "https://rmassoud-coder.github.io/Mass-Power-App/vehicle%20profiles/mass-power-logo.png";
   ops.push({ t: 'image', url: logoUrl, width: 143 });
@@ -163,8 +174,8 @@ export function buildWarrantyStickerDoc(
   // Footer
   ops.push({ t: 'footer', text: 'Keep this sticker with your receipt.', size: 10 });
 
-  // 🔥 FIX: Added leadRows: 8 so the logo clears the printer's lip completely
-  return { ops, frame: true, feedRows: 0, leadRows: 8 };
+  // 🔥 REMOVED leadRows. Replaced with actual black bar.
+  return { ops, frame: true, feedRows: 0 };
 }
 
 // ===============================================================
