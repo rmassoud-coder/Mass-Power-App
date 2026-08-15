@@ -63,7 +63,9 @@ export default function WarrantyStickerScreen() {
         settings
       );
 
-      await printJob(doc, { jobName: 'Warranty Sticker' });
+      // 🔥 CRITICAL FIX: Pass 'thermal: doc' so it routes to Cat Printer
+      await printJob(doc, { jobName: 'Warranty Sticker', thermal: doc });
+      
       Alert.alert('Success', 'Warranty sticker sent to printer!');
       router.back();
     } catch (error: any) {
