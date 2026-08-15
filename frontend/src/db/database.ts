@@ -1172,7 +1172,6 @@ async function restoreInventoryFromServiceItems(serviceId: string): Promise<void
 }
 
 /////////////// BLOCK 4: REPORT, EXPORT, IMPORT, SYNC ///////////////
-
 export async function getReport(
   startDate?: string,
   endDate?: string,
@@ -1676,6 +1675,8 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
 
   return result;
 }
+  
+  
 
 /////////////// BLOCK 5: SUPPLIER, WALK-IN, PRODUCT SALE, NUKE ///////////////
 
