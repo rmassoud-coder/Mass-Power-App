@@ -8,11 +8,11 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as LocalAuthentication from 'expo-local-authentication'; // 🔥 New Import
 import { getWeeklyCashSummary } from '../src/db/database';
 
 export default function ManagementScreen() {
@@ -24,8 +24,13 @@ export default function ManagementScreen() {
   const [loading, setLoading] = useState(true);
   const [wagesInput, setWagesInput] = useState('');
 
-  // 🔥 NEW: Biometric State
- // const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // 🔥 SECURITY STATE
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  
+  // 🔥 YOUR PIN: 3945
+  const SECRET_PIN = '3945';
 
   useEffect(() => {
     const loadFinances = async () => {
@@ -44,38 +49,16 @@ export default function ManagementScreen() {
     loadFinances();
   }, []);
 
-  // 🔥 NEW: Fingerprint Handler
-  const handleBiometricAuth = async () => {
-    try {
-      // 1. Check if the device supports biometrics
-      const compatible = await LocalAuthentication.hasHardwareAsync();
-      if (!compatible) {
-        Alert.alert('Error', 'Your device does not support fingerprint scanning.');
-        return;
-      }
-
-      // 2. Check if biometrics are enrolled
-      const enrolled = await LocalAuthentication.isEnrolledAsync();
-      if (!enrolled) {
-        Alert.alert('Error', 'No fingerprints enrolled. Please set up fingerprint in your phone settings.');
-        return;
-      }
-
-      // 3. Trigger the scan
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Authenticate to access finances',
-        fallbackLabel: 'Use Passcode',
-        disableDeviceFallback: false,
-      });
-
-      if (result.success) {
-        setIsAuthenticated(true);
-        Alert.alert('Success', 'Access granted!');
-      } else {
-        Alert.alert('Failed', 'Authentication failed.');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Something went wrong with the authentication.');
+  // 🔥 PIN HANDLER
+  const handlePinAuth = () => {
+    if (pinInput === SECRET_PIN) {
+      setIsAuthenticated(true);
+      setPinModalVisible(false);
+      setPinInput('');
+      Alert.alert('Success', 'Access granted!');
+    } else {
+      Alert.alert('Error', 'Incorrect PIN. Please try again.');
+      setPinInput('');
     }
   };
 
@@ -110,19 +93,19 @@ export default function ManagementScreen() {
           <Text style={styles.syncHint}>Push uploads data. Pull merges cloud copy.</Text>
         </View>
 
-        {/* 🔥 NEW: Biometric Button */}
-        <TouchableOpacity style={styles.bioButton} onPress={handleBiometricAuth}>
-          <Ionicons name="finger-print-outline" size={24} color="#fff" />
-          <Text style={styles.bioButtonText}>
-            {isAuthenticated ? '✅ Access Granted' : '🔒 Secure Access'}
-          </Text>
-        </TouchableOpacity>
+        {/* 🔥 PIN LOCK BUTTON */}
+        {!isAuthenticated && (
+          <TouchableOpacity style={styles.lockButton} onPress={() => setPinModalVisible(true)}>
+            <Ionicons name="lock-closed" size={24} color="#fff" />
+            <Text style={styles.lockButtonText}>🔒 Tap to Unlock Backend</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Weekly Cash Flow (Only shows if authenticated) */}
         {!isAuthenticated ? (
           <View style={styles.lockedCard}>
             <Ionicons name="lock-closed" size={32} color="#94a3b8" />
-            <Text style={styles.lockedText}>Tap "Secure Access" to view finances.</Text>
+            <Text style={styles.lockedText}>Backend is locked. Tap the button above to unlock.</Text>
           </View>
         ) : (
           <>
@@ -231,6 +214,42 @@ export default function ManagementScreen() {
         </View>
 
       </ScrollView>
+
+      {/* 🔥 PIN ENTRY MODAL */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={pinModalVisible}
+        onRequestClose={() => setPinModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Enter PIN</Text>
+            <Text style={styles.modalSubtitle}>Enter your 4-digit security code</Text>
+            
+            <TextInput
+              style={styles.pinInput}
+              placeholder="3945"
+              keyboardType="number-pad"
+              maxLength={4}
+              secureTextEntry={true}
+              value={pinInput}
+              onChangeText={setPinInput}
+              autoFocus={true}
+            />
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setPinModalVisible(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalConfirmBtn} onPress={handlePinAuth}>
+                <Text style={styles.modalConfirmText}>Unlock</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -269,9 +288,9 @@ const styles = StyleSheet.create({
   syncBtnText: { color: '#fff', fontWeight: '700', marginLeft: 6 },
   syncHint: { color: '#94a3b8', fontSize: 12, marginTop: 6 },
 
-  // 🔥 NEW: Bio Button
-  bioButton: {
-    backgroundColor: '#8b5cf6',
+  // 🔥 Lock Button
+  lockButton: {
+    backgroundColor: '#2563eb',
     borderRadius: 12,
     paddingVertical: 14,
     flexDirection: 'row',
@@ -279,7 +298,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  bioButtonText: { color: '#fff', fontSize: 16, fontWeight: '600', marginLeft: 8 },
+  lockButtonText: { color: '#fff', fontSize: 16, fontWeight: '600', marginLeft: 8 },
 
   lockedCard: {
     backgroundColor: '#f1f5f9',
@@ -389,4 +408,79 @@ const styles = StyleSheet.create({
   catPrinterCard: { backgroundColor: '#0ea5e9' },
   inventoryCard: { backgroundColor: '#0f766e' },
   stickerCard: { backgroundColor: '#9333ea' },
+
+  // 🔥 MODAL STYLES
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 20,
+  },
+  pinInput: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#2563eb',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    fontSize: 24,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: 8,
+    color: '#0f172a',
+    marginBottom: 24,
+    backgroundColor: '#f8fafc',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    color: '#64748b',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalConfirmBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });
