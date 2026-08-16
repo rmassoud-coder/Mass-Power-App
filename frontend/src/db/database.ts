@@ -1266,7 +1266,30 @@ export async function getReport(
   }));
   const total_cost = items.reduce((sum, i) => sum + i.cost, 0);
   const outsource_total = items.reduce((sum, i) => sum + (i.outsource_cost || 0), 0);
-  const net_cash_flow = total_cost - outsource_total;
+  // 🔥 Calculate the net cash flow
+let net_cash_flow = total_cost - outsource_total;
+
+// 🔥 Calculate dates for the week
+const today = new Date();
+const dayOfWeek = today.getDay();
+const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+const monday = new Date(today);
+monday.setDate(today.getDate() - diffToMonday);
+const mondayStr = monday.toISOString().slice(0, 10);
+const todayStr = today.toISOString().slice(0, 10);
+
+// 🔥 Subtract weekly wages from the net cash flow
+try {
+  const wagesResult = await db.getFirstAsync<{ total: number }>(
+    `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid 
+     WHERE DATE(date) >= ? AND DATE(date) <= ?`,
+    [mondayStr, todayStr]
+  );
+  const wages = wagesResult?.total || 0;
+  net_cash_flow = net_cash_flow - wages;
+} catch (e) {
+  // If wages table doesn't exist yet, just skip it
+}
   const unpaidItems = items.filter((i) => !i.is_paid);
   const unpaid_total = unpaidItems.reduce((sum, i) => sum + i.cost, 0);
   return {
