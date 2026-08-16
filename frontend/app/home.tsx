@@ -327,10 +327,6 @@ export default function HomeScreen() {
           </Text>
 
           {
-           ****************************************************
-           * NUKE DATABASE BUTTON - HIDDEN (Commented out)    *
-           * If you ever need it, just uncomment this block.   *
-           ****************************************************
           <TouchableOpacity
             style={styles.nukeButton}
             onPress={handleNukeDatabase}
