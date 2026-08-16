@@ -7,11 +7,13 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getWeeklyCashSummary, saveWeeklyWages } from '../src/db/database';
+import * as LocalAuthentication from 'expo-local-authentication'; // 🔥 New Import
+import { getWeeklyCashSummary } from '../src/db/database';
 
 export default function ManagementScreen() {
   const router = useRouter();
@@ -22,6 +24,9 @@ export default function ManagementScreen() {
   const [loading, setLoading] = useState(true);
   const [wagesInput, setWagesInput] = useState('');
 
+  // 🔥 NEW: Biometric State
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
   useEffect(() => {
     const loadFinances = async () => {
       try {
@@ -30,7 +35,6 @@ export default function ManagementScreen() {
         setRevenue(summary.revenue);
         setNetCash(summary.netDrawer);
         setTotalDebt(summary.totalOutstandingDebt);
-        setWagesInput(summary.wages > 0 ? String(summary.wages) : '');
       } catch (e) {
         console.warn("Failed to load finances:", e);
       } finally {
@@ -39,6 +43,41 @@ export default function ManagementScreen() {
     };
     loadFinances();
   }, []);
+
+  // 🔥 NEW: Fingerprint Handler
+  const handleBiometricAuth = async () => {
+    try {
+      // 1. Check if the device supports biometrics
+      const compatible = await LocalAuthentication.hasHardwareAsync();
+      if (!compatible) {
+        Alert.alert('Error', 'Your device does not support fingerprint scanning.');
+        return;
+      }
+
+      // 2. Check if biometrics are enrolled
+      const enrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!enrolled) {
+        Alert.alert('Error', 'No fingerprints enrolled. Please set up fingerprint in your phone settings.');
+        return;
+      }
+
+      // 3. Trigger the scan
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Authenticate to access finances',
+        fallbackLabel: 'Use Passcode',
+        disableDeviceFallback: false,
+      });
+
+      if (result.success) {
+        setIsAuthenticated(true);
+        Alert.alert('Success', 'Access granted!');
+      } else {
+        Alert.alert('Failed', 'Authentication failed.');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Something went wrong with the authentication.');
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -71,72 +110,90 @@ export default function ManagementScreen() {
           <Text style={styles.syncHint}>Push uploads data. Pull merges cloud copy.</Text>
         </View>
 
-        {/* Weekly Cash Flow */}
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#5b21b6" />
-            <Text style={styles.loadingText}>Calculating weekly cash...</Text>
+        {/* 🔥 NEW: Biometric Button */}
+        <TouchableOpacity style={styles.bioButton} onPress={handleBiometricAuth}>
+          <Ionicons name="finger-print-outline" size={24} color="#fff" />
+          <Text style={styles.bioButtonText}>
+            {isAuthenticated ? '✅ Access Granted' : '🔒 Secure Access'}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Weekly Cash Flow (Only shows if authenticated) */}
+        {!isAuthenticated ? (
+          <View style={styles.lockedCard}>
+            <Ionicons name="lock-closed" size={32} color="#94a3b8" />
+            <Text style={styles.lockedText}>Tap "Secure Access" to view finances.</Text>
           </View>
         ) : (
-          <View style={styles.cashCard}>
-            <View style={styles.cashHeaderRow}>
-              <Ionicons name="cash-outline" size={22} color="#5b21b6" />
-              <Text style={styles.cashHeader}>WEEKLY CASH FLOW</Text>
-              <TouchableOpacity style={styles.viewBtn} onPress={() => router.push('/report')}>
-                <Text style={styles.viewBtnText}>Details</Text>
-              </TouchableOpacity>
+          <>
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#5b21b6" />
+                <Text style={styles.loadingText}>Calculating weekly cash...</Text>
+              </View>
+            ) : (
+              <View style={styles.cashCard}>
+                <View style={styles.cashHeaderRow}>
+                  <Ionicons name="cash-outline" size={22} color="#5b21b6" />
+                  <Text style={styles.cashHeader}>WEEKLY CASH FLOW</Text>
+                  <TouchableOpacity style={styles.viewBtn} onPress={() => router.push('/report')}>
+                    <Text style={styles.viewBtnText}>Details</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.cashRow}>
+                  <Text style={styles.cashLabel}>Revenue</Text>
+                  <Text style={styles.cashValue}>${revenue.toFixed(2)}</Text>
+                </View>
+                <View style={styles.cashRow}>
+                  <Text style={[styles.cashLabel, { color: '#dc2626' }]}>− Outstanding Debt</Text>
+                  <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${totalDebt.toFixed(2)}</Text>
+                </View>
+                <View style={styles.cashDivider} />
+                <View style={styles.cashRow}>
+                  <Text style={[styles.cashLabel, { fontWeight: '800', color: '#5b21b6' }]}>
+                    Net Cash (After Wages)
+                  </Text>
+                  <Text style={[styles.cashValue, { fontWeight: '900', color: netCash >= 0 ? '#059669' : '#dc2626' }]}>
+                    ${netCash.toFixed(2)}
+                  </Text>
+                </View>
+                <Text style={styles.cashSubtext}>
+                  *Outstanding debt is deducted from your weekly revenue.
+                </Text>
+              </View>
+            )}
+
+            {/* Weekly Wages Input Section */}
+            <View style={styles.wagesCard}>
+              <View style={styles.wagesHeaderRow}>
+                <Ionicons name="people-outline" size={20} color="#2563eb" />
+                <Text style={styles.wagesHeader}>Weekly Wages Paid</Text>
+              </View>
+              <View style={styles.wagesRow}>
+                <Text style={styles.wagesLabel}>Enter total wages paid this week:</Text>
+                <TextInput
+                  style={styles.wagesInput}
+                  placeholder="0.00"
+                  keyboardType="decimal-pad"
+                  value={wagesInput}
+                  onChangeText={async (text) => {
+                    setWagesInput(text);
+                    const wages = parseFloat(text) || 0;
+                    setNetCash(revenue - wages);
+                    try {
+                      const db = await import('../src/db/database');
+                      await db.saveWeeklyWages(wages);
+                    } catch (e) {
+                      console.warn("Failed to save wages:", e);
+                    }
+                  }}
+                />
+              </View>
             </View>
-            <View style={styles.cashRow}>
-              <Text style={styles.cashLabel}>Revenue</Text>
-              <Text style={styles.cashValue}>${revenue.toFixed(2)}</Text>
-            </View>
-            <View style={styles.cashRow}>
-              <Text style={[styles.cashLabel, { color: '#dc2626' }]}>− Outstanding Debt</Text>
-              <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${totalDebt.toFixed(2)}</Text>
-            </View>
-            <View style={styles.cashDivider} />
-            <View style={styles.cashRow}>
-              <Text style={[styles.cashLabel, { fontWeight: '800', color: '#5b21b6' }]}>
-                Net Cash (After Wages)
-              </Text>
-              <Text style={[styles.cashValue, { fontWeight: '900', color: netCash >= 0 ? '#059669' : '#dc2626' }]}>
-                ${netCash.toFixed(2)}
-              </Text>
-            </View>
-            <Text style={styles.cashSubtext}>
-              *Outstanding debt is deducted from your weekly revenue.
-            </Text>
-          </View>
+          </>
         )}
 
-        {/* Weekly Wages Input Section */}
-        <View style={styles.wagesCard}>
-          <View style={styles.wagesHeaderRow}>
-            <Ionicons name="people-outline" size={20} color="#2563eb" />
-            <Text style={styles.wagesHeader}>Weekly Wages Paid</Text>
-          </View>
-          <View style={styles.wagesRow}>
-            <Text style={styles.wagesLabel}>Enter total wages paid this week:</Text>
-            <TextInput
-              style={styles.wagesInput}
-              placeholder="0.00"
-              keyboardType="decimal-pad"
-              value={wagesInput}
-              onChangeText={async (text) => {
-                setWagesInput(text);
-                const wages = parseFloat(text) || 0;
-                setNetCash(revenue - wages);
-                try {
-                  await saveWeeklyWages(wages);
-                } catch (e) {
-                  console.warn("Failed to save wages:", e);
-                }
-              }}
-            />
-          </View>
-        </View>
-
-        {/* 6-Button Grid - 100% Intact */}
+        {/* 6-Button Grid */}
         <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.reportCard]} onPress={() => router.push('/report')}>
             <Ionicons name="document-text-outline" size={32} color="#fff" />
@@ -212,6 +269,29 @@ const styles = StyleSheet.create({
   syncBtnText: { color: '#fff', fontWeight: '700', marginLeft: 6 },
   syncHint: { color: '#94a3b8', fontSize: 12, marginTop: 6 },
 
+  // 🔥 NEW: Bio Button
+  bioButton: {
+    backgroundColor: '#8b5cf6',
+    borderRadius: 12,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  bioButtonText: { color: '#fff', fontSize: 16, fontWeight: '600', marginLeft: 8 },
+
+  lockedCard: {
+    backgroundColor: '#f1f5f9',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  lockedText: { color: '#64748b', fontSize: 14, marginTop: 8 },
+
   loadingContainer: { alignItems: 'center', padding: 20 },
   loadingText: { color: '#64748b', marginTop: 8 },
 
@@ -243,7 +323,6 @@ const styles = StyleSheet.create({
   cashDivider: { height: 1, backgroundColor: '#c4b5fd', marginVertical: 8 },
   cashSubtext: { fontSize: 11, color: '#6b21a8', fontStyle: 'italic', marginTop: 8 },
 
-  // Wages Card Styles
   wagesCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
