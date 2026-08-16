@@ -1446,6 +1446,7 @@ export interface FullDbSnapshot {
   service_items: ServiceItem[];
   inventory: InventoryItem[];
   suppliers?: Supplier[];
+  supplierBalances?: { supplier_id: string; balance: number }[]; // 🔥 ADDED FOR SYNC
 }
 
 export async function exportFullDatabase(): Promise<FullDbSnapshot> {
@@ -1472,6 +1473,12 @@ export async function exportFullDatabase(): Promise<FullDbSnapshot> {
   const service_items = await db.getAllAsync<ServiceItem>(`SELECT * FROM service_items`);
   const inventory = await db.getAllAsync<InventoryItem>(`SELECT * FROM inventory`);
   const suppliers = await db.getAllAsync<Supplier>(`SELECT * FROM suppliers`);
+  
+  // 🔥 FETCH THE SUPPLIER BALANCES
+  const supplierBalances = await db.getAllAsync<{ supplier_id: string; balance: number }>(
+    `SELECT * FROM supplier_balances`
+  );
+
   return {
     version: 3,
     exported_at: new Date().toISOString(),
@@ -1481,6 +1488,7 @@ export async function exportFullDatabase(): Promise<FullDbSnapshot> {
     service_items,
     inventory,
     suppliers,
+    supplierBalances, // 🔥 ADDED TO EXPORT
   };
 }
 
@@ -1564,6 +1572,16 @@ export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
       await db.runAsync(
         `INSERT INTO suppliers (id, name, contact_info, created_at) VALUES (?, ?, ?, ?)`,
         [sup.id, sup.name, sup.contact_info ?? null, sup.created_at]
+      );
+    }
+  }
+  
+  // 🔥 RESTORE SUPPLIER BALANCES FROM CLOUD
+  if (Array.isArray(snap.supplierBalances)) {
+    for (const sb of snap.supplierBalances) {
+      await db.runAsync(
+        `INSERT OR REPLACE INTO supplier_balances (supplier_id, balance, updated_at) VALUES (?, ?, ?)`,
+        [sb.supplier_id, sb.balance, snap.exported_at]
       );
     }
   }
