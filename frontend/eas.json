@@ -11,15 +11,14 @@
       "distribution": "internal",
       "channel": "preview",
       "android": {
-        "buildType": "apk",
-        "image": "ubuntu-24.04-jdk-17-ndk-r27b"
+        "buildType": "apk"
       },
+      "ios": null, // 🚨 THIS IS THE FIX: Completely disables iOS
       "cache": {
         "disabled": true
       },
       "env": {
-        "EAS_BUILD_NPM_FORCE_INSTALL": "1",
-        "KOTLIN_VERSION": "2.1.0"
+        "EAS_BUILD_NPM_FORCE_INSTALL": "1"
       }
     },
     "production": {}
