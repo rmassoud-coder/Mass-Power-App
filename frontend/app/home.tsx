@@ -553,7 +553,7 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
   },
   // 🔥 Hidden nuke styles - kept just in case
-  nukeButton: {
+/*  nukeButton: {
     backgroundColor: '#dc2626',
     borderRadius: 12,
     paddingVertical: 16,
@@ -568,5 +568,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
-  },
+  },*/
 });
