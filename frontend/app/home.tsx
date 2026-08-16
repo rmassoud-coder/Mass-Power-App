@@ -318,7 +318,7 @@ export default function HomeScreen() {
             testID="quick-walkin-button"
           >
             <Ionicons name="walk-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
-            <Text style={styles.walkinButtonText}>Quick Walk-in</Text>
+            <Text style={styles.walkinButtonText}>Walk-in Customer</Text>
           </TouchableOpacity>
 
           {/* Supplier Debts Button - NEW */}
