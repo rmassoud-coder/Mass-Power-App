@@ -2187,13 +2187,19 @@ export async function createWalkinProductSale(
 
 export async function getSupplierBalances(): Promise<{ id: string; name: string; balance: number }[]> {
   const db = await getDb();
-  const rows = await db.getAllAsync<{ id: string; name: string; balance: number }>(
-    `SELECT s.id, s.name, COALESCE(b.balance, 0) as balance
-     FROM suppliers s
-     LEFT JOIN supplier_balances b ON s.id = b.supplier_id
-     ORDER BY s.name ASC`
-  );
-  return rows;
+  try {
+    const rows = await db.getAllAsync<{ id: string; name: string; balance: number }>(
+      `SELECT s.id, s.name, COALESCE(b.balance, 0) as balance
+       FROM suppliers s
+       LEFT JOIN supplier_balances b ON s.id = b.supplier_id
+       ORDER BY s.name ASC`
+    );
+    return rows;
+  } catch (error) {
+    console.error("❌ getSupplierBalances failed:", error);
+    // If the table doesn't exist yet, return an empty array
+    return [];
+  }
 }
 
 export async function updateSupplierBalance(supplierId: string, newBalance: number): Promise<void> {
