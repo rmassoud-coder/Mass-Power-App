@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getWeeklyCashSummary } from '../src/db/database';
+import { pushToCloud, pullFromCloud } from '../src/utils/dbSync'; // 🔥 ADDED SYNC IMPORTS
 
 export default function ManagementScreen() {
   const router = useRouter();
@@ -62,6 +63,27 @@ export default function ManagementScreen() {
     }
   };
 
+  // 🔥 SYNC HANDLERS
+  const handlePush = async () => {
+    try {
+      Alert.alert('Syncing', 'Pushing local data to cloud...');
+      await pushToCloud();
+      Alert.alert('Success', 'Push completed!');
+    } catch (e: any) {
+      Alert.alert('Error', 'Push failed: ' + e.message);
+    }
+  };
+
+  const handlePull = async () => {
+    try {
+      Alert.alert('Syncing', 'Pulling cloud data to device...');
+      await pullFromCloud();
+      Alert.alert('Success', 'Pull completed!');
+    } catch (e: any) {
+      Alert.alert('Error', 'Pull failed: ' + e.message);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -81,11 +103,11 @@ export default function ManagementScreen() {
         <View style={styles.syncCard}>
           <Text style={styles.syncTitle}>Cloud Sync</Text>
           <View style={styles.syncButtonsRow}>
-            <TouchableOpacity style={styles.pushBtn}>
+            <TouchableOpacity style={styles.pushBtn} onPress={handlePush}>
               <Ionicons name="cloud-upload" size={20} color="#fff" />
               <Text style={styles.syncBtnText}>Push</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.pullBtn}>
+            <TouchableOpacity style={styles.pullBtn} onPress={handlePull}>
               <Ionicons name="cloud-download" size={20} color="#fff" />
               <Text style={styles.syncBtnText}>Pull</Text>
             </TouchableOpacity>
