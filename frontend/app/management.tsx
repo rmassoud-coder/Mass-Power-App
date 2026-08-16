@@ -229,7 +229,7 @@ export default function ManagementScreen() {
             
             <TextInput
               style={styles.pinInput}
-              placeholder="3945"
+              placeholder="****"
               keyboardType="number-pad"
               maxLength={4}
               secureTextEntry={true}
