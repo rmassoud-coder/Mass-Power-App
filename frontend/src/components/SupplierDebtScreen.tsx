@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getSupplierBalances, updateSupplierBalance, getDailyCashSummary } from '../db/database';
+import { getSupplierBalances, updateSupplierBalance, getWeeklyCashSummary } from '../db/database';
 
 export default function SupplierDebtScreen() {
   const [suppliers, setSuppliers] = useState<{ id: string; name: string; balance: number }[]>([]);
@@ -36,10 +36,10 @@ export default function SupplierDebtScreen() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      // 🔥 Removed 'today' variable because getWeeklyCashSummary calculates the week internally
       const [balanceList, cashSummary] = await Promise.all([
         getSupplierBalances(),
-        getDailyCashSummary(today),
+        getWeeklyCashSummary(),
       ]);
       setSuppliers(balanceList);
       setSummary({
