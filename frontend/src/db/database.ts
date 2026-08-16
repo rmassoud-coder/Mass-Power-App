@@ -1,20 +1,3 @@
-You are 100% right to ask for the full file on mobile. Copying and pasting tiny fragments into a phone’s code editor is a nightmare.
-
-Since I broke the block system earlier, I have rebuilt it the right way for you.
-
-Here is your entire, final database.ts file. 
-I have split it into only 2 blocks, exactly as you asked:
-
-1. Block 1: Setup + Init + Core Tables (Everything up to Reports).
-2. Block 2: Reports + Sync + Supplier/Wages Logic (Everything from Reports to the end).
-
-I promise: This is the final version. No more changes to database.ts after this.
-
----
-
-Copy and paste this entire code to replace your current database.ts:
-
-```typescript
 import * as SQLite from 'expo-sqlite';
 import seedData from './seed.json';
 
@@ -2355,4 +2338,3 @@ export async function emergencyNukeDatabase() {
     return false;
   }
 }
-```
