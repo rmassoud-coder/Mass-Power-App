@@ -1478,20 +1478,26 @@ export async function exportFullDatabase(): Promise<FullDbSnapshot> {
   const supplierBalances = await db.getAllAsync<{ supplier_id: string; balance: number }>(
     `SELECT * FROM supplier_balances`
   );
-
+// 🔥 FETCH THE SUPPLIER BALANCES AND WAGES
+const supplierBalances = await db.getAllAsync<{ supplier_id: string; balance: number }>(
+  `SELECT * FROM supplier_balances`
+);
+const wagesPaid = await db.getAllAsync<{ id: number; date: string; amount: number }>(
+  `SELECT * FROM wages_paid`
+);
   return {
-    version: 3,
-    exported_at: new Date().toISOString(),
-    customers,
-    vehicles,
-    services,
-    service_items,
-    inventory,
-    suppliers,
-    supplierBalances, // 🔥 ADDED TO EXPORT
-  };
+  version: 3,
+  exported_at: new Date().toISOString(),
+  customers,
+  vehicles,
+  services,
+  service_items,
+  inventory,
+  suppliers,
+  supplierBalances, // 🔥 ADD THIS
+  wagesPaid,        // 🔥 ADD THIS
+};
 }
-
 /** Wipes every table and re-inserts the cloud snapshot. Cloud-wins semantics.
  *  Used only for: (1) restoring your own local pre-Pull safety snapshot,
  *  (2) explicit "Replace" in manual Backup & Restore. Never used by the
