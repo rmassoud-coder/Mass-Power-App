@@ -1497,7 +1497,7 @@ const wagesPaid = await db.getAllAsync<{ id: number; date: string; amount: numbe
   supplierBalances, // 🔥 ADD THIS
   wagesPaid,        // 🔥 ADD THIS
 };
-}
+
 /** Wipes every table and re-inserts the cloud snapshot. Cloud-wins semantics.
  *  Used only for: (1) restoring your own local pre-Pull safety snapshot,
  *  (2) explicit "Replace" in manual Backup & Restore. Never used by the
