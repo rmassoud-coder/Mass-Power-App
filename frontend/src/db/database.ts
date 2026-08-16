@@ -1474,18 +1474,15 @@ export async function exportFullDatabase(): Promise<FullDbSnapshot> {
   const inventory = await db.getAllAsync<InventoryItem>(`SELECT * FROM inventory`);
   const suppliers = await db.getAllAsync<Supplier>(`SELECT * FROM suppliers`);
   
-  // 🔥 FETCH THE SUPPLIER BALANCES
-  const supplierBalances = await db.getAllAsync<{ supplier_id: string; balance: number }>(
-    `SELECT * FROM supplier_balances`
-  );
-// 🔥 FETCH THE SUPPLIER BALANCES AND WAGES
+  // 🔥 FETCH THE SUPPLIER BALANCES AND WAGES
 const supplierBalances = await db.getAllAsync<{ supplier_id: string; balance: number }>(
   `SELECT * FROM supplier_balances`
 );
 const wagesPaid = await db.getAllAsync<{ id: number; date: string; amount: number }>(
   `SELECT * FROM wages_paid`
 );
-  return {
+
+return {
   version: 3,
   exported_at: new Date().toISOString(),
   customers,
