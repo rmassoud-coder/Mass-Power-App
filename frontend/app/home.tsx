@@ -326,7 +326,7 @@ export default function HomeScreen() {
               : 'Local Dev Mode'}
           </Text>
 
-          {/* 
+          {
            ****************************************************
            * NUKE DATABASE BUTTON - HIDDEN (Commented out)    *
            * If you ever need it, just uncomment this block.   *
@@ -338,7 +338,7 @@ export default function HomeScreen() {
             <Ionicons name="trash-bin" size={20} color="#fff" />
             <Text style={styles.nukeButtonText}>🗑️ NUKE 34MB DATABASE</Text>
           </TouchableOpacity>
-          */}
+          }
 
         </ScrollView>
       </KeyboardAvoidingView>
