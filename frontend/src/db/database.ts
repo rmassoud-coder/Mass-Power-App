@@ -89,6 +89,7 @@ export interface Supplier {
   name: string;
   contact_info?: string | null;
   created_at: string;
+  balance?: number; // 🔥 THE FIX
 }
 
 export interface LowStockItemBySupplier {
@@ -1763,8 +1764,8 @@ export async function updateSupplier(
     );
   }
 
-  // If a newDebt was passed, update the supplier_balances table
-  if (newDebt !== undefined && newDebt >= 0) {
+  // 🔥 RESTORE THE DEBT UPDATE BLOCK
+  if (newDebt !== undefined) {
     const now = new Date().toISOString();
     await db.runAsync(
       `INSERT INTO supplier_balances (supplier_id, balance, updated_at) VALUES (?, ?, ?)
