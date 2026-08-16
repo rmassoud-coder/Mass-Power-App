@@ -188,52 +188,52 @@ export default function HomeScreen() {
 
   // 🔥 Safety function kept inside the file just in case you ever need it again
   // 🔥 DIRECT SQL NUKE (No imports needed)
-const handleNukeDatabase = async () => {
-  Alert.alert(
-    '⚠️ DANGER',
-    'This will wipe corrupted supplier data. Your customers and revenue are SAFE.\n\nProceed?',
-    [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'NUKE SUPPLIER DATA',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            // 1. Open the database directly
-            const SQLite = require('expo-sqlite');
-            const db = await SQLite.openDatabaseAsync('mass_power.db');
-            
-            // 2. Drop and recreate only the bad tables
-            await db.execAsync(`
-              PRAGMA foreign_keys = OFF;
-              DROP TABLE IF EXISTS supplier_balances;
-              DROP TABLE IF EXISTS wages_paid;
-              PRAGMA foreign_keys = ON;
-
-              CREATE TABLE IF NOT EXISTS supplier_balances (
-                supplier_id TEXT PRIMARY KEY,
-                balance REAL NOT NULL DEFAULT 0,
-                updated_at TEXT NOT NULL,
-                FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE
-              );
+  const handleNukeDatabase = async () => {
+    Alert.alert(
+      '⚠️ DANGER',
+      'This will wipe corrupted supplier data. Your customers and revenue are SAFE.\n\nProceed?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'NUKE SUPPLIER DATA',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // 1. Open the database directly
+              const SQLite = require('expo-sqlite');
+              const db = await SQLite.openDatabaseAsync('mass_power.db');
               
-              CREATE TABLE IF NOT EXISTS wages_paid (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                date TEXT NOT NULL,
-                amount REAL NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL
-              );
-            `);
-            
-            Alert.alert('Success', 'Corrupted supplier data wiped. Please RESTART the app.');
-          } catch (error) {
-            Alert.alert('Error', 'Failed to wipe data: ' + (error as any).message);
+              // 2. Drop and recreate only the bad tables
+              await db.execAsync(`
+                PRAGMA foreign_keys = OFF;
+                DROP TABLE IF EXISTS supplier_balances;
+                DROP TABLE IF EXISTS wages_paid;
+                PRAGMA foreign_keys = ON;
+
+                CREATE TABLE IF NOT EXISTS supplier_balances (
+                  supplier_id TEXT PRIMARY KEY,
+                  balance REAL NOT NULL DEFAULT 0,
+                  updated_at TEXT NOT NULL,
+                  FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE
+                );
+                
+                CREATE TABLE IF NOT EXISTS wages_paid (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  date TEXT NOT NULL,
+                  amount REAL NOT NULL DEFAULT 0,
+                  created_at TEXT NOT NULL
+                );
+              `);
+              
+              Alert.alert('Success', 'Corrupted supplier data wiped. Please RESTART the app.');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to wipe data: ' + (error as any).message);
+            }
           }
         }
-      }
-    ]
-  );
-};
+      ]
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -347,7 +347,11 @@ const handleNukeDatabase = async () => {
               : 'Local Dev Mode'}
           </Text>
 
-         /* {
+          {/* 
+          ****************************************************
+          * NUKE DATABASE BUTTON - HIDDEN (Commented out)    *
+          * If you ever need it, just uncomment this block.   *
+          ****************************************************
           <TouchableOpacity
             style={styles.nukeButton}
             onPress={handleNukeDatabase}
@@ -355,7 +359,7 @@ const handleNukeDatabase = async () => {
             <Ionicons name="trash-bin" size={20} color="#fff" />
             <Text style={styles.nukeButtonText}>🗑️ NUKE 34MB DATABASE</Text>
           </TouchableOpacity>
-          } */
+          */}
 
         </ScrollView>
       </KeyboardAvoidingView>
@@ -553,7 +557,7 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
   },
   // 🔥 Hidden nuke styles - kept just in case
-/*  nukeButton: {
+  nukeButton: {
     backgroundColor: '#dc2626',
     borderRadius: 12,
     paddingVertical: 16,
@@ -568,5 +572,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
-  },*/
+  },
 });
