@@ -13,7 +13,7 @@
       "android": {
         "buildType": "apk"
       },
-      "ios": null, // 🚨 THIS IS THE FIX: Completely disables iOS
+      "ios": {}, // 🚨 THIS IS THE FIX: Completely disables iOS
       "cache": {
         "disabled": true
       },
