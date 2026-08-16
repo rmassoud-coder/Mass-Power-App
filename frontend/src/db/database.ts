@@ -1680,6 +1680,7 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
   
 
 /////////////// BLOCK 5: SUPPLIER, WALK-IN, PRODUCT SALE, NUKE ///////////////
+
 /////////////// BLOCK 5 - SUPPLIER, WALK-IN, PRODUCT SALE, NUKE & MATH ///////////////
 
 export async function listSuppliers(): Promise<Supplier[]> {
@@ -1789,11 +1790,6 @@ export interface CleanupResult {
   serviceItemsDeleted: number;
 }
 
-/**
- * Delete ALL walk-in related data from the database
- * ONLY checks by NAME, NOT by ID (to prevent false positives)
- * Processes in batches to avoid "too many SQL variables" error
- */
 export async function deleteAllWalkinData(): Promise<CleanupResult> {
   const db = await getDb();
   const BATCH_SIZE = 500;
@@ -2115,7 +2111,9 @@ export async function createWalkinProductSale(
       `INSERT INTO vehicles (id, customer_id, vin, plate_number, make, model, year, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [vehicleId, walkinCustomer!.id, 'N/A', 'WALK-IN', 'Walk-in', 'Vehicle', null, now]
     );
-    walkinVehicle = await db.getFirstAsync<Vehicle>(`SELECT * FROM vehicles WHERE id = ?`, [vehicleId]);
+    walkinVehicle = await db.getFirstAsync<Vehicle>(
+      `SELECT * FROM vehicles WHERE id = ?`, [vehicleId]
+    );
   }
 
   // 3. Calculate the price (Use Retail Price if available, otherwise Cost Price)
@@ -2204,7 +2202,33 @@ export async function updateSupplierBalance(supplierId: string, newBalance: numb
   );
 }
 
-// 3. 🔥 UPDATED: Weekly Cash Summary (Mon - Today) with Wages
+// 🔥 3. SAVE WEEKLY WAGES TO DATABASE
+export async function saveWeeklyWages(amount: number): Promise<void> {
+  const db = await getDb();
+  const now = new Date().toISOString();
+  
+  // Calculate Monday of this week
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday
+  const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - diffToMonday);
+  const mondayStr = monday.toISOString().slice(0, 10);
+
+  // Delete existing wage entry for this week (so we overwrite cleanly)
+  await db.runAsync(
+    `DELETE FROM wages_paid WHERE DATE(date) >= ? AND DATE(date) <= ?`,
+    [mondayStr, mondayStr]
+  );
+
+  // Insert the new wage amount
+  await db.runAsync(
+    `INSERT INTO wages_paid (date, amount, created_at) VALUES (?, ?, ?)`,
+    [mondayStr, amount, now]
+  );
+}
+
+// 🔥 4. Get Weekly Cash Summary (including wages)
 export async function getWeeklyCashSummary(): Promise<{
   revenue: number;
   totalOutstandingDebt: number;
@@ -2263,7 +2287,7 @@ export async function getWeeklyCashSummary(): Promise<{
     paidToday = 0;
   }
 
-  // 4. 🔥 NEW: Fetch total wages paid this week
+  // 🔥 4. Fetch saved wages from the database
   const wagesResult = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid 
      WHERE DATE(date) >= ? AND DATE(date) <= ?`,
@@ -2299,10 +2323,10 @@ export async function emergencyNukeDatabase() {
       DROP TABLE IF EXISTS services;
       DROP TABLE IF EXISTS service_items;
       DROP TABLE IF EXISTS inventory;
-      DROP TABLE IF EXISTS sinventory;
       DROP TABLE IF EXISTS suppliers;
       DROP TABLE IF EXISTS supplier_balances;
       DROP TABLE IF EXISTS app_meta;
+      DROP TABLE IF EXISTS wages_paid; /* 🔥 ADDED wages_paid table */
       
       PRAGMA foreign_keys = ON;
     `);
