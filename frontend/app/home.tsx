@@ -198,7 +198,7 @@ export default function HomeScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const db = await import('../db/database');
+              const db = await import('@/db/database');
               const success = await db.emergencyNukeDatabase();
               if (success) {
                 Alert.alert('Success', 'Database deleted. Please CLOSE the app completely and reopen it.');
