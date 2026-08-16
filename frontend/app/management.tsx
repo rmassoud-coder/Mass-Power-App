@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getWeeklyCashSummary } from '../src/db/database';
+import { getWeeklyCashSummary, saveWeeklyWages } from '../src/db/database';
 
 export default function ManagementScreen() {
   const router = useRouter();
@@ -20,8 +20,6 @@ export default function ManagementScreen() {
   const [netCash, setNetCash] = useState(0);
   const [totalDebt, setTotalDebt] = useState(0);
   const [loading, setLoading] = useState(true);
-  
-  // Wages State
   const [wagesInput, setWagesInput] = useState('');
 
   useEffect(() => {
@@ -32,6 +30,7 @@ export default function ManagementScreen() {
         setRevenue(summary.revenue);
         setNetCash(summary.netDrawer);
         setTotalDebt(summary.totalOutstandingDebt);
+        setWagesInput(summary.wages > 0 ? String(summary.wages) : '');
       } catch (e) {
         console.warn("Failed to load finances:", e);
       } finally {
@@ -127,11 +126,8 @@ export default function ManagementScreen() {
                 setWagesInput(text);
                 const wages = parseFloat(text) || 0;
                 setNetCash(revenue - wages);
-                
-                // 🔥 Save to database so it persists
                 try {
-                  const db = await import('../src/db/database');
-                  await db.saveWeeklyWages(wages);
+                  await saveWeeklyWages(wages);
                 } catch (e) {
                   console.warn("Failed to save wages:", e);
                 }
@@ -140,7 +136,7 @@ export default function ManagementScreen() {
           </View>
         </View>
 
-        {/* 6-Button Grid - Fully Intact */}
+        {/* 6-Button Grid - 100% Intact */}
         <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.reportCard]} onPress={() => router.push('/report')}>
             <Ionicons name="document-text-outline" size={32} color="#fff" />
@@ -307,7 +303,7 @@ const styles = StyleSheet.create({
   },
   dashTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginTop: 8, textAlign: 'center' },
 
-  // All 6 buttons preserved
+  // ALL 6 BUTTONS PRESERVED
   reportCard: { backgroundColor: '#10b981' },
   settingsCard: { backgroundColor: '#2563eb' },
   warrantyCard: { backgroundColor: '#d97706' },
