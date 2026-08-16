@@ -21,7 +21,7 @@ export default function ManagementScreen() {
   const [totalDebt, setTotalDebt] = useState(0);
   const [loading, setLoading] = useState(true);
   
-  // 🔥 NEW: Wages State
+  // Wages State
   const [wagesInput, setWagesInput] = useState('');
 
   useEffect(() => {
@@ -110,7 +110,7 @@ export default function ManagementScreen() {
           </View>
         )}
 
-        {/* 🔥 NEW: Wages Input Section */}
+        {/* Weekly Wages Input Section */}
         <View style={styles.wagesCard}>
           <View style={styles.wagesHeaderRow}>
             <Ionicons name="people-outline" size={20} color="#2563eb" />
@@ -123,17 +123,24 @@ export default function ManagementScreen() {
               placeholder="0.00"
               keyboardType="decimal-pad"
               value={wagesInput}
-              onChangeText={(text) => {
+              onChangeText={async (text) => {
                 setWagesInput(text);
-                // Auto-update Net Cash when typing wages
                 const wages = parseFloat(text) || 0;
                 setNetCash(revenue - wages);
+                
+                // 🔥 Save to database so it persists
+                try {
+                  const db = await import('../src/db/database');
+                  await db.saveWeeklyWages(wages);
+                } catch (e) {
+                  console.warn("Failed to save wages:", e);
+                }
               }}
             />
           </View>
         </View>
 
-        {/* 6-Button Grid - 100% Intact */}
+        {/* 6-Button Grid - Fully Intact */}
         <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.reportCard]} onPress={() => router.push('/report')}>
             <Ionicons name="document-text-outline" size={32} color="#fff" />
@@ -240,7 +247,7 @@ const styles = StyleSheet.create({
   cashDivider: { height: 1, backgroundColor: '#c4b5fd', marginVertical: 8 },
   cashSubtext: { fontSize: 11, color: '#6b21a8', fontStyle: 'italic', marginTop: 8 },
 
-  // 🔥 NEW: Wages Card Styles
+  // Wages Card Styles
   wagesCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
@@ -300,7 +307,7 @@ const styles = StyleSheet.create({
   },
   dashTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginTop: 8, textAlign: 'center' },
 
-  // ALL 6 BUTTONS PRESERVED
+  // All 6 buttons preserved
   reportCard: { backgroundColor: '#10b981' },
   settingsCard: { backgroundColor: '#2563eb' },
   warrantyCard: { backgroundColor: '#d97706' },
