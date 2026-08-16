@@ -347,7 +347,7 @@ const handleNukeDatabase = async () => {
               : 'Local Dev Mode'}
           </Text>
 
-          {
+         /* {
           <TouchableOpacity
             style={styles.nukeButton}
             onPress={handleNukeDatabase}
@@ -355,7 +355,7 @@ const handleNukeDatabase = async () => {
             <Ionicons name="trash-bin" size={20} color="#fff" />
             <Text style={styles.nukeButtonText}>🗑️ NUKE 34MB DATABASE</Text>
           </TouchableOpacity>
-          }
+          } */
 
         </ScrollView>
       </KeyboardAvoidingView>
