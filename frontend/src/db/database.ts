@@ -89,7 +89,7 @@ export interface Supplier {
   name: string;
   contact_info?: string | null;
   created_at: string;
-  balance?: number; // 🔥 THE FIX
+  balance?: number;
 }
 
 export interface LowStockItemBySupplier {
@@ -296,7 +296,6 @@ export async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_service_items_inventory ON service_items(inventory_id);
   `);
 
-  // 🔥 ADDED THE MISSING TABLES HERE
   try {
     await db.execAsync(`
       CREATE TABLE IF NOT EXISTS supplier_balances (
@@ -1446,7 +1445,8 @@ export interface FullDbSnapshot {
   service_items: ServiceItem[];
   inventory: InventoryItem[];
   suppliers?: Supplier[];
-  supplierBalances?: { supplier_id: string; balance: number }[]; // 🔥 ADDED FOR SYNC
+  supplierBalances?: { supplier_id: string; balance: number }[];
+  wagesPaid?: { id: number; date: string; amount: number }[];
 }
 
 export async function exportFullDatabase(): Promise<FullDbSnapshot> {
@@ -1475,25 +1475,26 @@ export async function exportFullDatabase(): Promise<FullDbSnapshot> {
   const suppliers = await db.getAllAsync<Supplier>(`SELECT * FROM suppliers`);
   
   // 🔥 FETCH THE SUPPLIER BALANCES AND WAGES
-const supplierBalances = await db.getAllAsync<{ supplier_id: string; balance: number }>(
-  `SELECT * FROM supplier_balances`
-);
-const wagesPaid = await db.getAllAsync<{ id: number; date: string; amount: number }>(
-  `SELECT * FROM wages_paid`
-);
+  const supplierBalances = await db.getAllAsync<{ supplier_id: string; balance: number }>(
+    `SELECT * FROM supplier_balances`
+  );
+  const wagesPaid = await db.getAllAsync<{ id: number; date: string; amount: number }>(
+    `SELECT * FROM wages_paid`
+  );
 
-return {
-  version: 3,
-  exported_at: new Date().toISOString(),
-  customers,
-  vehicles,
-  services,
-  service_items,
-  inventory,
-  suppliers,
-  supplierBalances, // 🔥 ADD THIS
-  wagesPaid,        // 🔥 ADD THIS
-};
+  return {
+    version: 3,
+    exported_at: new Date().toISOString(),
+    customers,
+    vehicles,
+    services,
+    service_items,
+    inventory,
+    suppliers,
+    supplierBalances,
+    wagesPaid,
+  };
+}
 
 /** Wipes every table and re-inserts the cloud snapshot. Cloud-wins semantics.
  *  Used only for: (1) restoring your own local pre-Pull safety snapshot,
@@ -1584,7 +1585,17 @@ export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
     for (const sb of snap.supplierBalances) {
       await db.runAsync(
         `INSERT OR REPLACE INTO supplier_balances (supplier_id, balance, updated_at) VALUES (?, ?, ?)`,
-        [sb.supplier_id, sb.balance, snap.exported_at]
+        [sb.supplier_id, sb.balance, sb.updated_at || snap.exported_at]
+      );
+    }
+  }
+
+  // 🔥 RESTORE WAGES FROM CLOUD
+  if (Array.isArray(snap.wagesPaid)) {
+    for (const wp of snap.wagesPaid) {
+      await db.runAsync(
+        `INSERT OR REPLACE INTO wages_paid (id, date, amount, created_at) VALUES (?, ?, ?, ?)`,
+        [wp.id, wp.date, wp.amount, wp.created_at || snap.exported_at]
       );
     }
   }
