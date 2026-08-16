@@ -25,7 +25,7 @@ export default function ManagementScreen() {
   const [wagesInput, setWagesInput] = useState('');
 
   // 🔥 NEW: Biometric State
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+ // const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
     const loadFinances = async () => {
