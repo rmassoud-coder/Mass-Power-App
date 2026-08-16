@@ -215,8 +215,6 @@ export interface ReportItem {
   service_date: string;
 }
 
-/////////////// BLOCK 1: INIT & CORE TABLES ///////////////
-
 // Initialize database tables and seed data on first run
 export async function initDatabase() {
   const db = await getDb();
@@ -295,6 +293,7 @@ export async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_service_items_inventory ON service_items(inventory_id);
   `);
 
+  // ✅ WAGES TABLE ADDED HERE
   try {
     await db.execAsync(`
       CREATE TABLE IF NOT EXISTS supplier_balances (
@@ -303,8 +302,15 @@ export async function initDatabase() {
         updated_at TEXT NOT NULL,
         FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE
       );
+      
+      CREATE TABLE IF NOT EXISTS wages_paid (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL,
+        amount REAL NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      );
     `);
-  } catch (e) { /* Table already exists */ }
+  } catch (e) { /* Tables already exist */ }
 
   try {
     await db.execAsync(`ALTER TABLE services ADD COLUMN is_paid INTEGER NOT NULL DEFAULT 1`);
@@ -412,8 +418,6 @@ export async function initDatabase() {
     await db.runAsync(`INSERT INTO app_meta (key, value) VALUES ('seeded', 'true')`);
   }
 }
-
-/////////////// BLOCK 2: CUSTOMER, VEHICLE, SERVICE CRUD ///////////////
 
 export async function createCustomer(name: string, mobileNumber: string): Promise<Customer> {
   const db = await getDb();
@@ -812,8 +816,6 @@ export async function deleteService(id: string): Promise<void> {
   await db.runAsync(`DELETE FROM services WHERE id = ?`, [id]);
 }
 
-/////////////// BLOCK 3: INVENTORY ///////////////
-
 async function generateInventoryItemNumber(): Promise<string> {
   const db = await getDb();
   const row = await db.getFirstAsync<{ max_num: number | null }>(
@@ -1171,7 +1173,6 @@ async function restoreInventoryFromServiceItems(serviceId: string): Promise<void
   await db.runAsync(`DELETE FROM service_items WHERE service_id = ?`, [serviceId]);
 }
 
-/////////////// BLOCK 4: REPORT, EXPORT, IMPORT, SYNC ///////////////
 export async function getReport(
   startDate?: string,
   endDate?: string,
@@ -1192,12 +1193,19 @@ export async function getReport(
   const conditions: string[] = [];
   const params: any[] = [];
 
+  // 🔥 Calculate Monday of this week for wages deduction
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - diffToMonday);
+
   if (startDate) {
-    conditions.push('s.service_date >= ?');
+    conditions.push('DATE(s.service_date) >= DATE(?)');
     params.push(startDate);
   }
   if (endDate) {
-    conditions.push('s.service_date <= ?');
+    conditions.push('DATE(s.service_date) <= DATE(?)');
     params.push(endDate);
   }
   if (mobile) {
@@ -1213,9 +1221,8 @@ export async function getReport(
     params.push(`%${plate}%`);
   }
   if (unpaidOnly) {
-  // 🔥 Include both completely unpaid AND partially paid services
-  conditions.push('s.is_paid = 0 OR s.partial_paid > 0');
-}
+    conditions.push('s.is_paid = 0 OR s.partial_paid > 0');
+  }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const sql = `
@@ -1266,30 +1273,27 @@ export async function getReport(
   }));
   const total_cost = items.reduce((sum, i) => sum + i.cost, 0);
   const outsource_total = items.reduce((sum, i) => sum + (i.outsource_cost || 0), 0);
-  // 🔥 Calculate the net cash flow
-let net_cash_flow = total_cost - outsource_total;
+  
+  // 🔥 Calculate the base net cash flow
+  let net_cash_flow = total_cost - outsource_total;
+  
+  const mondayStr = monday.toISOString().slice(0, 10);
+  const todayStr = today.toISOString().slice(0, 10);
 
-// 🔥 Calculate dates for the week
-const today = new Date();
-const dayOfWeek = today.getDay();
-const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
-const monday = new Date(today);
-monday.setDate(today.getDate() - diffToMonday);
-const mondayStr = monday.toISOString().slice(0, 10);
-const todayStr = today.toISOString().slice(0, 10);
+  // 🔥 Subtract weekly wages from the net cash flow
+  try {
+    const wagesResult = await db.getFirstAsync<{ total: number }>(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid 
+       WHERE DATE(date) >= ? AND DATE(date) <= ?`,
+      [mondayStr, todayStr]
+    );
+    const wages = wagesResult?.total || 0;
+    net_cash_flow = net_cash_flow - wages;
+    console.log(`✅ Subtracted $${wages} in wages`);
+  } catch (e) {
+    console.log("ℹ️ Wages table not ready yet, skipping...");
+  }
 
-// 🔥 Subtract weekly wages from the net cash flow
-try {
-  const wagesResult = await db.getFirstAsync<{ total: number }>(
-    `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid 
-     WHERE DATE(date) >= ? AND DATE(date) <= ?`,
-    [mondayStr, todayStr]
-  );
-  const wages = wagesResult?.total || 0;
-  net_cash_flow = net_cash_flow - wages;
-} catch (e) {
-  // If wages table doesn't exist yet, just skip it
-}
   const unpaidItems = items.filter((i) => !i.is_paid);
   const unpaid_total = unpaidItems.reduce((sum, i) => sum + i.cost, 0);
   return {
@@ -1699,12 +1703,6 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
 
   return result;
 }
-  
-  
-
-/////////////// BLOCK 5: SUPPLIER, WALK-IN, PRODUCT SALE, NUKE ///////////////
-
-/////////////// BLOCK 5 - SUPPLIER, WALK-IN, PRODUCT SALE, NUKE & MATH ///////////////
 
 export async function listSuppliers(): Promise<Supplier[]> {
   const db = await getDb();
@@ -2012,12 +2010,10 @@ export async function createQuickWalkinService(
   const db = await getDb();
   const now = new Date().toISOString();
   
-  // 🔥 Use the provided name, or fall back to 'Walk-in'
   const finalName = (customerName && customerName.trim()) 
     ? customerName.trim() 
     : 'Walk-in';
 
-  // 1. Find or create the customer
   let walkinCustomer = await db.getFirstAsync<Customer>(
     `SELECT * FROM customers WHERE name = ? AND mobile_number = 'N/A' LIMIT 1`,
     [finalName]
@@ -2034,7 +2030,6 @@ export async function createQuickWalkinService(
     );
   }
 
-  // 2. Find or create the generic "Walk-in Vehicle" for that customer
   let walkinVehicle = await db.getFirstAsync<Vehicle>(
     `SELECT * FROM vehicles WHERE customer_id = ? AND plate_number = 'WALK-IN' LIMIT 1`,
     [walkinCustomer!.id]
@@ -2051,7 +2046,6 @@ export async function createQuickWalkinService(
     );
   }
 
-  // 3. Create the Service
   const serviceId = generateId();
   const pp = Math.max(0, Number(partialPaid) || 0);
   const oc = Math.max(0, Number(outsourceCost) || 0);
@@ -2099,7 +2093,6 @@ export async function createWalkinProductSale(
   const db = await getDb();
   const now = new Date().toISOString();
 
-  // 1. Verify the product exists and has enough stock
   const inv = await db.getFirstAsync<InventoryItem>(
     `SELECT * FROM inventory WHERE id = ?`,
     [inventoryId]
@@ -2111,7 +2104,6 @@ export async function createWalkinProductSale(
     throw new Error(`Insufficient stock. Only ${inv.item_quantity} available.`);
   }
 
-  // 2. Find or create the generic "Walk-in" customer & vehicle
   let walkinCustomer = await db.getFirstAsync<Customer>(
     `SELECT * FROM customers WHERE name = 'Walk-in' AND mobile_number = 'N/A' LIMIT 1`
   );
@@ -2139,13 +2131,11 @@ export async function createWalkinProductSale(
     );
   }
 
-  // 3. Calculate the price (Use Retail Price if available, otherwise Cost Price)
   const unitPrice = (inv.item_retail_price && inv.item_retail_price > 0) 
     ? inv.item_retail_price 
     : inv.item_price;
   const totalCost = unitPrice * quantity;
 
-  // 4. Create the Service Record
   const serviceId = generateId();
   await db.runAsync(
     `INSERT INTO services (
@@ -2159,7 +2149,7 @@ export async function createWalkinProductSale(
       `Product Sale: ${inv.item_type} (x${quantity})`,
       null,
       totalCost,
-      1, // Always marked as paid at the counter
+      1,
       0,
       now,
       now,
@@ -2167,14 +2157,12 @@ export async function createWalkinProductSale(
     ]
   );
 
-  // 5. Deduct the quantity from inventory
   const newQty = Math.max(0, inv.item_quantity - quantity);
   await db.runAsync(
     `UPDATE inventory SET item_quantity = ?, updated_at = ? WHERE id = ?`,
     [newQty, now, inv.id]
   );
 
-  // 6. Link the product to the service (for history tracking)
   const rowId = generateId();
   await db.runAsync(
     `INSERT INTO service_items (id, service_id, inventory_id, item_type, quantity, unit_price, created_at)
@@ -2197,11 +2185,6 @@ export async function createWalkinProductSale(
   };
 }
 
-// ========================================================
-// 💰 SUPPLIER FINANCE OPERATIONS (Math Engine)
-// ========================================================
-
-// 1. Get a list of all suppliers with their current outstanding balances
 export async function getSupplierBalances(): Promise<{ id: string; name: string; balance: number }[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<{ id: string; name: string; balance: number }>(
@@ -2213,7 +2196,6 @@ export async function getSupplierBalances(): Promise<{ id: string; name: string;
   return rows;
 }
 
-// 2. Update a supplier's balance (Positive means you OWE them)
 export async function updateSupplierBalance(supplierId: string, newBalance: number): Promise<void> {
   const db = await getDb();
   const now = new Date().toISOString();
@@ -2225,33 +2207,28 @@ export async function updateSupplierBalance(supplierId: string, newBalance: numb
   );
 }
 
-// 🔥 3. SAVE WEEKLY WAGES TO DATABASE
 export async function saveWeeklyWages(amount: number): Promise<void> {
   const db = await getDb();
   const now = new Date().toISOString();
   
-  // Calculate Monday of this week
   const today = new Date();
-  const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday
+  const dayOfWeek = today.getDay();
   const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
   const monday = new Date(today);
   monday.setDate(today.getDate() - diffToMonday);
   const mondayStr = monday.toISOString().slice(0, 10);
 
-  // Delete existing wage entry for this week (so we overwrite cleanly)
   await db.runAsync(
     `DELETE FROM wages_paid WHERE DATE(date) >= ? AND DATE(date) <= ?`,
     [mondayStr, mondayStr]
   );
 
-  // Insert the new wage amount
   await db.runAsync(
     `INSERT INTO wages_paid (date, amount, created_at) VALUES (?, ?, ?)`,
     [mondayStr, amount, now]
   );
 }
 
-// 🔥 4. Get Weekly Cash Summary (including wages)
 export async function getWeeklyCashSummary(): Promise<{
   revenue: number;
   totalOutstandingDebt: number;
@@ -2261,16 +2238,14 @@ export async function getWeeklyCashSummary(): Promise<{
 }> {
   const db = await getDb();
   
-  // Calculate Monday of the current week
   const today = new Date();
-  const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday
+  const dayOfWeek = today.getDay();
   const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
   const monday = new Date(today);
   monday.setDate(today.getDate() - diffToMonday);
   const mondayStr = monday.toISOString().slice(0, 10);
   const todayStr = today.toISOString().slice(0, 10);
 
-  // 1. Revenue from Monday to Today
   const revenueResult = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(cost), 0) as total FROM services 
      WHERE DATE(service_date) >= ? AND DATE(service_date) <= ? AND (is_paid = 1 OR partial_paid > 0)`,
@@ -2278,13 +2253,11 @@ export async function getWeeklyCashSummary(): Promise<{
   );
   const revenue = revenueResult?.total || 0;
 
-  // 2. Total outstanding debt across all suppliers
   const debtResult = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(balance), 0) as total FROM supplier_balances WHERE balance > 0`
   );
   const totalDebt = debtResult?.total || 0;
 
-  // 3. Calculate cash paid towards debt this week
   let paidToday = 0;
   try {
     const paidResult = await db.getFirstAsync<{ total: number }>(
@@ -2310,7 +2283,6 @@ export async function getWeeklyCashSummary(): Promise<{
     paidToday = 0;
   }
 
-  // 🔥 4. Fetch saved wages from the database
   const wagesResult = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid 
      WHERE DATE(date) >= ? AND DATE(date) <= ?`,
@@ -2318,7 +2290,6 @@ export async function getWeeklyCashSummary(): Promise<{
   );
   const wages = wagesResult?.total || 0;
 
-  // 5. Net Drawer = Revenue - Debt Payments - Wages
   const netDrawer = revenue - paidToday - wages;
 
   return {
@@ -2330,14 +2301,10 @@ export async function getWeeklyCashSummary(): Promise<{
   };
 }
 
-// ========================================================
-// 🚨 EMERGENCY NUKE FUNCTION
-// ========================================================
 export async function emergencyNukeDatabase() {
   try {
     const db = await getDb();
     
-    // 🔥 Force SQLite to drop ALL tables and recreate them
     await db.execAsync(`
       PRAGMA foreign_keys = OFF;
       
@@ -2348,18 +2315,15 @@ export async function emergencyNukeDatabase() {
       DROP TABLE IF EXISTS inventory;
       DROP TABLE IF EXISTS suppliers;
       DROP TABLE IF EXISTS supplier_balances;
+      DROP TABLE IF EXISTS wages_paid;
       DROP TABLE IF EXISTS app_meta;
-      DROP TABLE IF EXISTS wages_paid; /* 🔥 ADDED wages_paid table */
       
       PRAGMA foreign_keys = ON;
     `);
     
-    dbPromise = null; // Reset lazy loader
-    console.log("💥 34MB Database successfully wiped via SQL!");
-    
-    // IMPORTANT: Trigger the initDatabase to recreate empty tables
+    dbPromise = null;
+    console.log("💥 Database wiped!");
     await initDatabase();
-    
     return true;
   } catch (error) {
     console.error("Nuke failed:", error);
