@@ -239,7 +239,8 @@ export default function ReportScreen() {
       Alert.alert('Error', 'Supplier name is required');
       return;
     }
-    const debt = parseFloat(supplierDebt) || 0;
+    // 🔥 Ensure empty strings are treated as 0
+    const debt = supplierDebt.trim() === '' ? 0 : parseFloat(supplierDebt) || 0;
     setSavingSupplier(true);
     try {
       if (editingSupplier) {
@@ -251,11 +252,14 @@ export default function ReportScreen() {
         }
       }
       triggerAutoPush();
+      
+      // 🔥 Load the fresh list first, THEN clear the inputs
+      setEditingSupplier(null);
+      await loadSuppliers();
+      
       setSupplierName('');
       setSupplierContact('');
       setSupplierDebt('');
-      setEditingSupplier(null);
-      await loadSuppliers();
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to save supplier');
     } finally {
