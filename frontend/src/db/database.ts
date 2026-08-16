@@ -2313,28 +2313,38 @@ export async function emergencyNukeDatabase() {
   try {
     const db = await getDb();
     
+    // 🔥 SAFE NUKE: Only drops the broken supplier and wages tables
     await db.execAsync(`
       PRAGMA foreign_keys = OFF;
       
-      DROP TABLE IF EXISTS customers;
-      DROP TABLE IF EXISTS vehicles;
-      DROP TABLE IF EXISTS services;
-      DROP TABLE IF EXISTS service_items;
-      DROP TABLE IF EXISTS inventory;
-      DROP TABLE IF EXISTS suppliers;
       DROP TABLE IF EXISTS supplier_balances;
       DROP TABLE IF EXISTS wages_paid;
-      DROP TABLE IF EXISTS app_meta;
       
       PRAGMA foreign_keys = ON;
     `);
     
-    dbPromise = null;
-    console.log("💥 Database wiped!");
-    await initDatabase();
+    console.log("💥 Corrupted supplier/wage tables wiped safely!");
+    
+    // IMPORTANT: Recreate the empty tables immediately
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS supplier_balances (
+        supplier_id TEXT PRIMARY KEY,
+        balance REAL NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE
+      );
+      
+      CREATE TABLE IF NOT EXISTS wages_paid (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL,
+        amount REAL NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      );
+    `);
+    
     return true;
   } catch (error) {
-    console.error("Nuke failed:", error);
+    console.error("Safe Nuke failed:", error);
     return false;
   }
 }
