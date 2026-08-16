@@ -30,6 +30,16 @@ let outOfStockReminderShown = false;
 let oilReminderShown = false;
 
 export default function HomeScreen() {
+  // 🔥 SPLASH SCREEN HACK
+  const [showSplash, setShowSplash] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 1000); // Shows white screen for 1 second
+    return () => clearTimeout(timer);
+  }, []);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   
@@ -214,6 +224,18 @@ export default function HomeScreen() {
     );
   };
 
+  // 🔥 If splash screen is active, render white screen with logo
+  if (showSplash) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#ffffff', justifyContent: 'center', alignItems: 'center' }}>
+        <Image 
+          source={require('../assets/images/mass-power-logo.png')} 
+          style={{ width: 150, height: 150, resizeMode: 'contain' }}
+        />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -265,6 +287,7 @@ export default function HomeScreen() {
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 autoCapitalize="characters"
+                keyboardType="phone-pad" // 🔥 Set to number pad by default
                 testID="unified-search-input"
               />
             </View>
