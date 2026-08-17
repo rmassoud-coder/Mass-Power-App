@@ -1616,6 +1616,195 @@ function newer(a?: string | null, b?: string | null): boolean {
   return ta > tb;
 }
 
+export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeResult> {
+  const db = await getDb();
+  const result: MergeResult = {
+    customers: { inserted: 0, updated: 0 },
+    vehicles: { inserted: 0, updated: 0 },
+    services: { inserted: 0, updated: 0 },
+    inventory: { inserted: 0, updated: 0 },
+    suppliers: { inserted: 0, updated: 0 },
+    service_items: { inserted: 0, updated: 0 }
+  };
+
+  // Merge customers
+  if (Array.isArray(snap.customers)) {
+    for (const c of snap.customers) {
+      const existing = await db.getFirstAsync<{ updated_at: string }>(
+        'SELECT updated_at FROM customers WHERE id = ?',
+        [c.id]
+      );
+      if (!existing || newer(c.updated_at, existing.updated_at)) {
+        await db.runAsync(
+          `INSERT INTO customers (id, name, phone, email, address, notes, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             name = excluded.name,
+             phone = excluded.phone,
+             email = excluded.email,
+             address = excluded.address,
+             notes = excluded.notes,
+             updated_at = excluded.updated_at`,
+          [c.id, c.name, c.phone, c.email, c.address, c.notes, c.updated_at]
+        );
+        existing ? result.customers.updated++ : result.customers.inserted++;
+      }
+    }
+  }
+
+  // Merge vehicles
+  if (Array.isArray(snap.vehicles)) {
+    for (const v of snap.vehicles) {
+      const existing = await db.getFirstAsync<{ updated_at: string }>(
+        'SELECT updated_at FROM vehicles WHERE id = ?',
+        [v.id]
+      );
+      if (!existing || newer(v.updated_at, existing.updated_at)) {
+        await db.runAsync(
+          `INSERT INTO vehicles (id, customer_id, make, model, year, license_plate, vin, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             customer_id = excluded.customer_id,
+             make = excluded.make,
+             model = excluded.model,
+             year = excluded.year,
+             license_plate = excluded.license_plate,
+             vin = excluded.vin,
+             updated_at = excluded.updated_at`,
+          [v.id, v.customer_id, v.make, v.model, v.year, v.license_plate, v.vin, v.updated_at]
+        );
+        existing ? result.vehicles.updated++ : result.vehicles.inserted++;
+      }
+    }
+  }
+
+  // Merge services
+  if (Array.isArray(snap.services)) {
+    for (const s of snap.services) {
+      const existing = await db.getFirstAsync<{ updated_at: string }>(
+        'SELECT updated_at FROM services WHERE id = ?',
+        [s.id]
+      );
+      if (!existing || newer(s.updated_at, existing.updated_at)) {
+        await db.runAsync(
+          `INSERT INTO services (
+            id, vehicle_id, service_date, description, total_cost,
+            is_paid, partial_paid, dash_abs, dash_check_engine,
+            dash_brake, dash_airbag, dash_immobilizer, dash_tpms,
+            dash_oil_leak, oil_filter_changed, battery_parasitic_tested,
+            hvac_leak_tested, reminder_dismissed, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            vehicle_id = excluded.vehicle_id,
+            service_date = excluded.service_date,
+            description = excluded.description,
+            total_cost = excluded.total_cost,
+            is_paid = excluded.is_paid,
+            partial_paid = excluded.partial_paid,
+            dash_abs = excluded.dash_abs,
+            dash_check_engine = excluded.dash_check_engine,
+            dash_brake = excluded.dash_brake,
+            dash_airbag = excluded.dash_airbag,
+            dash_immobilizer = excluded.dash_immobilizer,
+            dash_tpms = excluded.dash_tpms,
+            dash_oil_leak = excluded.dash_oil_leak,
+            oil_filter_changed = excluded.oil_filter_changed,
+            battery_parasitic_tested = excluded.battery_parasitic_tested,
+            hvac_leak_tested = excluded.hvac_leak_tested,
+            reminder_dismissed = excluded.reminder_dismissed,
+            updated_at = excluded.updated_at`,
+          [
+            s.id, s.vehicle_id, s.service_date, s.description, s.total_cost,
+            s.is_paid ? 1 : 0, s.partial_paid || 0,
+            s.dash_abs ? 1 : 0, s.dash_check_engine ? 1 : 0,
+            s.dash_brake ? 1 : 0, s.dash_airbag ? 1 : 0,
+            s.dash_immobilizer ? 1 : 0, s.dash_tpms ? 1 : 0,
+            s.dash_oil_leak ? 1 : 0, s.oil_filter_changed ? 1 : 0,
+            s.battery_parasitic_tested ? 1 : 0,
+            s.hvac_leak_tested ? 1 : 0,
+            s.reminder_dismissed ? 1 : 0,
+            s.updated_at
+          ]
+        );
+        existing ? result.services.updated++ : result.services.inserted++;
+      }
+    }
+  }
+
+  // Merge inventory
+  if (Array.isArray(snap.inventory)) {
+    for (const item of snap.inventory) {
+      const existing = await db.getFirstAsync<{ updated_at: string }>(
+        'SELECT updated_at FROM inventory WHERE id = ?',
+        [item.id]
+      );
+      if (!existing || newer(item.updated_at, existing.updated_at)) {
+        await db.runAsync(
+          `INSERT INTO inventory (id, name, quantity, price, supplier_id, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             name = excluded.name,
+             quantity = excluded.quantity,
+             price = excluded.price,
+             supplier_id = excluded.supplier_id,
+             updated_at = excluded.updated_at`,
+          [item.id, item.name, item.quantity, item.price, item.supplier_id, item.updated_at]
+        );
+        existing ? result.inventory.updated++ : result.inventory.inserted++;
+      }
+    }
+  }
+
+  // Merge suppliers
+  if (Array.isArray(snap.suppliers)) {
+    for (const sup of snap.suppliers) {
+      const existing = await db.getFirstAsync<{ updated_at: string }>(
+        'SELECT updated_at FROM suppliers WHERE id = ?',
+        [sup.id]
+      );
+      if (!existing || newer(sup.updated_at, existing.updated_at)) {
+        await db.runAsync(
+          `INSERT INTO suppliers (id, name, phone, email, address, notes, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             name = excluded.name,
+             phone = excluded.phone,
+             email = excluded.email,
+             address = excluded.address,
+             notes = excluded.notes,
+             updated_at = excluded.updated_at`,
+          [sup.id, sup.name, sup.phone, sup.email, sup.address, sup.notes, sup.updated_at]
+        );
+        existing ? result.suppliers.updated++ : result.suppliers.inserted++;
+      }
+    }
+  }
+
+  // Merge service_items
+  if (Array.isArray(snap.service_items)) {
+    for (const si of snap.service_items) {
+      const existing = await db.getFirstAsync<{ updated_at: string }>(
+        'SELECT updated_at FROM service_items WHERE id = ?',
+        [si.id]
+      );
+      if (!existing || newer(si.updated_at, existing.updated_at)) {
+        await db.runAsync(
+          `INSERT INTO service_items (id, service_id, description, quantity, unit_price, total, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             service_id = excluded.service_id,
+             description = excluded.description,
+             quantity = excluded.quantity,
+             unit_price = excluded.unit_price,
+             total = excluded.total,
+             updated_at = excluded.updated_at`,
+          [si.id, si.service_id, si.description, si.quantity, si.unit_price, si.total, si.updated_at]
+        );
+        existing ? result.service_items.updated++ : result.service_items.inserted++;
+      }
+    }
+  }
+
   // 🔥 MERGE SUPPLIER BALANCES (Debts) SO THEY SYNC
   if (Array.isArray(snap.supplierBalances)) {
     for (const sb of snap.supplierBalances) {
