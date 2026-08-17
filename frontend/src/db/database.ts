@@ -1617,6 +1617,7 @@ function newer(a?: string | null, b?: string | null): boolean {
 }
 
 export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeResult> {
+export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeResult> {
   const db = await getDb();
   const result: MergeResult = {
     customers: { inserted: 0, updated: 0 },
