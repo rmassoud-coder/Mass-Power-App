@@ -1616,16 +1616,30 @@ function newer(a?: string | null, b?: string | null): boolean {
   return ta > tb;
 }
 
-export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeResult> {
-  const db = await getDb();
-  const result: MergeResult = {
-    customers: { inserted: 0, updated: 0 },
-    vehicles: { inserted: 0, updated: 0 },
-    services: { inserted: 0, updated: 0 },
-    inventory: { inserted: 0, updated: 0 },
-    suppliers: { inserted: 0, updated: 0 },
-    service_items: { inserted: 0, updated: 0 },
-  };
+  // 🔥 MERGE SUPPLIER BALANCES (Debts) SO THEY SYNC
+  if (Array.isArray(snap.supplierBalances)) {
+    for (const sb of snap.supplierBalances) {
+      await db.runAsync(
+        `INSERT INTO supplier_balances (supplier_id, balance, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(supplier_id) DO UPDATE SET balance = ?, updated_at = ?`,
+        [sb.supplier_id, sb.balance, sb.updated_at || snap.exported_at, sb.balance, sb.updated_at || snap.exported_at]
+      );
+    }
+  }
+
+  // 🔥 MERGE WAGES SO THEY SYNC
+  if (Array.isArray(snap.wagesPaid)) {
+    for (const wp of snap.wagesPaid) {
+      await db.runAsync(
+        `INSERT INTO wages_paid (id, date, amount, created_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET amount = ?, created_at = ?`,
+        [wp.id, wp.date, wp.amount, wp.created_at || snap.exported_at, wp.amount, wp.created_at || snap.exported_at]
+      );
+    }
+  }
+
+  return result;
+}
 
   if (Array.isArray(snap.customers)) {
     for (const c of snap.customers) {
