@@ -1937,9 +1937,7 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
       }
     }
   }
-
   return result;
-}
 
 export async function listSuppliers(): Promise<Supplier[]> {
   const db = await getDb();
