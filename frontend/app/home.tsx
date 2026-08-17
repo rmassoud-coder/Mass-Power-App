@@ -11,7 +11,7 @@ import {
   ScrollView,
   Image,
   useWindowDimensions,
-  Modal, // 🔥 ADDED IMPORT
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -343,10 +343,19 @@ export default function HomeScreen() {
             <Text style={styles.walkinButtonText}>Walk-in Customer</Text>
           </TouchableOpacity>
 
+          {/* 🔥 NEW: Order List Button */}
+          <TouchableOpacity
+            style={[styles.orderButton, { paddingVertical: buttonPadding }]}
+            onPress={() => router.push('/order-list')}
+          >
+            <Ionicons name="list-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
+            <Text style={styles.orderButtonText}>Order List</Text>
+          </TouchableOpacity>
+
           {/* Supplier Debts Button - NEW */}
           <TouchableOpacity
             style={[styles.debtButton, { paddingVertical: buttonPadding }]}
-            onPress={handleSupplierDebtsPress} // 🔥 Changed to PIN handler
+            onPress={handleSupplierDebtsPress}
           >
             <Ionicons name="receipt-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
             <Text style={styles.debtButtonText}>Supplier Debts</Text>
@@ -567,6 +576,22 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   walkinButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  // 🔥 NEW: Order List Button
+  orderButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#059669',
+    marginTop: 8,
+  },
+  orderButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
