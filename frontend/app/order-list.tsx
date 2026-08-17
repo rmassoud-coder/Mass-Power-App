@@ -1,1 +1,1 @@
-export { default } from '../src/components/OrderListScreen';
+export { default } from '../src/OrderListScreen';
