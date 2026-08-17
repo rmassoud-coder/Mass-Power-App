@@ -11,6 +11,7 @@ import {
   ScrollView,
   Image,
   useWindowDimensions,
+  Modal, // 🔥 ADDED IMPORT
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -41,6 +42,11 @@ export default function HomeScreen() {
   const cardPadding = isSmallScreen ? 14 : 20;
   const cardMargin = isSmallScreen ? 10 : 16;
   const buttonPadding = isSmallScreen ? 10 : 14;
+
+  // 🔥 PIN STATE
+  const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const SECRET_PIN = '3945';
 
   // Out-of-stock reminder
   useEffect(() => {
@@ -186,6 +192,22 @@ export default function HomeScreen() {
     }
   };
 
+  // 🔥 PIN HANDLER FOR SUPPLIER DEBTS
+  const handleSupplierDebtsPress = () => {
+    setPinModalVisible(true);
+  };
+
+  const handlePinAuth = () => {
+    if (pinInput === SECRET_PIN) {
+      setPinModalVisible(false);
+      setPinInput('');
+      router.push('/supplier-debt');
+    } else {
+      Alert.alert('Error', 'Incorrect PIN. Please try again.');
+      setPinInput('');
+    }
+  };
+
   // 🔥 Safety function kept inside the file just in case you ever need it again
   // 🔥 DIRECT SQL NUKE (No imports needed)
   const handleNukeDatabase = async () => {
@@ -286,7 +308,7 @@ export default function HomeScreen() {
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 autoCapitalize="characters"
-                keyboardType="phone-pad" // 🔥 Set to number pad by default
+                keyboardType="phone-pad"
                 testID="unified-search-input"
               />
             </View>
@@ -324,7 +346,7 @@ export default function HomeScreen() {
           {/* Supplier Debts Button - NEW */}
           <TouchableOpacity
             style={[styles.debtButton, { paddingVertical: buttonPadding }]}
-            onPress={() => router.push('/supplier-debt')}
+            onPress={handleSupplierDebtsPress} // 🔥 Changed to PIN handler
           >
             <Ionicons name="receipt-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
             <Text style={styles.debtButtonText}>Supplier Debts</Text>
@@ -363,6 +385,42 @@ export default function HomeScreen() {
 
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* 🔥 PIN ENTRY MODAL FOR SUPPLIER DEBTS */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={pinModalVisible}
+        onRequestClose={() => setPinModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Enter PIN</Text>
+            <Text style={styles.modalSubtitle}>Enter your 4-digit security code</Text>
+            
+            <TextInput
+              style={styles.pinInput}
+              placeholder="****"
+              keyboardType="number-pad"
+              maxLength={4}
+              secureTextEntry={true}
+              value={pinInput}
+              onChangeText={setPinInput}
+              autoFocus={true}
+            />
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setPinModalVisible(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalConfirmBtn} onPress={handlePinAuth}>
+                <Text style={styles.modalConfirmText}>Unlock</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -499,7 +557,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
-  // New styles for Quick Walk-in Button
   walkinButton: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -515,7 +572,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
-  // 🔥 New styles for Supplier Debts Button
   debtButton: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -556,7 +612,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#94a3b8',
   },
-  // 🔥 Hidden nuke styles - kept just in case
   nukeButton: {
     backgroundColor: '#dc2626',
     borderRadius: 12,
@@ -572,5 +627,80 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
+  },
+
+  // 🔥 MODAL STYLES
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 20,
+  },
+  pinInput: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#2563eb',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    fontSize: 24,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: 8,
+    color: '#0f172a',
+    marginBottom: 24,
+    backgroundColor: '#f8fafc',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    color: '#64748b',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalConfirmBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
