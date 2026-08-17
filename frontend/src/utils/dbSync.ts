@@ -299,7 +299,13 @@ async function uploadVersionedBackup(
 /** Upload-only: local → cloud. Overwrites mass-power-db.json AND writes a
  *  timestamped copy to backups/ so history is never lost even if a bad
  *  push happens later. Never touches local data. */
-export async function pushToCloud(settings: AppSettings): Promise<SyncResult> {
+export async function pushToCloud(settings?: AppSettings): Promise<SyncResult> {
+  // 🔥 FIX: Auto-load settings if they weren't passed in
+  if (!settings) {
+    const { loadSettings } = require('./settings');
+    settings = await loadSettings();
+  }
+  
   assertConfigured(settings);
   
   // Check connectivity first
@@ -310,7 +316,7 @@ export async function pushToCloud(settings: AppSettings): Promise<SyncResult> {
   
   const startedAt = new Date().toISOString();
   const snap = await exportFullDatabase();
-const json = JSON.stringify(snap);  // ← no spaces (much smaller)
+  const json = JSON.stringify(snap);  // ← no spaces (much smaller)
   
   // Upload with retry logic
   await retryWithBackoff(async () => {
@@ -337,7 +343,13 @@ const json = JSON.stringify(snap);  // ← no spaces (much smaller)
  * can be undone on-device via restoreLocalSafetySnapshot() if it ever
  * pulls something unwanted.
  */
-export async function pullFromCloud(settings: AppSettings): Promise<SyncResult> {
+export async function pullFromCloud(settings?: AppSettings): Promise<SyncResult> {
+  // 🔥 FIX: Auto-load settings if they weren't passed in
+  if (!settings) {
+    const { loadSettings } = require('./settings');
+    settings = await loadSettings();
+  }
+  
   assertConfigured(settings);
   
   // Check connectivity first
