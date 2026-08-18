@@ -13,8 +13,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getWeeklyCashSummary } from '../src/db/database';
-import { pushToCloud, pullFromCloud } from '../src/utils/dbSync'; // 🔥 ADDED SYNC IMPORTS
+import { getWeeklyCashSummary, getReport } from '../src/db/database';
+import { pushToCloud, pullFromCloud } from '../src/utils/dbSync';
 
 export default function ManagementScreen() {
   const router = useRouter();
@@ -22,6 +22,11 @@ export default function ManagementScreen() {
   const [revenue, setRevenue] = useState(0);
   const [netCash, setNetCash] = useState(0);
   const [totalDebt, setTotalDebt] = useState(0);
+  
+  // 🔥 NEW STATES FOR INCOME
+  const [todayIncome, setTodayIncome] = useState(0);
+  const [wtdIncome, setWtdIncome] = useState(0);
+
   const [loading, setLoading] = useState(true);
   const [wagesInput, setWagesInput] = useState('');
 
@@ -37,10 +42,29 @@ export default function ManagementScreen() {
     const loadFinances = async () => {
       try {
         setLoading(true);
+        
+        // Get the weekly summary (revenue, debt, net cash)
         const summary = await getWeeklyCashSummary();
         setRevenue(summary.revenue);
         setNetCash(summary.netDrawer);
         setTotalDebt(summary.totalOutstandingDebt);
+
+        // 🔥 NEW: Calculate Today's Income & Week-to-Date Income using getReport
+        const today = new Date().toISOString().slice(0, 10);
+        const dayOfWeek = today.getDay();
+        const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+        const monday = new Date();
+        monday.setDate(monday.getDate() - diffToMonday);
+        const mondayIso = monday.toISOString().slice(0, 10);
+
+        // Fetch today's revenue
+        const todayReport = await getReport(`${today}T00:00:00`, `${today}T23:59:59`);
+        setTodayIncome(todayReport.total_cost);
+
+        // Fetch week-to-date revenue (Mon - Today)
+        const wtdReport = await getReport(`${mondayIso}T00:00:00`, `${today}T23:59:59`);
+        setWtdIncome(wtdReport.total_cost);
+
       } catch (e) {
         console.warn("Failed to load finances:", e);
       } finally {
@@ -145,10 +169,17 @@ export default function ManagementScreen() {
                     <Text style={styles.viewBtnText}>Details</Text>
                   </TouchableOpacity>
                 </View>
+                
+                {/* 🔥 UPDATED INCOME ROWS */}
                 <View style={styles.cashRow}>
-                  <Text style={styles.cashLabel}>Revenue</Text>
-                  <Text style={styles.cashValue}>${revenue.toFixed(2)}</Text>
+                  <Text style={styles.cashLabel}>Today's Income</Text>
+                  <Text style={styles.cashValue}>${todayIncome.toFixed(2)}</Text>
                 </View>
+                <View style={styles.cashRow}>
+                  <Text style={styles.cashLabel}>Week-to-Date Income</Text>
+                  <Text style={styles.cashValue}>${wtdIncome.toFixed(2)}</Text>
+                </View>
+
                 <View style={styles.cashRow}>
                   <Text style={[styles.cashLabel, { color: '#dc2626' }]}>− Outstanding Debt</Text>
                   <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${totalDebt.toFixed(2)}</Text>
@@ -184,7 +215,7 @@ export default function ManagementScreen() {
                   onChangeText={async (text) => {
                     setWagesInput(text);
                     const wages = parseFloat(text) || 0;
-                    setNetCash(revenue - wages);
+                    setNetCash(revenue - totalDebt - wages); // 🔥 Fixed math includes debt
                     try {
                       const db = await import('../src/db/database');
                       await db.saveWeeklyWages(wages);
