@@ -67,10 +67,8 @@ export default function ManagementScreen() {
         setNetDrawer(summary.netDrawer);
 
       } catch (e) {
-  // 🔥 ADD THIS LINE RIGHT HERE:
-  console.error("🔥 ManagementScreen load ERROR:", e);
-  
-  console.warn("Failed to load finances:", e);
+  // 🔥 Show the exact error on your phone screen
+  Alert.alert("🔥 ERROR", String(e));
 } finally {
   setLoading(false);
 }
