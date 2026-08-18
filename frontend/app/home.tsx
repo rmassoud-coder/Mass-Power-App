@@ -299,7 +299,7 @@ export default function HomeScreen() {
               <Text style={styles.searchTitle}>Search Customer</Text>
             </View>
             <Text style={styles.searchHint}>
-              Enter mobile number, VIN, or plate number
+              Enter mobile, VIN, or plate number
             </Text>
             <View style={styles.inputContainer}>
               <TextInput
