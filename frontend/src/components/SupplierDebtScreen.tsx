@@ -36,32 +36,29 @@ export default function SupplierDebtScreen() {
   const loadData = useCallback(async () => {
   setLoading(true);
   try {
-    // 1. Get Today's date in YYYY-MM-DD format
+    // 1. Get Today's date
     const today = new Date();
     const todayStr = today.toISOString().slice(0, 10);
 
-    // 2. Get Today's Income using the SAME getReport logic as the purple screen
+    // 2. Fetch Supplier Balances (List)
+    const balanceList = await getSupplierBalances();
+
+    // 3. Fetch the paid debt and debt totals (This keeps your working paid logic)
+    const cashSummary = await getWeeklyCashSummary();
+
+    // 4. Fetch Today's Revenue using getReport (Matches the purple screen)
     const todayReport = await getReport(
       `${todayStr}T00:00:00`,
       `${todayStr}T23:59:59`
     );
     const todayRevenue = todayReport.total_cost;
 
-    // 3. Get Supplier Balances (List)
-    const balanceList = await getSupplierBalances();
-
-    // 4. Get Debts & Paid logic (Keep your working paid logic)
-    // We still use getWeeklyCashSummary to keep the paid debts correct
-    const cashSummary = await getWeeklyCashSummary();
-
+    // 5. Update the UI with ALL data
     setSuppliers(balanceList);
-    
-    // 5. Update the summary using Today's Income from getReport
-    // But keep PaidToday and Debt from getWeeklyCashSummary
     setSummary({
       totalDebt: cashSummary.totalOutstandingDebt,
-      todayRevenue: todayRevenue,          // <-- NOW USING CORRECT getReport VALUE
-      paidToday: cashSummary.paidTowardsDebtToday,
+      todayRevenue: todayRevenue,               // Correct revenue from getReport
+      paidToday: cashSummary.paidTowardsDebtToday, // ✅ Kept your working paid logic
       drawer: todayRevenue - cashSummary.paidTowardsDebtToday - cashSummary.wages, 
     });
   } catch (error) {
