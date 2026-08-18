@@ -13,18 +13,16 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getWeeklyCashSummary, getReport } from '../src/db/database';
-import { pushToCloud, pullFromCloud } from '../src/utils/dbSync';
+import { getWeeklyCashSummary, getReport, pushToCloud, pullFromCloud } from '../src/db/database';
 
 export default function ManagementScreen() {
   const router = useRouter();
 
-  // INCOME STATES (from getReport)
+  // INCOME STATES
   const [todayIncome, setTodayIncome] = useState(0);
   const [wtdIncome, setWtdIncome] = useState(0);
-  const [weeklyNetIncome, setWeeklyNetIncome] = useState(0);
 
-  // DEBT & WAGES STATES (from getWeeklyCashSummary)
+  // DEBT & WAGES STATES
   const [totalDebt, setTotalDebt] = useState(0);
   const [paidToday, setPaidToday] = useState(0);
   const [wages, setWages] = useState(0);
@@ -51,15 +49,14 @@ export default function ManagementScreen() {
         monday.setDate(monday.getDate() - diffToMonday);
         const mondayIso = monday.toISOString().slice(0, 10);
 
-        // 1. INCOME (Using getReport - NO DB CHANGES)
+        // 1. INCOME (Using getReport)
         const todayReport = await getReport(`${today}T00:00:00`, `${today}T23:59:59`);
         setTodayIncome(todayReport.total_cost);
 
         const wtdReport = await getReport(`${mondayIso}T00:00:00`, `${today}T23:59:59`);
         setWtdIncome(wtdReport.total_cost);
-        setWeeklyNetIncome(wtdReport.net_cash_flow);
 
-        // 2. DEBTS, PAID TODAY, WAGES (Using getWeeklyCashSummary)
+        // 2. DEBTS, PAID TODAY, WAGES
         const summary = await getWeeklyCashSummary();
         setTotalDebt(summary.totalOutstandingDebt);
         setPaidToday(summary.paidTowardsDebtToday);
@@ -67,11 +64,10 @@ export default function ManagementScreen() {
         setNetDrawer(summary.netDrawer);
 
       } catch (e) {
-  // 🔥 Show the exact error on your phone screen
-  Alert.alert("🔥 ERROR", String(e));
-} finally {
-  setLoading(false);
-}
+        console.warn("Failed to load finances:", e);
+      } finally {
+        setLoading(false);
+      }
     };
     loadFinances();
   }, []);
@@ -202,23 +198,23 @@ export default function ManagementScreen() {
                   </Text>
                 </View>
 
-                {/* Weekly Net (WTD Income - Debts - Wages) */}
+                {/* Weekly Net (WTD Income - Wages) */}
                 <View style={styles.cashRow}>
                   <Text style={[styles.cashLabel, { fontWeight: '800', color: '#5b21b6' }]}>
                     Weekly Net (After Wages)
                   </Text>
-                  <Text style={[styles.cashValue, { fontWeight: '900', color: weeklyNetIncome >= 0 ? '#059669' : '#dc2626' }]}>
-                    ${weeklyNetIncome.toFixed(2)}
+                  <Text style={[styles.cashValue, { fontWeight: '900', color: (wtdIncome - wages) >= 0 ? '#059669' : '#dc2626' }]}>
+                    ${(wtdIncome - wages).toFixed(2)}
                   </Text>
                 </View>
 
                 <Text style={styles.cashSubtext}>
-                  *Weekly net = WTD income − total debts − wages.
+                  *Weekly net = WTD income − wages only. Debts not deducted.
                 </Text>
               </View>
             )}
 
-            {/* Wages Input - Kept intact */}
+            {/* Wages Input */}
             <View style={styles.wagesCard}>
               <View style={styles.wagesHeaderRow}>
                 <Ionicons name="people-outline" size={20} color="#2563eb" />
@@ -236,15 +232,18 @@ export default function ManagementScreen() {
                     try {
                       const db = await import('../src/db/database');
                       await db.saveWeeklyWages(parseFloat(text) || 0);
-                      // Reload data to update numbers
                       const summary = await db.getWeeklyCashSummary();
                       setWages(summary.wages);
                       setNetDrawer(summary.netDrawer);
-                      const wtdReport = await db.getReport(
-                        `${new Date(new Date().setDate(new Date().getDate() - new Date().getDay() + 1)).toISOString().slice(0, 10)}T00:00:00`,
-                        `${new Date().toISOString().slice(0, 10)}T23:59:59`
-                      );
-                      setWeeklyNetIncome(wtdReport.net_cash_flow);
+                      
+                      const today = new Date().toISOString().slice(0, 10);
+                      const dayOfWeek = today.getDay();
+                      const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+                      const monday = new Date();
+                      monday.setDate(monday.getDate() - diffToMonday);
+                      const mondayIso = monday.toISOString().slice(0, 10);
+                      const wtdReport = await db.getReport(`${mondayIso}T00:00:00`, `${today}T23:59:59`);
+                      setWtdIncome(wtdReport.total_cost);
                     } catch (e) {
                       console.warn("Failed to save wages:", e);
                     }
