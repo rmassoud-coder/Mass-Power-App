@@ -67,10 +67,13 @@ export default function ManagementScreen() {
         setNetDrawer(summary.netDrawer);
 
       } catch (e) {
-        console.warn("Failed to load finances:", e);
-      } finally {
-        setLoading(false);
-      }
+  // 🔥 ADD THIS LINE RIGHT HERE:
+  console.error("🔥 ManagementScreen load ERROR:", e);
+  
+  console.warn("Failed to load finances:", e);
+} finally {
+  setLoading(false);
+}
     };
     loadFinances();
   }, []);
