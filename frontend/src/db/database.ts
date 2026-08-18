@@ -1250,8 +1250,80 @@ export async function getReport(
     ORDER BY s.service_date DESC
   `;
 
+// 🔥 PASTE THIS AT THE BOTTOM OF database.ts
+export async function getReport(
+  startDate?: string,
+  endDate?: string,
+  mobile?: string,
+  vin?: string,
+  plate?: string,
+  unpaidOnly?: boolean
+): Promise<{
+  items: any[];
+  total_cost: number;
+  total_services: number;
+  unpaid_count: number;
+  unpaid_total: number;
+  outsource_total: number;
+  net_cash_flow: number;
+}> {
+  const db = await getDb();
+  const conditions: string[] = [];
+  const params: any[] = [];
+
+  if (startDate) {
+    conditions.push('DATE(s.service_date) >= DATE(?)');
+    params.push(startDate);
+  }
+  if (endDate) {
+    conditions.push('DATE(s.service_date) <= DATE(?)');
+    params.push(endDate);
+  }
+  if (mobile) {
+    conditions.push('c.mobile_number LIKE ?');
+    params.push(`%${mobile}%`);
+  }
+  if (vin) {
+    conditions.push('v.vin LIKE ?');
+    params.push(`%${vin}%`);
+  }
+  if (plate) {
+    conditions.push('v.plate_number LIKE ?');
+    params.push(`%${plate}%`);
+  }
+  if (unpaidOnly) {
+    conditions.push('s.is_paid = 0 OR s.partial_paid > 0');
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const sql = `
+    SELECT 
+      s.id as service_id,
+      s.customer_id,
+      c.name as customer_name,
+      c.mobile_number as customer_mobile,
+      s.vehicle_id,
+      v.make as vehicle_make,
+      v.model as vehicle_model,
+      v.year as vehicle_year,
+      v.vin as vehicle_vin,
+      v.plate_number as vehicle_plate,
+      s.service_description,
+      s.additional_info,
+      s.cost,
+      s.is_paid as is_paid_int,
+      s.partial_paid,
+      s.outsource_cost,
+      s.service_date
+    FROM services s
+    JOIN customers c ON s.customer_id = c.id
+    JOIN vehicles v ON s.vehicle_id = v.id
+    ${whereClause}
+    ORDER BY s.service_date DESC
+  `;
+
   const rawItems = await db.getAllAsync<any>(sql, params);
-  const items: ReportItem[] = rawItems.map((r) => ({
+  const items = rawItems.map((r) => ({
     service_id: r.service_id,
     customer_id: r.customer_id,
     customer_name: r.customer_name,
@@ -1270,11 +1342,12 @@ export async function getReport(
     outsource_cost: Number(r.outsource_cost) || 0,
     service_date: r.service_date,
   }));
+  
   const total_cost = items.reduce((sum, i) => sum + i.cost, 0);
   const outsource_total = items.reduce((sum, i) => sum + (i.outsource_cost || 0), 0);
   let net_cash_flow = total_cost - outsource_total;
   
-  // Deduct wages from net cash
+  // Deduct wages if wages table exists
   try {
     const wagesResult = await db.getFirstAsync<{ total: number }>(
       `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid 
@@ -1284,11 +1357,12 @@ export async function getReport(
     const wages = wagesResult?.total || 0;
     net_cash_flow = net_cash_flow - wages;
   } catch (e) {
-    console.log("ℹ️ Wages table not ready yet, skipping...");
+    // ignore
   }
 
   const unpaidItems = items.filter((i) => !i.is_paid);
   const unpaid_total = unpaidItems.reduce((sum, i) => sum + i.cost, 0);
+  
   return {
     items,
     total_cost,
