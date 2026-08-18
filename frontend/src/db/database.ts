@@ -1197,11 +1197,6 @@ export async function getReport(
   const conditions: string[] = [];
   const params: any[] = [];
 
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - diffToMonday);
 
   if (startDate) {
     conditions.push('DATE(s.service_date) >= DATE(?)');
