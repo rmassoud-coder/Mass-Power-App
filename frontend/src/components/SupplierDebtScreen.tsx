@@ -34,25 +34,42 @@ export default function SupplierDebtScreen() {
   const router = useRouter();
 
   const loadData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [balanceList, cashSummary] = await Promise.all([
-        getSupplierBalances(),
-        getWeeklyCashSummary(),
-      ]);
-      setSuppliers(balanceList);
-      setSummary({
-        totalDebt: cashSummary.totalOutstandingDebt,
-        todayRevenue: cashSummary.revenue,
-        paidToday: cashSummary.paidTowardsDebtToday,
-        drawer: cashSummary.netDrawer,
-      });
-    } catch (error) {
-      Alert.alert('Error', 'Failed to load supplier data.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  setLoading(true);
+  try {
+    // 1. Get Today's date in YYYY-MM-DD format
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
+
+    // 2. Get Today's Income using the SAME getReport logic as the purple screen
+    const todayReport = await getReport(
+      `${todayStr}T00:00:00`,
+      `${todayStr}T23:59:59`
+    );
+    const todayRevenue = todayReport.total_cost;
+
+    // 3. Get Supplier Balances (List)
+    const balanceList = await getSupplierBalances();
+
+    // 4. Get Debts & Paid logic (Keep your working paid logic)
+    // We still use getWeeklyCashSummary to keep the paid debts correct
+    const cashSummary = await getWeeklyCashSummary();
+
+    setSuppliers(balanceList);
+    
+    // 5. Update the summary using Today's Income from getReport
+    // But keep PaidToday and Debt from getWeeklyCashSummary
+    setSummary({
+      totalDebt: cashSummary.totalOutstandingDebt,
+      todayRevenue: todayRevenue,          // <-- NOW USING CORRECT getReport VALUE
+      paidToday: cashSummary.paidTowardsDebtToday,
+      drawer: todayRevenue - cashSummary.paidTowardsDebtToday - cashSummary.wages, 
+    });
+  } catch (error) {
+    Alert.alert('Error', 'Failed to load supplier data.');
+  } finally {
+    setLoading(false);
+  }
+}, []);
 
   useEffect(() => {
     loadData();
