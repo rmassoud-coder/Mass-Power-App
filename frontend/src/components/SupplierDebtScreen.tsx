@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getSupplierBalances, updateSupplierBalance, getWeeklyCashSummary } from '../db/database';
+import { getSupplierBalances, updateSupplierBalance, getWeeklyCashSummary, getReport } from '../db/database';
 
 export default function SupplierDebtScreen() {
   const [suppliers, setSuppliers] = useState<{ id: string; name: string; balance: number }[]>([]);
