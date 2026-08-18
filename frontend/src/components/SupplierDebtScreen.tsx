@@ -36,7 +36,6 @@ export default function SupplierDebtScreen() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // 🔥 Removed 'today' variable because getWeeklyCashSummary calculates the week internally
       const [balanceList, cashSummary] = await Promise.all([
         getSupplierBalances(),
         getWeeklyCashSummary(),
@@ -59,9 +58,10 @@ export default function SupplierDebtScreen() {
     loadData();
   }, [loadData]);
 
+  // ✅ FIXED: Correctly sets the supplier ID instead of null
   const handleEditPress = (id: string) => {
+    setEditingId(id);
     setPayTodayValue('');
-    setEditingId(null); // <-- already there, just confirm it's there
   };
 
   const handleSavePress = async () => {
@@ -72,11 +72,9 @@ export default function SupplierDebtScreen() {
       return;
     }
 
-    // Find the supplier
     const supplier = suppliers.find(s => s.id === editingId);
     if (!supplier) return;
 
-    // Prevent paying more than what is owed
     if (amountPaid > supplier.balance) {
       Alert.alert('Error', 'You cannot pay more than the outstanding balance.');
       return;
@@ -88,7 +86,7 @@ export default function SupplierDebtScreen() {
       await updateSupplierBalance(editingId, newBalance);
       setEditingId(null);
       setPayTodayValue('');
-      loadData(); // Reload to update math
+      setTimeout(() => loadData(), 300); // Small delay to let DB settle
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to update balance.');
     } finally {
