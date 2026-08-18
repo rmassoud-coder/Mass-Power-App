@@ -2387,6 +2387,7 @@ export async function getWeeklyCashSummary(): Promise<{
   const mondayStr = monday.toISOString().slice(0, 10);
   const todayStr = today.toISOString().slice(0, 10);
 
+  // Revenue (paid services this week)
   const revenueResult = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(cost), 0) as total FROM services 
      WHERE DATE(service_date) >= ? AND DATE(service_date) <= ? AND (is_paid = 1 OR partial_paid > 0)`,
@@ -2394,29 +2395,33 @@ export async function getWeeklyCashSummary(): Promise<{
   );
   const revenue = revenueResult?.total || 0;
 
+  // Total outstanding debt
   const debtResult = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(balance), 0) as total FROM supplier_balances WHERE balance > 0`
   );
   const totalDebt = debtResult?.total || 0;
 
+  // ✅ FIX: Calculate paid today by comparing each supplier's latest balance against its previous balance
   let paidToday = 0;
   try {
     const paidResult = await db.getFirstAsync<{ total: number }>(
       `SELECT COALESCE(SUM(
         CASE 
-          WHEN DATE(updated_at) >= ? AND DATE(updated_at) <= ? THEN balance - COALESCE(prev_balance, 0)
+          WHEN prev_balance IS NOT NULL AND balance < prev_balance THEN prev_balance - balance 
           ELSE 0 
         END
       ), 0) as total 
       FROM (
         SELECT 
-          supplier_id,
-          balance,
-          updated_at,
-          LAG(balance, 1) OVER (PARTITION BY supplier_id ORDER BY updated_at) as prev_balance
-        FROM supplier_balances
-      ) 
-      WHERE balance < prev_balance`,
+          sb1.balance,
+          sb1.updated_at,
+          (SELECT sb2.balance FROM supplier_balances sb2 
+           WHERE sb2.supplier_id = sb1.supplier_id 
+             AND sb2.updated_at < sb1.updated_at 
+           ORDER BY sb2.updated_at DESC LIMIT 1) as prev_balance
+        FROM supplier_balances sb1
+        WHERE DATE(sb1.updated_at) >= ? AND DATE(sb1.updated_at) <= ?
+      )`,
       [mondayStr, todayStr]
     );
     paidToday = Math.abs(paidResult?.total || 0);
