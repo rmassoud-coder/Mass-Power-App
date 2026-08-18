@@ -60,8 +60,8 @@ export default function SupplierDebtScreen() {
   }, [loadData]);
 
   const handleEditPress = (id: string) => {
-    setEditingId(id);
     setPayTodayValue('');
+    setEditingId(null); // <-- already there, just confirm it's there
   };
 
   const handleSavePress = async () => {
