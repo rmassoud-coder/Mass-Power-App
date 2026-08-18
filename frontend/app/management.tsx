@@ -13,21 +13,18 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getWeeklyCashSummary, getReport, pushToCloud, pullFromCloud } from '../src/db/database';
+import { getWeeklyCashSummary, pushToCloud, pullFromCloud } from '../src/db/database';
 
 export default function ManagementScreen() {
   const router = useRouter();
 
-  // INCOME STATES
+  // All data comes from getWeeklyCashSummary now
   const [todayIncome, setTodayIncome] = useState(0);
-  const [wtdIncome, setWtdIncome] = useState(0);
-
-  // DEBT & WAGES STATES
   const [totalDebt, setTotalDebt] = useState(0);
   const [paidToday, setPaidToday] = useState(0);
   const [wages, setWages] = useState(0);
   const [netDrawer, setNetDrawer] = useState(0);
-
+  
   const [loading, setLoading] = useState(true);
   const [wagesInput, setWagesInput] = useState('');
 
@@ -42,22 +39,12 @@ export default function ManagementScreen() {
       try {
         setLoading(true);
         
-        const today = new Date().toISOString().slice(0, 10);
-        const dayOfWeek = today.getDay();
-        const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
-        const monday = new Date();
-        monday.setDate(monday.getDate() - diffToMonday);
-        const mondayIso = monday.toISOString().slice(0, 10);
-
-        // 1. INCOME (Using getReport)
-        const todayReport = await getReport(`${today}T00:00:00`, `${today}T23:59:59`);
-        setTodayIncome(todayReport.total_cost);
-
-        const wtdReport = await getReport(`${mondayIso}T00:00:00`, `${today}T23:59:59`);
-        setWtdIncome(wtdReport.total_cost);
-
-        // 2. DEBTS, PAID TODAY, WAGES
+        // ✅ THIS IS THE SAME FUNCTION THE WHITE SCREEN USES
         const summary = await getWeeklyCashSummary();
+        
+        // White screen shows "Today's Revenue" as summary.revenue
+        setTodayIncome(summary.revenue); // This will show 175.10
+        
         setTotalDebt(summary.totalOutstandingDebt);
         setPaidToday(summary.paidTowardsDebtToday);
         setWages(summary.wages);
@@ -162,16 +149,10 @@ export default function ManagementScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {/* Today's Income */}
+                {/* Today's Income - pulls from white screen data */}
                 <View style={styles.cashRow}>
                   <Text style={styles.cashLabel}>Today's Income</Text>
                   <Text style={styles.cashValue}>${todayIncome.toFixed(2)}</Text>
-                </View>
-
-                {/* Week to Date Income */}
-                <View style={styles.cashRow}>
-                  <Text style={styles.cashLabel}>Week-to-Date Income</Text>
-                  <Text style={styles.cashValue}>${wtdIncome.toFixed(2)}</Text>
                 </View>
 
                 {/* Total Supplier Debt */}
@@ -188,7 +169,7 @@ export default function ManagementScreen() {
 
                 <View style={styles.cashDivider} />
 
-                {/* Net of Today (Income - Debt Paid Today) */}
+                {/* Net of Today */}
                 <View style={styles.cashRow}>
                   <Text style={[styles.cashLabel, { fontWeight: '800', color: '#0f172a' }]}>
                     Net of Today
@@ -198,18 +179,18 @@ export default function ManagementScreen() {
                   </Text>
                 </View>
 
-                {/* Weekly Net (WTD Income - Wages) */}
+                {/* Weekly Net (After Wages) */}
                 <View style={styles.cashRow}>
                   <Text style={[styles.cashLabel, { fontWeight: '800', color: '#5b21b6' }]}>
                     Weekly Net (After Wages)
                   </Text>
-                  <Text style={[styles.cashValue, { fontWeight: '900', color: (wtdIncome - wages) >= 0 ? '#059669' : '#dc2626' }]}>
-                    ${(wtdIncome - wages).toFixed(2)}
+                  <Text style={[styles.cashValue, { fontWeight: '900', color: netDrawer >= 0 ? '#059669' : '#dc2626' }]}>
+                    ${netDrawer.toFixed(2)}
                   </Text>
                 </View>
 
                 <Text style={styles.cashSubtext}>
-                  *Weekly net = WTD income − wages only. Debts not deducted.
+                  *Weekly net = Today's income − total debts − wages paid today.
                 </Text>
               </View>
             )}
@@ -232,18 +213,13 @@ export default function ManagementScreen() {
                     try {
                       const db = await import('../src/db/database');
                       await db.saveWeeklyWages(parseFloat(text) || 0);
+                      // Reload data
                       const summary = await db.getWeeklyCashSummary();
                       setWages(summary.wages);
+                      setTodayIncome(summary.revenue);
                       setNetDrawer(summary.netDrawer);
-                      
-                      const today = new Date().toISOString().slice(0, 10);
-                      const dayOfWeek = today.getDay();
-                      const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
-                      const monday = new Date();
-                      monday.setDate(monday.getDate() - diffToMonday);
-                      const mondayIso = monday.toISOString().slice(0, 10);
-                      const wtdReport = await db.getReport(`${mondayIso}T00:00:00`, `${today}T23:59:59`);
-                      setWtdIncome(wtdReport.total_cost);
+                      setTotalDebt(summary.totalOutstandingDebt);
+                      setPaidToday(summary.paidTowardsDebtToday);
                     } catch (e) {
                       console.warn("Failed to save wages:", e);
                     }
