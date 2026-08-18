@@ -1197,6 +1197,7 @@ export async function getReport(
   const conditions: string[] = [];
   const params: any[] = [];
 
+  // ✅ REMOVED THE BAD DATE FORCING BLOCK. It now respects passed dates.
 
   if (startDate) {
     conditions.push('DATE(s.service_date) >= DATE(?)');
@@ -1271,21 +1272,17 @@ export async function getReport(
   }));
   const total_cost = items.reduce((sum, i) => sum + i.cost, 0);
   const outsource_total = items.reduce((sum, i) => sum + (i.outsource_cost || 0), 0);
-  
   let net_cash_flow = total_cost - outsource_total;
   
-  const mondayStr = monday.toISOString().slice(0, 10);
-  const todayStr = today.toISOString().slice(0, 10);
-
+  // Deduct wages from net cash
   try {
     const wagesResult = await db.getFirstAsync<{ total: number }>(
       `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid 
        WHERE DATE(date) >= ? AND DATE(date) <= ?`,
-      [mondayStr, todayStr]
+      [startDate || '1970-01-01', endDate || '2099-12-31']
     );
     const wages = wagesResult?.total || 0;
     net_cash_flow = net_cash_flow - wages;
-    console.log(`✅ Subtracted $${wages} in wages`);
   } catch (e) {
     console.log("ℹ️ Wages table not ready yet, skipping...");
   }
@@ -1469,7 +1466,6 @@ export async function exportFullDatabase(): Promise<FullDbSnapshot> {
   const inventory = await db.getAllAsync<InventoryItem>(`SELECT * FROM inventory`);
   const suppliers = await db.getAllAsync<Supplier>(`SELECT * FROM suppliers`);
   
-  // 🔥 FETCH THE SUPPLIER BALANCES AND WAGES
   const supplierBalances = await db.getAllAsync<{ supplier_id: string; balance: number }>(
     `SELECT * FROM supplier_balances`
   );
@@ -1491,10 +1487,6 @@ export async function exportFullDatabase(): Promise<FullDbSnapshot> {
   };
 }
 
-/** Wipes every table and re-inserts the cloud snapshot. Cloud-wins semantics.
- *  Used only for: (1) restoring your own local pre-Pull safety snapshot,
- *  (2) explicit "Replace" in manual Backup & Restore. Never used by the
- *  normal Push/Pull flow — that uses mergeCloudIntoLocal instead. */
 export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
   if (!snap || !Array.isArray(snap.customers) || !Array.isArray(snap.vehicles) || !Array.isArray(snap.services)) {
     throw new Error('Invalid snapshot');
@@ -1575,7 +1567,6 @@ export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
     }
   }
   
-  // 🔥 RESTORE SUPPLIER BALANCES FROM CLOUD
   if (Array.isArray(snap.supplierBalances)) {
     for (const sb of snap.supplierBalances) {
       await db.runAsync(
@@ -1585,7 +1576,6 @@ export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
     }
   }
 
-  // 🔥 RESTORE WAGES FROM CLOUD
   if (Array.isArray(snap.wagesPaid)) {
     for (const wp of snap.wagesPaid) {
       await db.runAsync(
@@ -1611,7 +1601,6 @@ function newer(a?: string | null, b?: string | null): boolean {
   return ta > tb;
 }
 
-// *** FIXED SINGLE MERGE FUNCTION BELOW ***
 export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeResult> {
   const db = await getDb();
   const result: MergeResult = {
@@ -1623,7 +1612,6 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
     service_items: { inserted: 0, updated: 0 }
   };
 
-  // Merge customers
   if (Array.isArray(snap.customers)) {
     for (const c of snap.customers) {
       const existing = await db.getFirstAsync<{ updated_at: string }>(
@@ -1645,7 +1633,6 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
     }
   }
 
-  // Merge vehicles
   if (Array.isArray(snap.vehicles)) {
     for (const v of snap.vehicles) {
       const existing = await db.getFirstAsync<{ created_at: string }>(
@@ -1671,7 +1658,6 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
     }
   }
 
-  // Merge services
   if (Array.isArray(snap.services)) {
     for (const s of snap.services) {
       const existing = await db.getFirstAsync<{ created_at: string }>(
@@ -1736,7 +1722,6 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
     }
   }
 
-  // Merge inventory
   if (Array.isArray(snap.inventory)) {
     for (const item of snap.inventory) {
       const existing = await db.getFirstAsync<{ updated_at: string }>(
@@ -1763,7 +1748,6 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
     }
   }
 
-  // Merge suppliers
   if (Array.isArray(snap.suppliers)) {
     for (const sup of snap.suppliers) {
       const existing = await db.getFirstAsync<{ created_at: string }>(
@@ -1784,7 +1768,6 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
     }
   }
 
-  // Merge service_items
   if (Array.isArray(snap.service_items)) {
     for (const si of snap.service_items) {
       const existing = await db.getFirstAsync<{ created_at: string }>(
@@ -1808,7 +1791,6 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
     }
   }
 
-  // 🔥 MERGE SUPPLIER BALANCES (Debts) SO THEY SYNC
   if (Array.isArray(snap.supplierBalances)) {
     for (const sb of snap.supplierBalances) {
       await db.runAsync(
@@ -1819,7 +1801,6 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
     }
   }
 
-  // 🔥 MERGE WAGES SO THEY SYNC
   if (Array.isArray(snap.wagesPaid)) {
     for (const wp of snap.wagesPaid) {
       await db.runAsync(
@@ -1879,7 +1860,6 @@ export async function updateSupplier(
   
   const prev = await db.getFirstAsync<Supplier>(`SELECT * FROM suppliers WHERE id = ?`, [id]);
   
-  // Update the supplier's name and contact info
   await db.runAsync(
     `UPDATE suppliers SET name = ?, contact_info = ? WHERE id = ?`,
     [clean, (contactInfo || '').trim() || null, id]
@@ -1891,7 +1871,6 @@ export async function updateSupplier(
     );
   }
 
-  // 🔥 RESTORE THE DEBT UPDATE BLOCK
   if (newDebt !== undefined) {
     const now = new Date().toISOString();
     await db.runAsync(
@@ -1946,7 +1925,6 @@ export async function deleteAllWalkinData(): Promise<CleanupResult> {
   
   console.log('🗑️ Starting walk-in data cleanup...');
   
-  // 1. Find all walk-in customer IDs - ONLY by NAME!
   const walkinCustomers = await db.getAllAsync<{ id: string }>(
     `SELECT id FROM customers 
      WHERE LOWER(name) LIKE '%walkin%' 
@@ -1961,7 +1939,6 @@ export async function deleteAllWalkinData(): Promise<CleanupResult> {
     return { customersDeleted: 0, vehiclesDeleted: 0, servicesDeleted: 0, serviceItemsDeleted: 0 };
   }
   
-  // 2. Find vehicles belonging to walk-in customers
   let vehicleIds: string[] = [];
   if (customerIds.length > 0) {
     for (let i = 0; i < customerIds.length; i += BATCH_SIZE) {
@@ -1976,7 +1953,6 @@ export async function deleteAllWalkinData(): Promise<CleanupResult> {
   }
   console.log(`🔍 Found ${vehicleIds.length} walk-in vehicles`);
   
-  // 3. Find services belonging to walk-in vehicles or customers
   let serviceIds: string[] = [];
   
   if (vehicleIds.length > 0) {
@@ -2006,7 +1982,6 @@ export async function deleteAllWalkinData(): Promise<CleanupResult> {
   serviceIds = [...new Set(serviceIds)];
   console.log(`🔍 Found ${serviceIds.length} walk-in services`);
   
-  // 4. Delete service_items
   let serviceItemsDeleted = 0;
   if (serviceIds.length > 0) {
     for (let i = 0; i < serviceIds.length; i += BATCH_SIZE) {
@@ -2021,7 +1996,6 @@ export async function deleteAllWalkinData(): Promise<CleanupResult> {
     console.log(`🗑️ Deleted ${serviceItemsDeleted} service items`);
   }
   
-  // 5. Delete services
   let servicesDeleted = 0;
   if (serviceIds.length > 0) {
     for (let i = 0; i < serviceIds.length; i += BATCH_SIZE) {
@@ -2036,7 +2010,6 @@ export async function deleteAllWalkinData(): Promise<CleanupResult> {
     console.log(`🗑️ Deleted ${servicesDeleted} services`);
   }
   
-  // 6. Delete vehicles
   let vehiclesDeleted = 0;
   if (vehicleIds.length > 0) {
     for (let i = 0; i < vehicleIds.length; i += BATCH_SIZE) {
@@ -2051,7 +2024,6 @@ export async function deleteAllWalkinData(): Promise<CleanupResult> {
     console.log(`🗑️ Deleted ${vehiclesDeleted} vehicles`);
   }
   
-  // 7. Delete customers
   let customersDeleted = 0;
   if (customerIds.length > 0) {
     for (let i = 0; i < customerIds.length; i += BATCH_SIZE) {
@@ -2083,7 +2055,6 @@ export async function checkWalkinData(): Promise<{
 }> {
   const db = await getDb();
   
-  // ONLY check by NAME!
   const customers = await db.getAllAsync<{ count: number }>(
     `SELECT COUNT(*) as count FROM customers 
      WHERE LOWER(name) LIKE '%walkin%' 
@@ -2096,7 +2067,6 @@ export async function checkWalkinData(): Promise<{
   let vehicles = 0;
   let services = 0;
   
-  // Only count vehicles/services if there are walk-in customers
   if (customerResult > 0) {
     const vehicleResult = await db.getAllAsync<{ count: number }>(
       `SELECT COUNT(*) as count FROM vehicles 
@@ -2314,7 +2284,6 @@ export async function createWalkinProductSale(
   };
 }
 
-// 🔥 FIXED: getSupplierBalances with error catching
 export async function getSupplierBalances(): Promise<{ id: string; name: string; balance: number }[]> {
   const db = await getDb();
   try {
@@ -2327,7 +2296,6 @@ export async function getSupplierBalances(): Promise<{ id: string; name: string;
     return rows;
   } catch (error) {
     console.error("❌ getSupplierBalances failed:", error);
-    // Return empty array instead of crashing
     return [];
   }
 }
@@ -2382,7 +2350,6 @@ export async function getWeeklyCashSummary(): Promise<{
   const mondayStr = monday.toISOString().slice(0, 10);
   const todayStr = today.toISOString().slice(0, 10);
 
-  // Revenue (paid services this week)
   const revenueResult = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(cost), 0) as total FROM services 
      WHERE DATE(service_date) >= ? AND DATE(service_date) <= ? AND (is_paid = 1 OR partial_paid > 0)`,
@@ -2390,13 +2357,11 @@ export async function getWeeklyCashSummary(): Promise<{
   );
   const revenue = revenueResult?.total || 0;
 
-  // Total outstanding debt
   const debtResult = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(balance), 0) as total FROM supplier_balances WHERE balance > 0`
   );
   const totalDebt = debtResult?.total || 0;
 
-  // ✅ FIX: Calculate paid today by comparing each supplier's latest balance against its previous balance
   let paidToday = 0;
   try {
     const paidResult = await db.getFirstAsync<{ total: number }>(
@@ -2446,7 +2411,6 @@ export async function emergencyNukeDatabase() {
   try {
     const db = await getDb();
     
-    // 🔥 SAFE NUKE: Only drops the broken supplier and wages tables
     await db.execAsync(`
       PRAGMA foreign_keys = OFF;
       
@@ -2458,7 +2422,6 @@ export async function emergencyNukeDatabase() {
     
     console.log("💥 Corrupted supplier/wage tables wiped safely!");
     
-    // IMPORTANT: Recreate the empty tables immediately
     await db.execAsync(`
       CREATE TABLE IF NOT EXISTS supplier_balances (
         supplier_id TEXT PRIMARY KEY,
