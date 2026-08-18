@@ -13,18 +13,18 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getWeeklyCashSummary, pushToCloud, pullFromCloud } from '../src/db/database';
+import { getReport, getWeeklyCashSummary, pushToCloud, pullFromCloud } from '../src/db/database';
 
 export default function ManagementScreen() {
   const router = useRouter();
 
-  // All data comes from getWeeklyCashSummary now
+  // 5 NUMBERS YOU ASKED FOR
   const [todayIncome, setTodayIncome] = useState(0);
-  const [totalDebt, setTotalDebt] = useState(0);
-  const [paidToday, setPaidToday] = useState(0);
-  const [wages, setWages] = useState(0);
-  const [netDrawer, setNetDrawer] = useState(0);
-  
+  const [wtdIncome, setWtdIncome] = useState(0);
+  const [outsourceTotal, setOutsourceTotal] = useState(0);
+  const [totalSupplierDebt, setTotalSupplierDebt] = useState(0);
+  const [debtPaidThisWeek, setDebtPaidThisWeek] = useState(0);
+
   const [loading, setLoading] = useState(true);
   const [wagesInput, setWagesInput] = useState('');
 
@@ -38,17 +38,36 @@ export default function ManagementScreen() {
     const loadFinances = async () => {
       try {
         setLoading(true);
-        
-        // ✅ THIS IS THE SAME FUNCTION THE WHITE SCREEN USES
+
+        // 1. GET TODAY'S DATE AND MONDAY'S DATE
+        const today = new Date();
+        const todayStr = today.toISOString().slice(0, 10); // 2026-08-18
+
+        const dayOfWeek = today.getDay();
+        const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+        const monday = new Date(today);
+        monday.setDate(today.getDate() - diffToMonday);
+        const mondayStr = monday.toISOString().slice(0, 10); // 2026-08-17
+
+        // 2. GET TODAY'S REPORT (18-08 only)
+        const todayReport = await getReport(
+          `${todayStr}T00:00:00`,
+          `${todayStr}T23:59:59`
+        );
+        setTodayIncome(todayReport.total_cost);
+        setOutsourceTotal(todayReport.outsource_total);
+
+        // 3. GET WEEK-TO-DATE REPORT (17-08 to 18-08)
+        const wtdReport = await getReport(
+          `${mondayStr}T00:00:00`,
+          `${todayStr}T23:59:59`
+        );
+        setWtdIncome(wtdReport.total_cost);
+
+        // 4. GET SUPPLIER DEBTS & PAID THIS WEEK
         const summary = await getWeeklyCashSummary();
-        
-        // White screen shows "Today's Revenue" as summary.revenue
-        setTodayIncome(summary.revenue); // This will show 175.10
-        
-        setTotalDebt(summary.totalOutstandingDebt);
-        setPaidToday(summary.paidTowardsDebtToday);
-        setWages(summary.wages);
-        setNetDrawer(summary.netDrawer);
+        setTotalSupplierDebt(summary.totalOutstandingDebt);
+        setDebtPaidThisWeek(summary.paidTowardsDebtToday);
 
       } catch (e) {
         console.warn("Failed to load finances:", e);
@@ -103,7 +122,6 @@ export default function ManagementScreen() {
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         
-        {/* Cloud Sync */}
         <View style={styles.syncCard}>
           <Text style={styles.syncTitle}>Cloud Sync</Text>
           <View style={styles.syncButtonsRow}>
@@ -119,7 +137,6 @@ export default function ManagementScreen() {
           <Text style={styles.syncHint}>Push uploads data. Pull merges cloud copy.</Text>
         </View>
 
-        {/* Lock */}
         {!isAuthenticated && (
           <TouchableOpacity style={styles.lockButton} onPress={() => setPinModalVisible(true)}>
             <Ionicons name="lock-closed" size={24} color="#fff" />
@@ -137,7 +154,7 @@ export default function ManagementScreen() {
             {loading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#5b21b6" />
-                <Text style={styles.loadingText}>Calculating cash...</Text>
+                <Text style={styles.loadingText}>Loading finances...</Text>
               </View>
             ) : (
               <View style={styles.cashCard}>
@@ -149,84 +166,40 @@ export default function ManagementScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {/* Today's Income - pulls from white screen data */}
+                {/* 1. Today Income */}
                 <View style={styles.cashRow}>
                   <Text style={styles.cashLabel}>Today's Income</Text>
                   <Text style={styles.cashValue}>${todayIncome.toFixed(2)}</Text>
                 </View>
 
-                {/* Total Supplier Debt */}
+                {/* 2. Week-to-Date Income */}
                 <View style={styles.cashRow}>
-                  <Text style={[styles.cashLabel, { color: '#dc2626' }]}>− Supplier Debt Total</Text>
-                  <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${totalDebt.toFixed(2)}</Text>
+                  <Text style={styles.cashLabel}>Week-to-Date Income</Text>
+                  <Text style={styles.cashValue}>${wtdIncome.toFixed(2)}</Text>
                 </View>
 
-                {/* Paid Towards Debt Today */}
+                {/* 3. Outsource Amount */}
                 <View style={styles.cashRow}>
-                  <Text style={[styles.cashLabel, { color: '#eab308' }]}>Paid Towards Debt Today</Text>
-                  <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${paidToday.toFixed(2)}</Text>
+                  <Text style={[styles.cashLabel, { color: '#dc2626' }]}>− Outsource</Text>
+                  <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${outsourceTotal.toFixed(2)}</Text>
                 </View>
 
                 <View style={styles.cashDivider} />
 
-                {/* Net of Today */}
+                {/* 4. Total Supplier Debts */}
                 <View style={styles.cashRow}>
-                  <Text style={[styles.cashLabel, { fontWeight: '800', color: '#0f172a' }]}>
-                    Net of Today
-                  </Text>
-                  <Text style={[styles.cashValue, { fontWeight: '900', color: (todayIncome - paidToday) >= 0 ? '#059669' : '#dc2626' }]}>
-                    ${(todayIncome - paidToday).toFixed(2)}
-                  </Text>
+                  <Text style={[styles.cashLabel, { color: '#dc2626' }]}>Total Supplier Debts</Text>
+                  <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${totalSupplierDebt.toFixed(2)}</Text>
                 </View>
 
-                {/* Weekly Net (After Wages) */}
+                {/* 5. Debt Paid This Week */}
                 <View style={styles.cashRow}>
-                  <Text style={[styles.cashLabel, { fontWeight: '800', color: '#5b21b6' }]}>
-                    Weekly Net (After Wages)
-                  </Text>
-                  <Text style={[styles.cashValue, { fontWeight: '900', color: netDrawer >= 0 ? '#059669' : '#dc2626' }]}>
-                    ${netDrawer.toFixed(2)}
-                  </Text>
+                  <Text style={[styles.cashLabel, { color: '#eab308' }]}>Paid This Week</Text>
+                  <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${debtPaidThisWeek.toFixed(2)}</Text>
                 </View>
 
-                <Text style={styles.cashSubtext}>
-                  *Weekly net = Today's income − total debts − wages paid today.
-                </Text>
               </View>
             )}
-
-            {/* Wages Input */}
-            <View style={styles.wagesCard}>
-              <View style={styles.wagesHeaderRow}>
-                <Ionicons name="people-outline" size={20} color="#2563eb" />
-                <Text style={styles.wagesHeader}>Weekly Wages Paid</Text>
-              </View>
-              <View style={styles.wagesRow}>
-                <Text style={styles.wagesLabel}>Enter total wages paid this week:</Text>
-                <TextInput
-                  style={styles.wagesInput}
-                  placeholder="0.00"
-                  keyboardType="decimal-pad"
-                  value={wagesInput}
-                  onChangeText={async (text) => {
-                    setWagesInput(text);
-                    try {
-                      const db = await import('../src/db/database');
-                      await db.saveWeeklyWages(parseFloat(text) || 0);
-                      // Reload data
-                      const summary = await db.getWeeklyCashSummary();
-                      setWages(summary.wages);
-                      setTodayIncome(summary.revenue);
-                      setNetDrawer(summary.netDrawer);
-                      setTotalDebt(summary.totalOutstandingDebt);
-                      setPaidToday(summary.paidTowardsDebtToday);
-                    } catch (e) {
-                      console.warn("Failed to save wages:", e);
-                    }
-                  }}
-                />
-              </View>
-            </View>
           </>
         )}
 
@@ -264,7 +237,6 @@ export default function ManagementScreen() {
 
       </ScrollView>
 
-      {/* PIN MODAL */}
       <Modal animationType="slide" transparent visible={pinModalVisible} onRequestClose={() => setPinModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -354,24 +326,6 @@ const styles = StyleSheet.create({
   cashLabel: { fontSize: 15, color: '#1e293b', fontWeight: '500' },
   cashValue: { fontSize: 15, fontWeight: '700', color: '#1e293b' },
   cashDivider: { height: 1, backgroundColor: '#c4b5fd', marginVertical: 8 },
-  cashSubtext: { fontSize: 11, color: '#6b21a8', fontStyle: 'italic', marginTop: 8 },
-  wagesCard: {
-    backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16,
-    borderWidth: 1, borderColor: '#e2e8f0',
-  },
-  wagesHeaderRow: {
-    flexDirection: 'row', alignItems: 'center', marginBottom: 12,
-  },
-  wagesHeader: { fontSize: 16, fontWeight: '700', color: '#2563eb', marginLeft: 8 },
-  wagesRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-  },
-  wagesLabel: { fontSize: 14, color: '#475569', flex: 1, marginRight: 12 },
-  wagesInput: {
-    backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8,
-    paddingHorizontal: 12, paddingVertical: 8, minWidth: 100, fontSize: 16,
-    fontWeight: '600', textAlign: 'right', color: '#0f172a',
-  },
   dashboardGrid: { flexDirection: 'row', gap: 12, marginBottom: 12 },
   dashCard: {
     flex: 1, borderRadius: 16, padding: 20, alignItems: 'center',
