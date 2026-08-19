@@ -2246,13 +2246,31 @@ export async function getSupplierBalances(): Promise<{ id: string; name: string;
 
 export async function updateSupplierBalance(supplierId: string, newBalance: number): Promise<void> {
   const db = await getDb();
-  const now = new Date().toISOString(); // 🔥 THIS MUST BE HERE
+  const now = new Date().toISOString();
   
+  // 1. Get OLD balance
+  const oldRecord = await db.getFirstAsync<{ balance: number }>(
+    `SELECT balance FROM supplier_balances WHERE supplier_id = ?`,
+    [supplierId]
+  );
+  const oldBalance = oldRecord?.balance || 0;
+  
+  // 2. Update the balance
   await db.runAsync(
     `INSERT INTO supplier_balances (supplier_id, balance, updated_at) VALUES (?, ?, ?)
      ON CONFLICT(supplier_id) DO UPDATE SET balance = ?, updated_at = ?`,
-    [supplierId, newBalance, now, newBalance, now] // 🔥 NOW IS PASSED HERE
+    [supplierId, newBalance, now, newBalance, now]
   );
+
+  // 3. Log the payment if money was paid
+  if (newBalance < oldBalance) {
+    const amountPaid = oldBalance - newBalance;
+    const paymentId = generateId();
+    await db.runAsync(
+      `INSERT INTO supplier_payments (id, supplier_id, amount_paid, paid_at, created_at) VALUES (?, ?, ?, ?, ?)`,
+      [paymentId, supplierId, amountPaid, now, now]
+    );
+  }
 }
 
 export async function saveWeeklyWages(amount: number): Promise<void> {
