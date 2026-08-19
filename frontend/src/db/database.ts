@@ -628,25 +628,35 @@ export async function createService(
   hvac?: HvacService,
   outsourceCost: number = 0
 ): Promise<Service> {
-  const db = await getDb();
-  const vehicle = await db.getFirstAsync<Vehicle>(
-    `SELECT * FROM vehicles WHERE id = ?`,
-    [vehicleId]
-  );
-  if (!vehicle) {
-    throw new Error('Vehicle not found');
-  }
-  const id = generateId();
-  const now = new Date().toISOString();
-  const d = dashLights || EMPTY_DASH_LIGHTS;
-  const o = oilReminder || EMPTY_OIL_REMINDER;
-  const b = battery || EMPTY_BATTERY_REPLACEMENT;
-  const h = hvac || EMPTY_HVAC_SERVICE;
-  const pp = Math.max(0, Number(partialPaid) || 0);
-  const oc = Math.max(0, Number(outsourceCost) || 0);
-  await db.runAsync(
-    `INSERT INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, partial_paid, service_date, created_at, dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, dash_tpms, dash_oil_leak, current_mileage, next_service_date, next_service_mileage, oil_grade, oil_filter_changed, battery_amp_rate, battery_install_date, battery_warranty_months, battery_parasitic_tested, hvac_freon_date, hvac_leak_tested, outsource_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
+  try {
+    const db = await getDb();
+    const vehicle = await db.getFirstAsync<Vehicle>(
+      `SELECT * FROM vehicles WHERE id = ?`,
+      [vehicleId]
+    );
+    if (!vehicle) {
+      throw new Error('Vehicle not found');
+    }
+    const id = generateId();
+    const now = new Date().toISOString();
+    const d = dashLights || EMPTY_DASH_LIGHTS;
+    const o = oilReminder || EMPTY_OIL_REMINDER;
+    const b = battery || EMPTY_BATTERY_REPLACEMENT;
+    const h = hvac || EMPTY_HVAC_SERVICE;
+    const pp = Math.max(0, Number(partialPaid) || 0);
+    const oc = Math.max(0, Number(outsourceCost) || 0);
+
+    const sql = `
+      INSERT INTO services (
+        id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, partial_paid, 
+        service_date, created_at, dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, 
+        dash_tpms, dash_oil_leak, current_mileage, next_service_date, next_service_mileage, oil_grade, 
+        oil_filter_changed, battery_amp_rate, battery_install_date, battery_warranty_months, 
+        battery_parasitic_tested, hvac_freon_date, hvac_leak_tested, outsource_cost
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    const params = [
       id,
       vehicleId,
       vehicle.customer_id,
@@ -676,42 +686,47 @@ export async function createService(
       h.freonDate || null,
       h.leakTested ? 1 : 0,
       oc,
-    ]
-  );
+    ];
 
-  const savedItems = await attachItemsToService(id, items || []);
+    await db.runAsync(sql, params);
 
-  return {
-    id,
-    vehicle_id: vehicleId,
-    customer_id: vehicle.customer_id,
-    service_description: serviceDescription,
-    additional_info: additionalInfo,
-    cost,
-    is_paid: isPaid,
-    service_date: now,
-    created_at: now,
-    dash_abs: d.abs,
-    dash_check_engine: d.check_engine,
-    dash_brake: d.brake,
-    dash_airbag: d.airbag,
-    dash_immobilizer: d.immobilizer,
-    dash_tpms: d.tpms,
-    dash_oil_leak: d.oil_leak,
-    current_mileage: o.currentMileage,
-    next_service_date: o.nextServiceDate,
-    next_service_mileage: o.nextServiceMileage,
-    oil_grade: o.oilGrade || null,
-    oil_filter_changed: o.oilFilterChanged,
-    battery_amp_rate: b.ampRate?.trim() || null,
-    battery_install_date: b.installDate || null,
-    battery_warranty_months: b.warrantyMonths ?? null,
-    battery_parasitic_tested: b.parasiticTested,
-    hvac_freon_date: h.freonDate || null,
-    hvac_leak_tested: h.leakTested,
-    outsource_cost: oc,
-    items: savedItems,
-  };
+    const savedItems = await attachItemsToService(id, items || []);
+
+    return {
+      id,
+      vehicle_id: vehicleId,
+      customer_id: vehicle.customer_id,
+      service_description: serviceDescription,
+      additional_info: additionalInfo,
+      cost,
+      is_paid: isPaid,
+      service_date: now,
+      created_at: now,
+      dash_abs: d.abs,
+      dash_check_engine: d.check_engine,
+      dash_brake: d.brake,
+      dash_airbag: d.airbag,
+      dash_immobilizer: d.immobilizer,
+      dash_tpms: d.tpms,
+      dash_oil_leak: d.oil_leak,
+      current_mileage: o.currentMileage,
+      next_service_date: o.nextServiceDate,
+      next_service_mileage: o.nextServiceMileage,
+      oil_grade: o.oilGrade || null,
+      oil_filter_changed: o.oilFilterChanged,
+      battery_amp_rate: b.ampRate?.trim() || null,
+      battery_install_date: b.installDate || null,
+      battery_warranty_months: b.warrantyMonths ?? null,
+      battery_parasitic_tested: b.parasiticTested,
+      hvac_freon_date: h.freonDate || null,
+      hvac_leak_tested: h.leakTested,
+      outsource_cost: oc,
+      items: savedItems,
+    };
+  } catch (error: any) {
+    // 🔥 Shows the exact error on your phone screen instead of white screen
+    throw new Error(`CRASH in createService: ${error.message}`);
+  }
 }
 
 export async function updateService(
