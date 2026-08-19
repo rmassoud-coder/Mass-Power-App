@@ -997,7 +997,7 @@ try {
 } catch (e) {
   paidToday = 0;
 }
-  
+}
   // This calculates what the debt was before today (Monday to Yesterday)
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
