@@ -1785,7 +1785,6 @@ function newer(a?: string | null, b?: string | null): boolean {
   const tb = b ? Date.parse(b) : 0;
   return ta > tb;
 }
-
 export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeResult> {
   const db = await getDb();
   const result: MergeResult = {
@@ -1960,7 +1959,46 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
         [si.id]
       );
       if (!existing || newer(si.created_at, existing.created_at)) {
-        await db.runAsync(          
+        await db.runAsync(
+          `INSERT INTO service_items (id, service_id, inventory_id, item_type, quantity, unit_price, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             service_id = excluded.service_id,
+             inventory_id = excluded.inventory_id,
+             item_type = excluded.item_type,
+             quantity = excluded.quantity,
+             unit_price = excluded.unit_price`,
+          [si.id, si.service_id, si.inventory_id, si.item_type, si.quantity, si.unit_price, si.created_at]
+        );
+        existing ? result.service_items.updated++ : result.service_items.inserted++;
+      }
+    }
+  }
+
+  if (Array.isArray(snap.supplierBalances)) {
+    for (const sb of snap.supplierBalances) {
+      await db.runAsync(
+        `INSERT INTO supplier_balances (supplier_id, balance, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(supplier_id) DO UPDATE SET balance = ?, updated_at = ?`,
+        [sb.supplier_id, sb.balance, sb.updated_at || snap.exported_at, sb.balance, sb.updated_at || snap.exported_at]
+      );
+    }
+  }
+
+  if (Array.isArray(snap.wagesPaid)) {
+    for (const wp of snap.wagesPaid) {
+      await db.runAsync(
+        `INSERT INTO wages_paid (id, date, amount, created_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET amount = ?, created_at = ?`,
+        [wp.id, wp.date, wp.amount, wp.created_at || snap.exported_at, wp.amount, wp.created_at || snap.exported_at]
+      );
+    }
+  }
+
+  return result;
+}
+
+export async function createQuickWalkinService(
   customerName: string | undefined,
   description: string,
   totalCost: number,
@@ -2355,6 +2393,3 @@ export async function checkWalkinData(): Promise<{
     services,
   };
 }
-      }
-    }
-  }
