@@ -1152,6 +1152,18 @@ export async function getReport(
     net_cash_flow,
   };
 }
+
+// EXPORT MISSING SYNC FUNCTIONS (dummy for now so app doesn't crash)
+export async function pushToCloud(): Promise<void> {
+  console.log("Push to cloud called");
+}
+export async function pullFromCloud(): Promise<void> {
+  console.log("Pull from cloud called");
+}
+export async function triggerAutoPush(): Promise<void> {
+  console.log("Auto push triggered");
+}
+
 // 🔥 ADD THIS BLOCK AT THE VERY BOTTOM OF database.ts
 export async function createQuickWalkinService(
   customerName: string | undefined,
@@ -1337,14 +1349,4 @@ export async function createWalkinProductSale(
     partial_paid: 0,
     outsource_cost: 0,
   };
-}
-// EXPORT MISSING SYNC FUNCTIONS (dummy for now so app doesn't crash)
-export async function pushToCloud(): Promise<void> {
-  console.log("Push to cloud called");
-}
-export async function pullFromCloud(): Promise<void> {
-  console.log("Pull from cloud called");
-}
-export async function triggerAutoPush(): Promise<void> {
-  console.log("Auto push triggered");
 }
