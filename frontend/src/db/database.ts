@@ -2325,29 +2325,15 @@ export async function getWeeklyCashSummary(): Promise<{
   const totalDebt = debtResult?.total || 0;
 
 // 🔥 FIX: Simple, cross-version SQLite math (No LAG, no window functions)
+// 🔥 FIX: Read from the supplier_payments table
 let paidToday = 0;
 try {
-  // Get total debt at the beginning of the week (Monday morning)
-  // Calculate the day BEFORE Monday (Sunday)
-const sunday = new Date(monday);
-sunday.setDate(sunday.getDate() - 1);
-const sundayStr = sunday.toISOString().slice(0, 10);
-
-const prevDebtResult = await db.getFirstAsync<{ total: number }>(
-  `SELECT COALESCE(SUM(balance), 0) as total FROM supplier_balances 
-   WHERE DATE(updated_at) <= ?`,
-  [sundayStr]
-);
-  const prevTotalDebt = prevDebtResult?.total || 0;
-
-  // Get total debt right now
-  const currentDebtResult = await db.getFirstAsync<{ total: number }>(
-    `SELECT COALESCE(SUM(balance), 0) as total FROM supplier_balances`
+  const paidResult = await db.getFirstAsync<{ total: number }>(
+    `SELECT COALESCE(SUM(amount_paid), 0) as total FROM supplier_payments 
+     WHERE DATE(paid_at) >= ? AND DATE(paid_at) <= ?`,
+    [mondayStr, todayStr]
   );
-  const currentTotalDebt = currentDebtResult?.total || 0;
-
-  // Paid today = what we owed at the start of the week - what we owe now
-  paidToday = Math.max(0, prevTotalDebt - currentTotalDebt);
+  paidToday = paidResult?.total || 0;
 } catch (e) {
   paidToday = 0;
 }
