@@ -282,7 +282,14 @@ export async function initDatabase() {
       contact_info TEXT,
       created_at TEXT NOT NULL
     );
-
+    
+CREATE TABLE IF NOT EXISTS supplier_payments (
+  id TEXT PRIMARY KEY,
+  supplier_id TEXT NOT NULL,
+  amount_paid REAL NOT NULL,
+  paid_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
     CREATE TABLE IF NOT EXISTS service_items (
       id TEXT PRIMARY KEY,
       service_id TEXT NOT NULL,
