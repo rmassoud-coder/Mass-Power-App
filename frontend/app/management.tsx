@@ -13,7 +13,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getReport, getWeeklyCashSummary, pushToCloud, pullFromCloud } from '../src/db/database';
+import { getReport, getWeeklyCashSummary } from '../src/db/database';
+import { pushToCloud, pullFromCloud } from '../src/utils/dbSync';
 
 export default function ManagementScreen() {
   const router = useRouter();
