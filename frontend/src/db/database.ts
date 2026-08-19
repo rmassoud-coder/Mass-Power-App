@@ -2239,12 +2239,12 @@ export async function getSupplierBalances(): Promise<{ id: string; name: string;
 
 export async function updateSupplierBalance(supplierId: string, newBalance: number): Promise<void> {
   const db = await getDb();
-  const now = new Date().toISOString();
+  const now = new Date().toISOString(); // 🔥 THIS MUST BE HERE
   
   await db.runAsync(
     `INSERT INTO supplier_balances (supplier_id, balance, updated_at) VALUES (?, ?, ?)
      ON CONFLICT(supplier_id) DO UPDATE SET balance = ?, updated_at = ?`,
-    [supplierId, newBalance, now, newBalance, now]
+    [supplierId, newBalance, now, newBalance, now] // 🔥 NOW IS PASSED HERE
   );
 }
 
