@@ -120,7 +120,13 @@ export default function AddServiceScreen() {
         return;
       }
     }
-
+// 🔥 SAFETY CHECK: Ensure every picked item has an inventory_id
+const validItems = pickedItems.filter(p => p.inventory_id || p.id);
+if (pickedItems.length > 0 && validItems.length === 0) {
+  Alert.alert('Error', 'Selected inventory items are missing valid IDs.');
+  setLoading(false);
+  return;
+}
     setLoading(true);
     try {
       await createService(
