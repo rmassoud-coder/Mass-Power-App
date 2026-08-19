@@ -909,11 +909,29 @@ export async function updateSupplierBalance(supplierId: string, newBalance: numb
   const db = await getDb();
   const now = new Date().toISOString();
   
+  // 1. Get the OLD balance so we know how much was paid
+  const oldRecord = await db.getFirstAsync<{ balance: number }>(
+    `SELECT balance FROM supplier_balances WHERE supplier_id = ?`,
+    [supplierId]
+  );
+  const oldBalance = oldRecord?.balance || 0;
+  
+  // 2. Update the balance
   await db.runAsync(
     `INSERT INTO supplier_balances (supplier_id, balance, updated_at) VALUES (?, ?, ?)
      ON CONFLICT(supplier_id) DO UPDATE SET balance = ?, updated_at = ?`,
     [supplierId, newBalance, now, newBalance, now]
   );
+
+  // 3. 🔥 If money was paid (balance went down), log it!
+  if (newBalance < oldBalance) {
+    const amountPaid = oldBalance - newBalance;
+    const paymentId = generateId();
+    await db.runAsync(
+      `INSERT INTO supplier_payments (id, supplier_id, amount_paid, paid_at, created_at) VALUES (?, ?, ?, ?, ?)`,
+      [paymentId, supplierId, amountPaid, now, now]
+    );
+  }
 }
 
 export async function saveWeeklyWages(amount: number): Promise<void> {
