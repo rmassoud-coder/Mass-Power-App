@@ -28,10 +28,10 @@ import {
   HvacService,
 } from '../src/db/database';
 import { triggerAutoPush } from '../src/utils/autoSync';
-/import DashLightsPicker from '../src/components/DashLightsPicker';
-/import OilReminderForm from '../src/components/OilReminderForm';
+import DashLightsPicker from '../src/components/DashLightsPicker';
+import OilReminderForm from '../src/components/OilReminderForm';
 import BatteryReplacementForm from '../src/components/BatteryReplacementForm';
-/import HvacServiceForm from '../src/components/HvacServiceForm';
+import HvacServiceForm from '../src/components/HvacServiceForm';
 import InventoryPicker, { PickedItem } from '../src/components/InventoryPicker';
 
 interface Vehicle {
