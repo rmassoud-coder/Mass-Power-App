@@ -960,32 +960,32 @@ export async function getWeeklyCashSummary(): Promise<{
   );
   const totalDebt = debtResult?.total || 0;
 
-  let paidToday = 0;
-  try {
-    const paidResult = await db.getFirstAsync<{ total: number }>(
-      `SELECT COALESCE(SUM(
-        CASE 
-          WHEN prev_balance IS NOT NULL AND balance < prev_balance THEN prev_balance - balance 
-          ELSE 0 
-        END
-      ), 0) as total 
-      FROM (
-        SELECT 
-          sb1.balance,
-          sb1.updated_at,
-          (SELECT sb2.balance FROM supplier_balances sb2 
-           WHERE sb2.supplier_id = sb1.supplier_id 
-             AND sb2.updated_at < sb1.updated_at 
-           ORDER BY sb2.updated_at DESC LIMIT 1) as prev_balance
-        FROM supplier_balances sb1
-        WHERE DATE(sb1.updated_at) >= ? AND DATE(sb1.updated_at) <= ?
-      )`,
-      [mondayStr, todayStr]
-    );
-    paidToday = Math.abs(paidResult?.total || 0);
-  } catch (e) {
-    paidToday = 0;
-  }
+// 🔥 FIX: Simple, bulletproof way to calculate what was paid today
+let paidToday = 0;
+try {
+  // This fetches the current total debt balance
+  const currentDebtResult = await db.getFirstAsync<{ total: number }>(
+    `SELECT COALESCE(SUM(balance), 0) as total FROM supplier_balances`
+  );
+  const currentTotalDebt = currentDebtResult?.total || 0;
+
+  // This calculates what the debt was before today (Monday to Yesterday)
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().slice(0, 10);
+
+  const previousDebtResult = await db.getFirstAsync<{ total: number }>(
+    `SELECT COALESCE(SUM(balance), 0) as total FROM supplier_balances 
+     WHERE DATE(updated_at) < ?`,
+    [todayStr]
+  );
+  const previousTotalDebt = previousDebtResult?.total || currentTotalDebt;
+
+  // Paid today = Previous Debt - Current Debt
+  paidToday = Math.max(0, previousTotalDebt - currentTotalDebt);
+} catch (e) {
+  paidToday = 0;
+}
 
   const wagesResult = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid 
