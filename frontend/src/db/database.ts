@@ -2303,11 +2303,16 @@ export async function getWeeklyCashSummary(): Promise<{
 let paidToday = 0;
 try {
   // Get total debt at the beginning of the week (Monday morning)
-  const prevDebtResult = await db.getFirstAsync<{ total: number }>(
-    `SELECT COALESCE(SUM(balance), 0) as total FROM supplier_balances 
-     WHERE DATE(updated_at) < ?`,
-    [mondayStr]
-  );
+  // Calculate the day BEFORE Monday (Sunday)
+const sunday = new Date(monday);
+sunday.setDate(sunday.getDate() - 1);
+const sundayStr = sunday.toISOString().slice(0, 10);
+
+const prevDebtResult = await db.getFirstAsync<{ total: number }>(
+  `SELECT COALESCE(SUM(balance), 0) as total FROM supplier_balances 
+   WHERE DATE(updated_at) <= ?`,
+  [sundayStr]
+);
   const prevTotalDebt = prevDebtResult?.total || 0;
 
   // Get total debt right now
