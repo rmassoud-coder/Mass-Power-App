@@ -248,13 +248,13 @@ export async function initDatabase() {
       created_at TEXT NOT NULL
     );
 
-CREATE TABLE IF NOT EXISTS supplier_payments (
-  id TEXT PRIMARY KEY,
-  supplier_id TEXT NOT NULL,
-  amount_paid REAL NOT NULL,
-  paid_at TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
+    CREATE TABLE IF NOT EXISTS supplier_payments (
+      id TEXT PRIMARY KEY,
+      supplier_id TEXT NOT NULL,
+      amount_paid REAL NOT NULL,
+      paid_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS service_items (
       id TEXT PRIMARY KEY,
       service_id TEXT NOT NULL,
@@ -810,6 +810,341 @@ export async function listInventory(): Promise<InventoryItem[]> {
   return rows;
 }
 
+export async function getInventoryItem(id: string): Promise<InventoryItem | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<InventoryItem>(
+    `SELECT * FROM inventory WHERE id = ?`,
+    [id]
+  );
+  return row || null;
+}
+
+export async function addInventoryItem(
+  itemType: string,
+  itemQuantity: number,
+  itemPrice: number,
+  extras?: {
+    item_retail_price?: number;
+    item_supplier?: string | null;
+    item_code?: string | null;
+  }
+): Promise<InventoryItem> {
+  const db = await getDb();
+  if (!itemType.trim()) {
+    throw new Error('Item Type is required');
+  }
+  if (!isFinite(itemQuantity) || itemQuantity < 0) {
+    throw new Error('Quantity must be 0 or greater');
+  }
+  if (!isFinite(itemPrice) || itemPrice < 0) {
+    throw new Error('Price must be 0 or greater');
+  }
+  const retail = extras?.item_retail_price;
+  if (retail !== undefined && (!isFinite(retail) || retail < 0)) {
+    throw new Error('Retail price must be 0 or greater');
+  }
+  const id = generateId();
+  const itemNumber = await generateInventoryItemNumber();
+  const now = new Date().toISOString();
+  await db.runAsync(
+    `INSERT INTO inventory (id, item_number, item_type, item_quantity, item_price, item_retail_price, item_supplier, item_code, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      itemNumber,
+      itemType.trim(),
+      Math.floor(itemQuantity),
+      itemPrice,
+      retail ?? 0,
+      (extras?.item_supplier || '').trim() || null,
+      (extras?.item_code || '').trim() || null,
+      now,
+      now,
+    ]
+  );
+  return {
+    id,
+    item_number: itemNumber,
+    item_type: itemType.trim(),
+    item_quantity: Math.floor(itemQuantity),
+    item_price: itemPrice,
+    item_retail_price: retail ?? 0,
+    item_supplier: (extras?.item_supplier || '').trim() || null,
+    item_code: (extras?.item_code || '').trim() || null,
+    created_at: now,
+    updated_at: now,
+  };
+}
+
+export async function updateInventoryItem(
+  id: string,
+  itemType: string,
+  itemQuantity: number,
+  itemPrice: number,
+  extras?: {
+    item_retail_price?: number;
+    item_supplier?: string | null;
+    item_code?: string | null;
+  }
+): Promise<void> {
+  const db = await getDb();
+  if (!itemType.trim()) {
+    throw new Error('Item Type is required');
+  }
+  if (!isFinite(itemQuantity) || itemQuantity < 0) {
+    throw new Error('Quantity must be 0 or greater');
+  }
+  if (!isFinite(itemPrice) || itemPrice < 0) {
+    throw new Error('Price must be 0 or greater');
+  }
+  const retail = extras?.item_retail_price;
+  if (retail !== undefined && (!isFinite(retail) || retail < 0)) {
+    throw new Error('Retail price must be 0 or greater');
+  }
+  const now = new Date().toISOString();
+  await db.runAsync(
+    `UPDATE inventory
+       SET item_type = ?,
+           item_quantity = ?,
+           item_price = ?,
+           item_retail_price = ?,
+           item_supplier = ?,
+           item_code = ?,
+           updated_at = ?
+     WHERE id = ?`,
+    [
+      itemType.trim(),
+      Math.floor(itemQuantity),
+      itemPrice,
+      retail ?? 0,
+      (extras?.item_supplier || '').trim() || null,
+      (extras?.item_code || '').trim() || null,
+      now,
+      id,
+    ]
+  );
+}
+
+export async function adjustInventoryQuantity(
+  id: string,
+  delta: number
+): Promise<number> {
+  if (!Number.isFinite(delta) || delta === 0) return 0;
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ item_quantity: number }>(
+    `SELECT item_quantity FROM inventory WHERE id = ?`,
+    [id]
+  );
+  if (!row) throw new Error('Inventory item not found');
+  const next = Math.max(0, (row.item_quantity || 0) + Math.round(delta));
+  const now = new Date().toISOString();
+  await db.runAsync(
+    `UPDATE inventory SET item_quantity = ?, updated_at = ? WHERE id = ?`,
+    [next, now, id]
+  );
+  return next;
+}
+
+export async function deleteInventoryItem(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`DELETE FROM inventory WHERE id = ?`, [id]);
+}
+
+export async function getServiceItems(serviceId: string): Promise<ServiceItem[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<ServiceItem>(
+    `SELECT * FROM service_items WHERE service_id = ? ORDER BY created_at ASC`,
+    [serviceId]
+  );
+  return rows;
+}
+
+async function attachItemsToService(
+  serviceId: string,
+  items: ServiceItemInput[]
+): Promise<ServiceItem[]> {
+  const db = await getDb();
+  const saved: ServiceItem[] = [];
+  for (const it of items) {
+    if (!it.inventory_id || !it.quantity || it.quantity <= 0) continue;
+    const inv = await db.getFirstAsync<InventoryItem>(
+      `SELECT * FROM inventory WHERE id = ?`,
+      [it.inventory_id]
+    );
+    if (!inv) continue;
+    const qty = Math.floor(it.quantity);
+    const rowId = generateId();
+    const now = new Date().toISOString();
+    const snapshotPrice =
+      inv.item_retail_price && inv.item_retail_price > 0
+        ? inv.item_retail_price
+        : inv.item_price;
+    await db.runAsync(
+      `INSERT INTO service_items (id, service_id, inventory_id, item_type, quantity, unit_price, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [rowId, serviceId, inv.id, inv.item_type, qty, snapshotPrice, now]
+    );
+    const newQty = Math.max(0, inv.item_quantity - qty);
+    await db.runAsync(
+      `UPDATE inventory SET item_quantity = ?, updated_at = ? WHERE id = ?`,
+      [newQty, now, inv.id]
+    );
+    saved.push({
+      id: rowId,
+      service_id: serviceId,
+      inventory_id: inv.id,
+      item_type: inv.item_type,
+      quantity: qty,
+      unit_price: snapshotPrice,
+      created_at: now,
+    });
+  }
+  return saved;
+}
+
+async function restoreInventoryFromServiceItems(serviceId: string): Promise<void> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<ServiceItem>(
+    `SELECT * FROM service_items WHERE service_id = ?`,
+    [serviceId]
+  );
+  const now = new Date().toISOString();
+  for (const r of rows) {
+    await db.runAsync(
+      `UPDATE inventory SET item_quantity = item_quantity + ?, updated_at = ? WHERE id = ?`,
+      [r.quantity, now, r.inventory_id]
+    );
+  }
+  await db.runAsync(`DELETE FROM service_items WHERE service_id = ?`, [serviceId]);
+}
+
+export interface OilReminderDue {
+  service_id: string;
+  customer_id: string;
+  customer_name: string;
+  customer_mobile: string;
+  vehicle_id: string;
+  vehicle_make: string;
+  vehicle_model: string;
+  vehicle_year: string | null;
+  vehicle_plate: string;
+  vehicle_vin: string;
+  next_service_date: string;
+  next_service_mileage: number | null;
+  current_mileage: number | null;
+  oil_grade: string | null;
+  service_date: string;
+  days_overdue: number;
+}
+
+export async function listDueOilReminders(): Promise<OilReminderDue[]> {
+  const db = await getDb();
+  const today = new Date().toISOString().slice(0, 10);
+
+  const rows = await db.getAllAsync<{
+    service_id: string;
+    customer_id: string;
+    customer_name: string;
+    customer_mobile: string;
+    vehicle_id: string;
+    vehicle_make: string;
+    vehicle_model: string;
+    vehicle_year: string | null;
+    vehicle_plate: string;
+    vehicle_vin: string;
+    next_service_date: string;
+    next_service_mileage: number | null;
+    current_mileage: number | null;
+    oil_grade: string | null;
+    service_date: string;
+    created_at: string;
+  }>(
+    `SELECT
+        s.id            AS service_id,
+        c.id            AS customer_id,
+        c.name          AS customer_name,
+        c.mobile_number AS customer_mobile,
+        v.id            AS vehicle_id,
+        v.make          AS vehicle_make,
+        v.model         AS vehicle_model,
+        v.year          AS vehicle_year,
+        v.plate_number  AS vehicle_plate,
+        v.vin           AS vehicle_vin,
+        s.next_service_date,
+        s.next_service_mileage,
+        s.current_mileage,
+        s.oil_grade,
+        s.service_date,
+        s.created_at
+      FROM services s
+      INNER JOIN customers c ON c.id = s.customer_id
+      INNER JOIN vehicles  v ON v.id = s.vehicle_id
+      WHERE
+        s.next_service_date IS NOT NULL
+        AND TRIM(s.next_service_date) != ''
+        AND DATE(s.next_service_date) <= DATE(?)
+        AND COALESCE(s.reminder_dismissed, 0) = 0
+      ORDER BY s.next_service_date ASC, s.created_at DESC`,
+    [today]
+  );
+
+  const latestByVehicle = new Map<string, (typeof rows)[number]>();
+  for (const r of rows) {
+    const existing = latestByVehicle.get(r.vehicle_id);
+    if (!existing) {
+      latestByVehicle.set(r.vehicle_id, r);
+      continue;
+    }
+    const better =
+      r.service_date > existing.service_date ||
+      (r.service_date === existing.service_date && r.created_at > existing.created_at);
+    if (better) latestByVehicle.set(r.vehicle_id, r);
+  }
+  const deduped = Array.from(latestByVehicle.values()).sort((a, b) =>
+    a.next_service_date < b.next_service_date ? -1 : 1
+  );
+
+  const todayMs = new Date(today).getTime();
+  return deduped.map((r) => {
+    const dueMs = new Date(r.next_service_date).getTime();
+    const daysOverdue = Math.max(0, Math.floor((todayMs - dueMs) / 86400000));
+    return {
+      service_id: r.service_id,
+      customer_id: r.customer_id,
+      customer_name: r.customer_name,
+      customer_mobile: r.customer_mobile,
+      vehicle_id: r.vehicle_id,
+      vehicle_make: r.vehicle_make,
+      vehicle_model: r.vehicle_model,
+      vehicle_year: r.vehicle_year,
+      vehicle_plate: r.vehicle_plate,
+      vehicle_vin: r.vehicle_vin,
+      next_service_date: r.next_service_date,
+      next_service_mileage: r.next_service_mileage,
+      current_mileage: r.current_mileage,
+      oil_grade: r.oil_grade,
+      service_date: r.service_date,
+      days_overdue: daysOverdue,
+    };
+  });
+}
+
+export async function dismissReminder(serviceId: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE services SET reminder_dismissed = 1 WHERE id = ?`,
+    [serviceId]
+  );
+}
+
+export async function undismissReminder(serviceId: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE services SET reminder_dismissed = 0 WHERE id = ?`,
+    [serviceId]
+  );
+}
+
 export async function listSuppliers(): Promise<Supplier[]> {
   const db = await getDb();
   return await db.getAllAsync<Supplier>(
@@ -981,22 +1316,23 @@ export async function getWeeklyCashSummary(): Promise<{
   const revenue = revenueResult?.total || 0;
 
   const debtResult = await db.getFirstAsync<{ total: number }>(
-  `SELECT COALESCE(SUM(balance), 0) as total FROM supplier_balances WHERE balance > 0`
-);
-const totalDebt = debtResult?.total || 0;
-
-// 🔥 FIX: Read paidToday directly from the supplier_payments table
-let paidToday = 0;
-try {
-  const paidResult = await db.getFirstAsync<{ total: number }>(
-    `SELECT COALESCE(SUM(amount_paid), 0) as total FROM supplier_payments 
-     WHERE paid_at >= ? AND paid_at <= ?`,
-    [`${mondayStr}T00:00:00`, `${todayStr}T23:59:59`]
+    `SELECT COALESCE(SUM(balance), 0) as total FROM supplier_balances WHERE balance > 0`
   );
-  paidToday = paidResult?.total || 0;
-} catch (e) {
-  paidToday = 0;
-}
+  const totalDebt = debtResult?.total || 0;
+
+  // 🔥 FIX: Read paidToday directly from the supplier_payments table
+  let paidToday = 0;
+  try {
+    const paidResult = await db.getFirstAsync<{ total: number }>(
+      `SELECT COALESCE(SUM(amount_paid), 0) as total FROM supplier_payments 
+       WHERE paid_at >= ? AND paid_at <= ?`,
+      [`${mondayStr}T00:00:00`, `${todayStr}T23:59:59`]
+    );
+    paidToday = paidResult?.total || 0;
+  } catch (e) {
+    paidToday = 0;
+  }
+
   const wagesResult = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid 
      WHERE DATE(date) >= ? AND DATE(date) <= ?`,
@@ -1149,7 +1485,6 @@ export async function triggerAutoPush(): Promise<void> {
   console.log("Auto push triggered");
 }
 
-// 🔥 ADD THIS BLOCK AT THE VERY BOTTOM OF database.ts
 export async function createQuickWalkinService(
   customerName: string | undefined,
   description: string,
@@ -1333,5 +1668,215 @@ export async function createWalkinProductSale(
     created_at: now,
     partial_paid: 0,
     outsource_cost: 0,
+  };
+}
+
+export async function getLowStockBySupplier(
+  threshold: number = 5
+): Promise<LowStockItemBySupplier[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<InventoryItem>(
+    `SELECT * FROM inventory WHERE item_quantity < ? ORDER BY item_supplier ASC, item_type ASC`,
+    [threshold]
+  );
+  const grouped = new Map<string, InventoryItem[]>();
+  for (const r of rows) {
+    const key = (r.item_supplier || '').trim() || 'Unassigned Supplier';
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(r);
+  }
+  return Array.from(grouped.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([supplier_name, items]) => ({ supplier_name, items }));
+}
+
+export interface LowStockItemBySupplier {
+  supplier_name: string;
+  items: InventoryItem[];
+}
+
+export interface CleanupResult {
+  customersDeleted: number;
+  vehiclesDeleted: number;
+  servicesDeleted: number;
+  serviceItemsDeleted: number;
+}
+
+export async function deleteAllWalkinData(): Promise<CleanupResult> {
+  const db = await getDb();
+  const BATCH_SIZE = 500;
+  
+  console.log('🗑️ Starting walk-in data cleanup...');
+  
+  const walkinCustomers = await db.getAllAsync<{ id: string }>(
+    `SELECT id FROM customers 
+     WHERE LOWER(name) LIKE '%walkin%' 
+     OR LOWER(name) LIKE '%walk-in%'
+     OR LOWER(name) LIKE '%walk in%'`
+  );
+  
+  const customerIds = walkinCustomers.map(c => c.id);
+  console.log(`🔍 Found ${customerIds.length} walk-in customers`);
+  
+  if (customerIds.length === 0) {
+    return { customersDeleted: 0, vehiclesDeleted: 0, servicesDeleted: 0, serviceItemsDeleted: 0 };
+  }
+  
+  let vehicleIds: string[] = [];
+  if (customerIds.length > 0) {
+    for (let i = 0; i < customerIds.length; i += BATCH_SIZE) {
+      const batch = customerIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const vehicles = await db.getAllAsync<{ id: string }>(
+        `SELECT id FROM vehicles WHERE customer_id IN (${placeholders})`,
+        batch
+      );
+      vehicleIds = vehicleIds.concat(vehicles.map(v => v.id));
+    }
+  }
+  console.log(`🔍 Found ${vehicleIds.length} walk-in vehicles`);
+  
+  let serviceIds: string[] = [];
+  
+  if (vehicleIds.length > 0) {
+    for (let i = 0; i < vehicleIds.length; i += BATCH_SIZE) {
+      const batch = vehicleIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const services = await db.getAllAsync<{ id: string }>(
+        `SELECT id FROM services WHERE vehicle_id IN (${placeholders})`,
+        batch
+      );
+      serviceIds = serviceIds.concat(services.map(s => s.id));
+    }
+  }
+  
+  if (customerIds.length > 0) {
+    for (let i = 0; i < customerIds.length; i += BATCH_SIZE) {
+      const batch = customerIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const services = await db.getAllAsync<{ id: string }>(
+        `SELECT id FROM services WHERE customer_id IN (${placeholders})`,
+        batch
+      );
+      serviceIds = serviceIds.concat(services.map(s => s.id));
+    }
+  }
+  
+  serviceIds = [...new Set(serviceIds)];
+  console.log(`🔍 Found ${serviceIds.length} walk-in services`);
+  
+  let serviceItemsDeleted = 0;
+  if (serviceIds.length > 0) {
+    for (let i = 0; i < serviceIds.length; i += BATCH_SIZE) {
+      const batch = serviceIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const result = await db.runAsync(
+        `DELETE FROM service_items WHERE service_id IN (${placeholders})`,
+        batch
+      );
+      serviceItemsDeleted += result.changes || 0;
+    }
+    console.log(`🗑️ Deleted ${serviceItemsDeleted} service items`);
+  }
+  
+  let servicesDeleted = 0;
+  if (serviceIds.length > 0) {
+    for (let i = 0; i < serviceIds.length; i += BATCH_SIZE) {
+      const batch = serviceIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const result = await db.runAsync(
+        `DELETE FROM services WHERE id IN (${placeholders})`,
+        batch
+      );
+      servicesDeleted += result.changes || 0;
+    }
+    console.log(`🗑️ Deleted ${servicesDeleted} services`);
+  }
+  
+  let vehiclesDeleted = 0;
+  if (vehicleIds.length > 0) {
+    for (let i = 0; i < vehicleIds.length; i += BATCH_SIZE) {
+      const batch = vehicleIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const result = await db.runAsync(
+        `DELETE FROM vehicles WHERE id IN (${placeholders})`,
+        batch
+      );
+      vehiclesDeleted += result.changes || 0;
+    }
+    console.log(`🗑️ Deleted ${vehiclesDeleted} vehicles`);
+  }
+  
+  let customersDeleted = 0;
+  if (customerIds.length > 0) {
+    for (let i = 0; i < customerIds.length; i += BATCH_SIZE) {
+      const batch = customerIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const result = await db.runAsync(
+        `DELETE FROM customers WHERE id IN (${placeholders})`,
+        batch
+      );
+      customersDeleted += result.changes || 0;
+    }
+    console.log(`🗑️ Deleted ${customersDeleted} customers`);
+  }
+  
+  console.log('✅ Walk-in cleanup complete!');
+  
+  return {
+    customersDeleted,
+    vehiclesDeleted,
+    servicesDeleted,
+    serviceItemsDeleted,
+  };
+}
+
+export async function checkWalkinData(): Promise<{
+  customers: number;
+  vehicles: number;
+  services: number;
+}> {
+  const db = await getDb();
+  
+  const customers = await db.getAllAsync<{ count: number }>(
+    `SELECT COUNT(*) as count FROM customers 
+     WHERE LOWER(name) LIKE '%walkin%' 
+     OR LOWER(name) LIKE '%walk-in%'
+     OR LOWER(name) LIKE '%walk in%'`
+  );
+  
+  const customerResult = customers[0]?.count || 0;
+  
+  let vehicles = 0;
+  let services = 0;
+  
+  if (customerResult > 0) {
+    const vehicleResult = await db.getAllAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM vehicles 
+       WHERE customer_id IN (
+         SELECT id FROM customers 
+         WHERE LOWER(name) LIKE '%walkin%' 
+         OR LOWER(name) LIKE '%walk-in%'
+         OR LOWER(name) LIKE '%walk in%'
+       )`
+    );
+    vehicles = vehicleResult[0]?.count || 0;
+    
+    const serviceResult = await db.getAllAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM services 
+       WHERE customer_id IN (
+         SELECT id FROM customers 
+         WHERE LOWER(name) LIKE '%walkin%' 
+         OR LOWER(name) LIKE '%walk-in%'
+         OR LOWER(name) LIKE '%walk in%'
+       )`
+    );
+    services = serviceResult[0]?.count || 0;
+  }
+  
+  return {
+    customers: customerResult,
+    vehicles,
+    services,
   };
 }
