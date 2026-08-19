@@ -3,6 +3,7 @@ import seedData from './seed.json';
 
 const DB_NAME = 'mass_power.db';
 
+// Lazy-initialized database
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
 function getDb(): Promise<SQLite.SQLiteDatabase> {
@@ -12,6 +13,7 @@ function getDb(): Promise<SQLite.SQLiteDatabase> {
   return dbPromise;
 }
 
+// Generate a unique ID (simple timestamp + random)
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 10);
 }
@@ -87,6 +89,12 @@ export interface Supplier {
   name: string;
   contact_info?: string | null;
   created_at: string;
+  balance?: number;
+}
+
+export interface LowStockItemBySupplier {
+  supplier_name: string;
+  items: InventoryItem[];
 }
 
 export interface ServiceItem {
@@ -103,6 +111,18 @@ export interface ServiceItemInput {
   inventory_id: string;
   quantity: number;
 }
+
+export const SERVICE_CATEGORIES = [
+  'HVAC Services',
+  'Locksmith Services',
+  'Oil Services',
+  'Battery Replacement',
+  'Electrical Services',
+  'Mechanical Services',
+  'Other Services',
+] as const;
+
+export type ServiceCategory = typeof SERVICE_CATEGORIES[number];
 
 export interface DashLights {
   abs: boolean;
@@ -164,6 +184,18 @@ export const EMPTY_HVAC_SERVICE: HvacService = {
   leakTested: false,
 };
 
+export interface SearchResult {
+  customer: Customer;
+  vehicles: Vehicle[];
+  total_services: number;
+}
+
+export interface CustomerDetail {
+  customer: Customer;
+  vehicles: Vehicle[];
+  services: Service[];
+}
+
 export interface ReportItem {
   service_id: string;
   customer_id: string;
@@ -184,6 +216,9 @@ export interface ReportItem {
   service_date: string;
 }
 
+/////////////// BLOCK 1 - SETUP, INIT, & CORE TABLES ///////////////
+
+// Initialize database tables and seed data on first run
 export async function initDatabase() {
   const db = await getDb();
   await db.execAsync(`
@@ -248,13 +283,6 @@ export async function initDatabase() {
       created_at TEXT NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS supplier_payments (
-      id TEXT PRIMARY KEY,
-      supplier_id TEXT NOT NULL,
-      amount_paid REAL NOT NULL,
-      paid_at TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
     CREATE TABLE IF NOT EXISTS service_items (
       id TEXT PRIMARY KEY,
       service_id TEXT NOT NULL,
@@ -284,7 +312,7 @@ export async function initDatabase() {
         created_at TEXT NOT NULL
       );
     `);
-  } catch (e) {}
+  } catch (e) { /* Tables already exist */ }
 
   try {
     await db.execAsync(`ALTER TABLE services ADD COLUMN is_paid INTEGER NOT NULL DEFAULT 1`);
@@ -361,7 +389,9 @@ export async function initDatabase() {
   }
 
   try {
-    await db.execAsync(`ALTER TABLE services ADD COLUMN outsource_cost REAL NOT NULL DEFAULT 0`);
+    await db.execAsync(
+      `ALTER TABLE services ADD COLUMN outsource_cost REAL NOT NULL DEFAULT 0`
+    );
   } catch {}
 
   const seeded = await db.getFirstAsync<{ value: string }>(
@@ -425,7 +455,7 @@ export async function deleteCustomer(id: string): Promise<void> {
   await db.runAsync(`DELETE FROM customers WHERE id = ?`, [id]);
 }
 
-export async function searchCustomers(query: string): Promise<any[]> {
+export async function searchCustomers(query: string): Promise<SearchResult[]> {
   const db = await getDb();
   const q = `%${query}%`;
   const customers = await db.getAllAsync<Customer>(
@@ -433,7 +463,7 @@ export async function searchCustomers(query: string): Promise<any[]> {
     [q, q]
   );
 
-  const results: any[] = [];
+  const results: SearchResult[] = [];
   for (const customer of customers) {
     const vehicles = await db.getAllAsync<Vehicle>(
       `SELECT * FROM vehicles WHERE customer_id = ?`,
@@ -452,7 +482,7 @@ export async function searchCustomers(query: string): Promise<any[]> {
   return results;
 }
 
-export async function getCustomerDetails(customerId: string): Promise<any> {
+export async function getCustomerDetails(customerId: string): Promise<CustomerDetail> {
   const db = await getDb();
   const customer = await db.getFirstAsync<Customer>(
     `SELECT * FROM customers WHERE id = ?`,
@@ -493,7 +523,7 @@ export async function getCustomerDetails(customerId: string): Promise<any> {
   return { customer, vehicles, services };
 }
 
-export async function searchVehiclesByVin(vin: string): Promise<any[]> {
+export async function searchVehiclesByVin(vin: string): Promise<SearchResult[]> {
   const db = await getDb();
   const q = `%${vin}%`;
   const vehicles = await db.getAllAsync<Vehicle>(
@@ -503,7 +533,7 @@ export async function searchVehiclesByVin(vin: string): Promise<any[]> {
   return collectCustomersFromVehicles(db, vehicles);
 }
 
-export async function searchVehiclesByPlate(plate: string): Promise<any[]> {
+export async function searchVehiclesByPlate(plate: string): Promise<SearchResult[]> {
   const db = await getDb();
   const q = `%${plate}%`;
   const vehicles = await db.getAllAsync<Vehicle>(
@@ -516,8 +546,8 @@ export async function searchVehiclesByPlate(plate: string): Promise<any[]> {
 async function collectCustomersFromVehicles(
   db: SQLite.SQLiteDatabase,
   vehicles: Vehicle[]
-): Promise<any[]> {
-  const results: any[] = [];
+): Promise<SearchResult[]> {
+  const results: SearchResult[] = [];
   const seen = new Set<string>();
   for (const v of vehicles) {
     if (seen.has(v.customer_id)) continue;
@@ -810,6 +840,133 @@ export async function listInventory(): Promise<InventoryItem[]> {
   return rows;
 }
 
+export interface OilReminderDue {
+  service_id: string;
+  customer_id: string;
+  customer_name: string;
+  customer_mobile: string;
+  vehicle_id: string;
+  vehicle_make: string;
+  vehicle_model: string;
+  vehicle_year: string | null;
+  vehicle_plate: string;
+  vehicle_vin: string;
+  next_service_date: string;
+  next_service_mileage: number | null;
+  current_mileage: number | null;
+  oil_grade: string | null;
+  service_date: string;
+  days_overdue: number;
+}
+
+export async function listDueOilReminders(): Promise<OilReminderDue[]> {
+  const db = await getDb();
+  const today = new Date().toISOString().slice(0, 10);
+
+  const rows = await db.getAllAsync<{
+    service_id: string;
+    customer_id: string;
+    customer_name: string;
+    customer_mobile: string;
+    vehicle_id: string;
+    vehicle_make: string;
+    vehicle_model: string;
+    vehicle_year: string | null;
+    vehicle_plate: string;
+    vehicle_vin: string;
+    next_service_date: string;
+    next_service_mileage: number | null;
+    current_mileage: number | null;
+    oil_grade: string | null;
+    service_date: string;
+    created_at: string;
+  }>(
+    `SELECT
+        s.id            AS service_id,
+        c.id            AS customer_id,
+        c.name          AS customer_name,
+        c.mobile_number AS customer_mobile,
+        v.id            AS vehicle_id,
+        v.make          AS vehicle_make,
+        v.model         AS vehicle_model,
+        v.year          AS vehicle_year,
+        v.plate_number  AS vehicle_plate,
+        v.vin           AS vehicle_vin,
+        s.next_service_date,
+        s.next_service_mileage,
+        s.current_mileage,
+        s.oil_grade,
+        s.service_date,
+        s.created_at
+      FROM services s
+      INNER JOIN customers c ON c.id = s.customer_id
+      INNER JOIN vehicles  v ON v.id = s.vehicle_id
+      WHERE
+        s.next_service_date IS NOT NULL
+        AND TRIM(s.next_service_date) != ''
+        AND DATE(s.next_service_date) <= DATE(?)
+        AND COALESCE(s.reminder_dismissed, 0) = 0
+      ORDER BY s.next_service_date ASC, s.created_at DESC`,
+    [today]
+  );
+
+  const latestByVehicle = new Map<string, (typeof rows)[number]>();
+  for (const r of rows) {
+    const existing = latestByVehicle.get(r.vehicle_id);
+    if (!existing) {
+      latestByVehicle.set(r.vehicle_id, r);
+      continue;
+    }
+    const better =
+      r.service_date > existing.service_date ||
+      (r.service_date === existing.service_date && r.created_at > existing.created_at);
+    if (better) latestByVehicle.set(r.vehicle_id, r);
+  }
+  const deduped = Array.from(latestByVehicle.values()).sort((a, b) =>
+    a.next_service_date < b.next_service_date ? -1 : 1
+  );
+
+  const todayMs = new Date(today).getTime();
+  return deduped.map((r) => {
+    const dueMs = new Date(r.next_service_date).getTime();
+    const daysOverdue = Math.max(0, Math.floor((todayMs - dueMs) / 86400000));
+    return {
+      service_id: r.service_id,
+      customer_id: r.customer_id,
+      customer_name: r.customer_name,
+      customer_mobile: r.customer_mobile,
+      vehicle_id: r.vehicle_id,
+      vehicle_make: r.vehicle_make,
+      vehicle_model: r.vehicle_model,
+      vehicle_year: r.vehicle_year,
+      vehicle_plate: r.vehicle_plate,
+      vehicle_vin: r.vehicle_vin,
+      next_service_date: r.next_service_date,
+      next_service_mileage: r.next_service_mileage,
+      current_mileage: r.current_mileage,
+      oil_grade: r.oil_grade,
+      service_date: r.service_date,
+      days_overdue: daysOverdue,
+    };
+  });
+}
+
+export async function dismissReminder(serviceId: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE services SET reminder_dismissed = 1 WHERE id = ?`,
+    [serviceId]
+  );
+}
+
+export async function undismissReminder(serviceId: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE services SET reminder_dismissed = 0 WHERE id = ?`,
+    [serviceId]
+  );
+}
+
 export async function getInventoryItem(id: string): Promise<InventoryItem | null> {
   const db = await getDb();
   const row = await db.getFirstAsync<InventoryItem>(
@@ -965,22 +1122,13 @@ async function attachItemsToService(
 ): Promise<ServiceItem[]> {
   const db = await getDb();
   const saved: ServiceItem[] = [];
-  
-  // If no items, return empty array immediately
-  if (!items || items.length === 0) {
-    return saved;
-  }
-
   for (const it of items) {
-    // Skip invalid items
     if (!it.inventory_id || !it.quantity || it.quantity <= 0) continue;
-    
     const inv = await db.getFirstAsync<InventoryItem>(
       `SELECT * FROM inventory WHERE id = ?`,
       [it.inventory_id]
     );
     if (!inv) continue;
-
     const qty = Math.floor(it.quantity);
     const rowId = generateId();
     const now = new Date().toISOString();
@@ -988,7 +1136,6 @@ async function attachItemsToService(
       inv.item_retail_price && inv.item_retail_price > 0
         ? inv.item_retail_price
         : inv.item_price;
-
     await db.runAsync(
       `INSERT INTO service_items (id, service_id, inventory_id, item_type, quantity, unit_price, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -1028,340 +1175,8 @@ async function restoreInventoryFromServiceItems(serviceId: string): Promise<void
   await db.runAsync(`DELETE FROM service_items WHERE service_id = ?`, [serviceId]);
 }
 
-export interface OilReminderDue {
-  service_id: string;
-  customer_id: string;
-  customer_name: string;
-  customer_mobile: string;
-  vehicle_id: string;
-  vehicle_make: string;
-  vehicle_model: string;
-  vehicle_year: string | null;
-  vehicle_plate: string;
-  vehicle_vin: string;
-  next_service_date: string;
-  next_service_mileage: number | null;
-  current_mileage: number | null;
-  oil_grade: string | null;
-  service_date: string;
-  days_overdue: number;
-}
+/////////////// BLOCK 2 - REPORTS, SYNC, SUPPLIERS, WALK-INS, WAGES & MATH ///////////////
 
-export async function listDueOilReminders(): Promise<OilReminderDue[]> {
-  const db = await getDb();
-  const today = new Date().toISOString().slice(0, 10);
-
-  const rows = await db.getAllAsync<{
-    service_id: string;
-    customer_id: string;
-    customer_name: string;
-    customer_mobile: string;
-    vehicle_id: string;
-    vehicle_make: string;
-    vehicle_model: string;
-    vehicle_year: string | null;
-    vehicle_plate: string;
-    vehicle_vin: string;
-    next_service_date: string;
-    next_service_mileage: number | null;
-    current_mileage: number | null;
-    oil_grade: string | null;
-    service_date: string;
-    created_at: string;
-  }>(
-    `SELECT
-        s.id            AS service_id,
-        c.id            AS customer_id,
-        c.name          AS customer_name,
-        c.mobile_number AS customer_mobile,
-        v.id            AS vehicle_id,
-        v.make          AS vehicle_make,
-        v.model         AS vehicle_model,
-        v.year          AS vehicle_year,
-        v.plate_number  AS vehicle_plate,
-        v.vin           AS vehicle_vin,
-        s.next_service_date,
-        s.next_service_mileage,
-        s.current_mileage,
-        s.oil_grade,
-        s.service_date,
-        s.created_at
-      FROM services s
-      INNER JOIN customers c ON c.id = s.customer_id
-      INNER JOIN vehicles  v ON v.id = s.vehicle_id
-      WHERE
-        s.next_service_date IS NOT NULL
-        AND TRIM(s.next_service_date) != ''
-        AND DATE(s.next_service_date) <= DATE(?)
-        AND COALESCE(s.reminder_dismissed, 0) = 0
-      ORDER BY s.next_service_date ASC, s.created_at DESC`,
-    [today]
-  );
-
-  const latestByVehicle = new Map<string, (typeof rows)[number]>();
-  for (const r of rows) {
-    const existing = latestByVehicle.get(r.vehicle_id);
-    if (!existing) {
-      latestByVehicle.set(r.vehicle_id, r);
-      continue;
-    }
-    const better =
-      r.service_date > existing.service_date ||
-      (r.service_date === existing.service_date && r.created_at > existing.created_at);
-    if (better) latestByVehicle.set(r.vehicle_id, r);
-  }
-  const deduped = Array.from(latestByVehicle.values()).sort((a, b) =>
-    a.next_service_date < b.next_service_date ? -1 : 1
-  );
-
-  const todayMs = new Date(today).getTime();
-  return deduped.map((r) => {
-    const dueMs = new Date(r.next_service_date).getTime();
-    const daysOverdue = Math.max(0, Math.floor((todayMs - dueMs) / 86400000));
-    return {
-      service_id: r.service_id,
-      customer_id: r.customer_id,
-      customer_name: r.customer_name,
-      customer_mobile: r.customer_mobile,
-      vehicle_id: r.vehicle_id,
-      vehicle_make: r.vehicle_make,
-      vehicle_model: r.vehicle_model,
-      vehicle_year: r.vehicle_year,
-      vehicle_plate: r.vehicle_plate,
-      vehicle_vin: r.vehicle_vin,
-      next_service_date: r.next_service_date,
-      next_service_mileage: r.next_service_mileage,
-      current_mileage: r.current_mileage,
-      oil_grade: r.oil_grade,
-      service_date: r.service_date,
-      days_overdue: daysOverdue,
-    };
-  });
-}
-
-export async function dismissReminder(serviceId: string): Promise<void> {
-  const db = await getDb();
-  await db.runAsync(
-    `UPDATE services SET reminder_dismissed = 1 WHERE id = ?`,
-    [serviceId]
-  );
-}
-
-export async function undismissReminder(serviceId: string): Promise<void> {
-  const db = await getDb();
-  await db.runAsync(
-    `UPDATE services SET reminder_dismissed = 0 WHERE id = ?`,
-    [serviceId]
-  );
-}
-
-export async function listSuppliers(): Promise<Supplier[]> {
-  const db = await getDb();
-  return await db.getAllAsync<Supplier>(
-    `SELECT * FROM suppliers ORDER BY name ASC`
-  );
-}
-
-export async function addSupplier(
-  name: string,
-  contactInfo?: string
-): Promise<Supplier> {
-  const db = await getDb();
-  const clean = (name || '').trim();
-  if (!clean) throw new Error('Supplier name is required');
-  const existing = await db.getFirstAsync<Supplier>(
-    `SELECT * FROM suppliers WHERE LOWER(name) = LOWER(?) LIMIT 1`,
-    [clean]
-  );
-  if (existing) throw new Error(`Supplier "${clean}" already exists.`);
-  const id = generateId();
-  const now = new Date().toISOString();
-  await db.runAsync(
-    `INSERT INTO suppliers (id, name, contact_info, created_at) VALUES (?, ?, ?, ?)`,
-    [id, clean, (contactInfo || '').trim() || null, now]
-  );
-  return { id, name: clean, contact_info: (contactInfo || '').trim() || null, created_at: now };
-}
-
-export async function updateSupplier(
-  id: string,
-  name: string,
-  contactInfo?: string,
-  newDebt?: number
-): Promise<void> {
-  const db = await getDb();
-  const clean = (name || '').trim();
-  if (!clean) throw new Error('Supplier name is required');
-  
-  const existing = await db.getFirstAsync<{ id: string }>(
-    `SELECT id FROM suppliers WHERE LOWER(name) = LOWER(?) AND id != ? LIMIT 1`,
-    [clean, id]
-  );
-  if (existing) throw new Error(`Another supplier already uses "${clean}".`);
-  
-  const prev = await db.getFirstAsync<Supplier>(`SELECT * FROM suppliers WHERE id = ?`, [id]);
-  
-  await db.runAsync(
-    `UPDATE suppliers SET name = ?, contact_info = ? WHERE id = ?`,
-    [clean, (contactInfo || '').trim() || null, id]
-  );
-  if (prev && prev.name !== clean) {
-    await db.runAsync(
-      `UPDATE inventory SET item_supplier = ? WHERE item_supplier = ?`,
-      [clean, prev.name]
-    );
-  }
-
-  if (newDebt !== undefined) {
-    const now = new Date().toISOString();
-    await db.runAsync(
-      `INSERT INTO supplier_balances (supplier_id, balance, updated_at) VALUES (?, ?, ?)
-       ON CONFLICT(supplier_id) DO UPDATE SET balance = ?, updated_at = ?`,
-      [id, newDebt, now, newDebt, now]
-    );
-  }
-}
-
-export async function deleteSupplier(id: string): Promise<void> {
-  const db = await getDb();
-  const prev = await db.getFirstAsync<Supplier>(`SELECT * FROM suppliers WHERE id = ?`, [id]);
-  await db.runAsync(`DELETE FROM suppliers WHERE id = ?`, [id]);
-  if (prev) {
-    await db.runAsync(
-      `UPDATE inventory SET item_supplier = NULL WHERE item_supplier = ?`,
-      [prev.name]
-    );
-  }
-}
-
-export async function getSupplierBalances(): Promise<{ id: string; name: string; balance: number }[]> {
-  const db = await getDb();
-  try {
-    const rows = await db.getAllAsync<{ id: string; name: string; balance: number }>(
-      `SELECT s.id, s.name, COALESCE(b.balance, 0) as balance
-       FROM suppliers s
-       LEFT JOIN supplier_balances b ON s.id = b.supplier_id
-       ORDER BY s.name ASC`
-    );
-    return rows;
-  } catch (error) {
-    console.error("❌ getSupplierBalances failed:", error);
-    return [];
-  }
-}
-
-export async function updateSupplierBalance(supplierId: string, newBalance: number): Promise<void> {
-  const db = await getDb();
-  const now = new Date().toISOString();
-  
-  // 1. Get the OLD balance so we know how much was paid
-  const oldRecord = await db.getFirstAsync<{ balance: number }>(
-    `SELECT balance FROM supplier_balances WHERE supplier_id = ?`,
-    [supplierId]
-  );
-  const oldBalance = oldRecord?.balance || 0;
-  
-  // 2. Update the balance
-  await db.runAsync(
-    `INSERT INTO supplier_balances (supplier_id, balance, updated_at) VALUES (?, ?, ?)
-     ON CONFLICT(supplier_id) DO UPDATE SET balance = ?, updated_at = ?`,
-    [supplierId, newBalance, now, newBalance, now]
-  );
-
-  // 3. 🔥 If money was paid (balance went down), log it!
-  if (newBalance < oldBalance) {
-    const amountPaid = oldBalance - newBalance;
-    const paymentId = generateId();
-    await db.runAsync(
-      `INSERT INTO supplier_payments (id, supplier_id, amount_paid, paid_at, created_at) VALUES (?, ?, ?, ?, ?)`,
-      [paymentId, supplierId, amountPaid, now, now]
-    );
-  }
-}
-
-export async function saveWeeklyWages(amount: number): Promise<void> {
-  const db = await getDb();
-  const now = new Date().toISOString();
-  
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - diffToMonday);
-  const mondayStr = monday.toISOString().slice(0, 10);
-
-  await db.runAsync(
-    `DELETE FROM wages_paid WHERE DATE(date) >= ? AND DATE(date) <= ?`,
-    [mondayStr, mondayStr]
-  );
-
-  await db.runAsync(
-    `INSERT INTO wages_paid (date, amount, created_at) VALUES (?, ?, ?)`,
-    [mondayStr, amount, now]
-  );
-}
-
-export async function getWeeklyCashSummary(): Promise<{
-  revenue: number;
-  totalOutstandingDebt: number;
-  paidTowardsDebtToday: number;
-  wages: number;
-  netDrawer: number;
-}> {
-  const db = await getDb();
-  
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - diffToMonday);
-  const mondayStr = monday.toISOString().slice(0, 10);
-  const todayStr = today.toISOString().slice(0, 10);
-
-  const revenueResult = await db.getFirstAsync<{ total: number }>(
-    `SELECT COALESCE(SUM(cost), 0) as total FROM services 
-     WHERE DATE(service_date) >= ? AND DATE(service_date) <= ? AND (is_paid = 1 OR partial_paid > 0)`,
-    [mondayStr, todayStr]
-  );
-  const revenue = revenueResult?.total || 0;
-
-  const debtResult = await db.getFirstAsync<{ total: number }>(
-    `SELECT COALESCE(SUM(balance), 0) as total FROM supplier_balances WHERE balance > 0`
-  );
-  const totalDebt = debtResult?.total || 0;
-
-  // 🔥 FIX: Read paidToday directly from the supplier_payments table
-  let paidToday = 0;
-  try {
-    const paidResult = await db.getFirstAsync<{ total: number }>(
-      `SELECT COALESCE(SUM(amount_paid), 0) as total FROM supplier_payments 
-       WHERE paid_at >= ? AND paid_at <= ?`,
-      [`${mondayStr}T00:00:00`, `${todayStr}T23:59:59`]
-    );
-    paidToday = paidResult?.total || 0;
-  } catch (e) {
-    paidToday = 0;
-  }
-
-  const wagesResult = await db.getFirstAsync<{ total: number }>(
-    `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid 
-     WHERE DATE(date) >= ? AND DATE(date) <= ?`,
-    [mondayStr, todayStr]
-  );
-  const wages = wagesResult?.total || 0;
-
-  const netDrawer = revenue - paidToday - wages;
-
-  return {
-    revenue,
-    totalOutstandingDebt: totalDebt,
-    paidTowardsDebtToday: paidToday,
-    wages,
-    netDrawer,
-  };
-}
-
-// 🔥 EXPORTED GET REPORT FUNCTION
 export async function getReport(
   startDate?: string,
   endDate?: string,
@@ -1370,7 +1185,7 @@ export async function getReport(
   plate?: string,
   unpaidOnly?: boolean
 ): Promise<{
-  items: any[];
+  items: ReportItem[];
   total_cost: number;
   total_services: number;
   unpaid_count: number;
@@ -1381,6 +1196,12 @@ export async function getReport(
   const db = await getDb();
   const conditions: string[] = [];
   const params: any[] = [];
+
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - diffToMonday);
 
   if (startDate) {
     conditions.push('DATE(s.service_date) >= DATE(?)');
@@ -1434,7 +1255,7 @@ export async function getReport(
   `;
 
   const rawItems = await db.getAllAsync<any>(sql, params);
-  const items = rawItems.map((r) => ({
+  const items: ReportItem[] = rawItems.map((r) => ({
     service_id: r.service_id,
     customer_id: r.customer_id,
     customer_name: r.customer_name,
@@ -1453,26 +1274,29 @@ export async function getReport(
     outsource_cost: Number(r.outsource_cost) || 0,
     service_date: r.service_date,
   }));
-  
   const total_cost = items.reduce((sum, i) => sum + i.cost, 0);
   const outsource_total = items.reduce((sum, i) => sum + (i.outsource_cost || 0), 0);
+  
   let net_cash_flow = total_cost - outsource_total;
   
+  const mondayStr = monday.toISOString().slice(0, 10);
+  const todayStr = today.toISOString().slice(0, 10);
+
   try {
     const wagesResult = await db.getFirstAsync<{ total: number }>(
       `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid 
        WHERE DATE(date) >= ? AND DATE(date) <= ?`,
-      [startDate || '1970-01-01', endDate || '2099-12-31']
+      [mondayStr, todayStr]
     );
     const wages = wagesResult?.total || 0;
     net_cash_flow = net_cash_flow - wages;
+    console.log(`✅ Subtracted $${wages} in wages`);
   } catch (e) {
-    // ignore
+    console.log("ℹ️ Wages table not ready yet, skipping...");
   }
 
   const unpaidItems = items.filter((i) => !i.is_paid);
   const unpaid_total = unpaidItems.reduce((sum, i) => sum + i.cost, 0);
-  
   return {
     items,
     total_cost,
@@ -1482,17 +1306,6 @@ export async function getReport(
     outsource_total,
     net_cash_flow,
   };
-}
-
-// EXPORT MISSING SYNC FUNCTIONS (dummy for now so app doesn't crash)
-export async function pushToCloud(): Promise<void> {
-  console.log("Push to cloud called");
-}
-export async function pullFromCloud(): Promise<void> {
-  console.log("Pull from cloud called");
-}
-export async function triggerAutoPush(): Promise<void> {
-  console.log("Auto push triggered");
 }
 
 export async function exportAllData(): Promise<string> {
@@ -1661,6 +1474,7 @@ export async function exportFullDatabase(): Promise<FullDbSnapshot> {
   const inventory = await db.getAllAsync<InventoryItem>(`SELECT * FROM inventory`);
   const suppliers = await db.getAllAsync<Supplier>(`SELECT * FROM suppliers`);
   
+  // 🔥 FETCH THE SUPPLIER BALANCES AND WAGES
   const supplierBalances = await db.getAllAsync<{ supplier_id: string; balance: number }>(
     `SELECT * FROM supplier_balances`
   );
@@ -1682,6 +1496,10 @@ export async function exportFullDatabase(): Promise<FullDbSnapshot> {
   };
 }
 
+/** Wipes every table and re-inserts the cloud snapshot. Cloud-wins semantics.
+ *  Used only for: (1) restoring your own local pre-Pull safety snapshot,
+ *  (2) explicit "Replace" in manual Backup & Restore. Never used by the
+ *  normal Push/Pull flow — that uses mergeCloudIntoLocal instead. */
 export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
   if (!snap || !Array.isArray(snap.customers) || !Array.isArray(snap.vehicles) || !Array.isArray(snap.services)) {
     throw new Error('Invalid snapshot');
@@ -1762,6 +1580,7 @@ export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
     }
   }
   
+  // 🔥 RESTORE SUPPLIER BALANCES FROM CLOUD
   if (Array.isArray(snap.supplierBalances)) {
     for (const sb of snap.supplierBalances) {
       await db.runAsync(
@@ -1771,6 +1590,7 @@ export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
     }
   }
 
+  // 🔥 RESTORE WAGES FROM CLOUD
   if (Array.isArray(snap.wagesPaid)) {
     for (const wp of snap.wagesPaid) {
       await db.runAsync(
@@ -1795,6 +1615,7 @@ function newer(a?: string | null, b?: string | null): boolean {
   const tb = b ? Date.parse(b) : 0;
   return ta > tb;
 }
+
 export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeResult> {
   const db = await getDb();
   const result: MergeResult = {
@@ -1803,107 +1624,60 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
     services: { inserted: 0, updated: 0 },
     inventory: { inserted: 0, updated: 0 },
     suppliers: { inserted: 0, updated: 0 },
-    service_items: { inserted: 0, updated: 0 }
+    service_items: { inserted: 0, updated: 0 },
   };
 
   if (Array.isArray(snap.customers)) {
     for (const c of snap.customers) {
-      const existing = await db.getFirstAsync<{ updated_at: string }>(
-        'SELECT updated_at FROM customers WHERE id = ?',
-        [c.id]
-      );
-      if (!existing || newer(c.updated_at, existing.updated_at)) {
+      const local = await db.getFirstAsync<Customer>(`SELECT * FROM customers WHERE id = ?`, [c.id]);
+      if (!local) {
         await db.runAsync(
-          `INSERT INTO customers (id, name, mobile_number, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?)
-           ON CONFLICT(id) DO UPDATE SET
-             name = excluded.name,
-             mobile_number = excluded.mobile_number,
-             updated_at = excluded.updated_at`,
+          `INSERT INTO customers (id, name, mobile_number, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
           [c.id, c.name, c.mobile_number, c.created_at, c.updated_at]
         );
-        existing ? result.customers.updated++ : result.customers.inserted++;
+        result.customers.inserted++;
+      } else if (newer(c.updated_at, local.updated_at)) {
+        await db.runAsync(
+          `UPDATE customers SET name = ?, mobile_number = ?, updated_at = ? WHERE id = ?`,
+          [c.name, c.mobile_number, c.updated_at, c.id]
+        );
+        result.customers.updated++;
       }
     }
   }
 
   if (Array.isArray(snap.vehicles)) {
     for (const v of snap.vehicles) {
-      const existing = await db.getFirstAsync<{ created_at: string }>(
-        'SELECT created_at FROM vehicles WHERE id = ?',
-        [v.id]
-      );
-      if (!existing || newer(v.created_at, existing.created_at)) {
+      const local = await db.getFirstAsync<Vehicle>(`SELECT * FROM vehicles WHERE id = ?`, [v.id]);
+      if (!local) {
         await db.runAsync(
-          `INSERT INTO vehicles (id, customer_id, vin, plate_number, make, model, year, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT(id) DO UPDATE SET
-             customer_id = excluded.customer_id,
-             vin = excluded.vin,
-             plate_number = excluded.plate_number,
-             make = excluded.make,
-             model = excluded.model,
-             year = excluded.year,
-             created_at = excluded.created_at`,
+          `INSERT INTO vehicles (id, customer_id, vin, plate_number, make, model, year, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [v.id, v.customer_id, v.vin, v.plate_number, v.make, v.model, v.year || null, v.created_at]
         );
-        existing ? result.vehicles.updated++ : result.vehicles.inserted++;
+        result.vehicles.inserted++;
       }
     }
   }
 
   if (Array.isArray(snap.services)) {
     for (const s of snap.services) {
-      const existing = await db.getFirstAsync<{ created_at: string }>(
-        'SELECT created_at FROM services WHERE id = ?',
-        [s.id]
-      );
-      if (!existing || newer(s.created_at, existing.created_at)) {
+      const local = await db.getFirstAsync<any>(`SELECT * FROM services WHERE id = ?`, [s.id]);
+      if (!local) {
         await db.runAsync(
           `INSERT INTO services (
-            id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, partial_paid,
-            service_date, created_at,
-            dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, dash_tpms, dash_oil_leak,
-            current_mileage, next_service_date, next_service_mileage, oil_grade, oil_filter_changed,
-            battery_amp_rate, battery_install_date, battery_warranty_months, battery_parasitic_tested,
-            hvac_freon_date, hvac_leak_tested, outsource_cost, reminder_dismissed
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(id) DO UPDATE SET
-            vehicle_id = excluded.vehicle_id,
-            customer_id = excluded.customer_id,
-            service_description = excluded.service_description,
-            additional_info = excluded.additional_info,
-            cost = excluded.cost,
-            is_paid = excluded.is_paid,
-            partial_paid = excluded.partial_paid,
-            service_date = excluded.service_date,
-            dash_abs = excluded.dash_abs,
-            dash_check_engine = excluded.dash_check_engine,
-            dash_brake = excluded.dash_brake,
-            dash_airbag = excluded.dash_airbag,
-            dash_immobilizer = excluded.dash_immobilizer,
-            dash_tpms = excluded.dash_tpms,
-            dash_oil_leak = excluded.dash_oil_leak,
-            current_mileage = excluded.current_mileage,
-            next_service_date = excluded.next_service_date,
-            next_service_mileage = excluded.next_service_mileage,
-            oil_grade = excluded.oil_grade,
-            oil_filter_changed = excluded.oil_filter_changed,
-            battery_amp_rate = excluded.battery_amp_rate,
-            battery_install_date = excluded.battery_install_date,
-            battery_warranty_months = excluded.battery_warranty_months,
-            battery_parasitic_tested = excluded.battery_parasitic_tested,
-            hvac_freon_date = excluded.hvac_freon_date,
-            hvac_leak_tested = excluded.hvac_leak_tested,
-            outsource_cost = excluded.outsource_cost,
-            reminder_dismissed = excluded.reminder_dismissed,
-            created_at = excluded.created_at`,
+             id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, partial_paid,
+             service_date, created_at,
+             dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, dash_tpms, dash_oil_leak,
+             current_mileage, next_service_date, next_service_mileage, oil_grade, oil_filter_changed,
+             battery_amp_rate, battery_install_date, battery_warranty_months, battery_parasitic_tested,
+             hvac_freon_date, hvac_leak_tested, outsource_cost, reminder_dismissed
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             s.id, s.vehicle_id, s.customer_id, s.service_description, s.additional_info || null,
             s.cost, s.is_paid ? 1 : 0, s.partial_paid || 0, s.service_date, s.created_at,
-            s.dash_abs ? 1 : 0, s.dash_check_engine ? 1 : 0, s.dash_brake ? 1 : 0,
-            s.dash_airbag ? 1 : 0, s.dash_immobilizer ? 1 : 0, s.dash_tpms ? 1 : 0, s.dash_oil_leak ? 1 : 0,
-            s.current_mileage || null, s.next_service_date || null, s.next_service_mileage || null,
+            s.dash_abs ? 1 : 0, s.dash_check_engine ? 1 : 0, s.dash_brake ? 1 : 0, s.dash_airbag ? 1 : 0,
+            s.dash_immobilizer ? 1 : 0, s.dash_tpms ? 1 : 0, s.dash_oil_leak ? 1 : 0,
+            s.current_mileage ?? null, s.next_service_date || null, s.next_service_mileage ?? null,
             s.oil_grade || null, s.oil_filter_changed ? 1 : 0,
             s.battery_amp_rate || null, s.battery_install_date || null, s.battery_warranty_months ?? null,
             s.battery_parasitic_tested ? 1 : 0,
@@ -1911,101 +1685,352 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
             s.outsource_cost || 0, s.reminder_dismissed ? 1 : 0,
           ]
         );
-        existing ? result.services.updated++ : result.services.inserted++;
+        result.services.inserted++;
       }
     }
   }
 
   if (Array.isArray(snap.inventory)) {
-    for (const item of snap.inventory) {
-      const existing = await db.getFirstAsync<{ updated_at: string }>(
-        'SELECT updated_at FROM inventory WHERE id = ?',
-        [item.id]
-      );
-      if (!existing || newer(item.updated_at, existing.updated_at)) {
+    for (const it of snap.inventory) {
+      const local = await db.getFirstAsync<InventoryItem>(`SELECT * FROM inventory WHERE id = ?`, [it.id]);
+      if (!local) {
         await db.runAsync(
-          `INSERT INTO inventory (id, item_number, item_type, item_quantity, item_price, item_retail_price, item_supplier, item_code, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT(id) DO UPDATE SET
-             item_number = excluded.item_number,
-             item_type = excluded.item_type,
-             item_quantity = excluded.item_quantity,
-             item_price = excluded.item_price,
-             item_retail_price = excluded.item_retail_price,
-             item_supplier = excluded.item_supplier,
-             item_code = excluded.item_code,
-             updated_at = excluded.updated_at`,
-          [item.id, item.item_number, item.item_type, item.item_quantity, item.item_price, item.item_retail_price ?? 0, item.item_supplier ?? null, item.item_code ?? null, item.created_at, item.updated_at]
+          `INSERT INTO inventory (id, item_number, item_type, item_quantity, item_price, item_retail_price, item_supplier, item_code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [it.id, it.item_number, it.item_type, it.item_quantity, it.item_price, it.item_retail_price ?? 0, it.item_supplier ?? null, it.item_code ?? null, it.created_at, it.updated_at]
         );
-        existing ? result.inventory.updated++ : result.inventory.inserted++;
+        result.inventory.inserted++;
+      } else if (newer(it.updated_at, local.updated_at)) {
+        await db.runAsync(
+          `UPDATE inventory SET item_number = ?, item_type = ?, item_quantity = ?, item_price = ?, item_retail_price = ?, item_supplier = ?, item_code = ?, updated_at = ? WHERE id = ?`,
+          [it.item_number, it.item_type, it.item_quantity, it.item_price, it.item_retail_price ?? 0, it.item_supplier ?? null, it.item_code ?? null, it.updated_at, it.id]
+        );
+        result.inventory.updated++;
       }
     }
   }
 
   if (Array.isArray(snap.suppliers)) {
     for (const sup of snap.suppliers) {
-      const existing = await db.getFirstAsync<{ created_at: string }>(
-        'SELECT created_at FROM suppliers WHERE id = ?',
-        [sup.id]
-      );
-      if (!existing || newer(sup.created_at, existing.created_at)) {
+      const local = await db.getFirstAsync<Supplier>(`SELECT * FROM suppliers WHERE id = ?`, [sup.id]);
+      if (!local) {
         await db.runAsync(
-          `INSERT INTO suppliers (id, name, contact_info, created_at)
-           VALUES (?, ?, ?, ?)
-           ON CONFLICT(id) DO UPDATE SET
-             name = excluded.name,
-             contact_info = excluded.contact_info`,
+          `INSERT INTO suppliers (id, name, contact_info, created_at) VALUES (?, ?, ?, ?)`,
           [sup.id, sup.name, sup.contact_info ?? null, sup.created_at]
         );
-        existing ? result.suppliers.updated++ : result.suppliers.inserted++;
+        result.suppliers.inserted++;
       }
     }
   }
 
   if (Array.isArray(snap.service_items)) {
     for (const si of snap.service_items) {
-      const existing = await db.getFirstAsync<{ created_at: string }>(
-        'SELECT created_at FROM service_items WHERE id = ?',
-        [si.id]
-      );
-      if (!existing || newer(si.created_at, existing.created_at)) {
+      const local = await db.getFirstAsync<ServiceItem>(`SELECT * FROM service_items WHERE id = ?`, [si.id]);
+      if (!local) {
         await db.runAsync(
-          `INSERT INTO service_items (id, service_id, inventory_id, item_type, quantity, unit_price, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT(id) DO UPDATE SET
-             service_id = excluded.service_id,
-             inventory_id = excluded.inventory_id,
-             item_type = excluded.item_type,
-             quantity = excluded.quantity,
-             unit_price = excluded.unit_price`,
+          `INSERT INTO service_items (id, service_id, inventory_id, item_type, quantity, unit_price, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [si.id, si.service_id, si.inventory_id, si.item_type, si.quantity, si.unit_price, si.created_at]
         );
-        existing ? result.service_items.updated++ : result.service_items.inserted++;
+        result.service_items.inserted++;
       }
     }
   }
 
-  if (Array.isArray(snap.supplierBalances)) {
-    for (const sb of snap.supplierBalances) {
-      await db.runAsync(
-        `INSERT INTO supplier_balances (supplier_id, balance, updated_at) VALUES (?, ?, ?)
-         ON CONFLICT(supplier_id) DO UPDATE SET balance = ?, updated_at = ?`,
-        [sb.supplier_id, sb.balance, sb.updated_at || snap.exported_at, sb.balance, sb.updated_at || snap.exported_at]
-      );
-    }
-  }
-
-  if (Array.isArray(snap.wagesPaid)) {
-    for (const wp of snap.wagesPaid) {
-      await db.runAsync(
-        `INSERT INTO wages_paid (id, date, amount, created_at) VALUES (?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET amount = ?, created_at = ?`,
-        [wp.id, wp.date, wp.amount, wp.created_at || snap.exported_at, wp.amount, wp.created_at || snap.exported_at]
-      );
-    }
-  }
-
   return result;
+}
+
+export async function listSuppliers(): Promise<Supplier[]> {
+  const db = await getDb();
+  return await db.getAllAsync<Supplier>(
+    `SELECT * FROM suppliers ORDER BY name ASC`
+  );
+}
+
+export async function addSupplier(
+  name: string,
+  contactInfo?: string
+): Promise<Supplier> {
+  const db = await getDb();
+  const clean = (name || '').trim();
+  if (!clean) throw new Error('Supplier name is required');
+  const existing = await db.getFirstAsync<Supplier>(
+    `SELECT * FROM suppliers WHERE LOWER(name) = LOWER(?) LIMIT 1`,
+    [clean]
+  );
+  if (existing) throw new Error(`Supplier "${clean}" already exists.`);
+  const id = generateId();
+  const now = new Date().toISOString();
+  await db.runAsync(
+    `INSERT INTO suppliers (id, name, contact_info, created_at) VALUES (?, ?, ?, ?)`,
+    [id, clean, (contactInfo || '').trim() || null, now]
+  );
+  return { id, name: clean, contact_info: (contactInfo || '').trim() || null, created_at: now };
+}
+
+export async function updateSupplier(
+  id: string,
+  name: string,
+  contactInfo?: string,
+  newDebt?: number
+): Promise<void> {
+  const db = await getDb();
+  const clean = (name || '').trim();
+  if (!clean) throw new Error('Supplier name is required');
+  
+  const existing = await db.getFirstAsync<{ id: string }>(
+    `SELECT id FROM suppliers WHERE LOWER(name) = LOWER(?) AND id != ? LIMIT 1`,
+    [clean, id]
+  );
+  if (existing) throw new Error(`Another supplier already uses "${clean}".`);
+  
+  const prev = await db.getFirstAsync<Supplier>(`SELECT * FROM suppliers WHERE id = ?`, [id]);
+  
+  // Update the supplier's name and contact info
+  await db.runAsync(
+    `UPDATE suppliers SET name = ?, contact_info = ? WHERE id = ?`,
+    [clean, (contactInfo || '').trim() || null, id]
+  );
+  if (prev && prev.name !== clean) {
+    await db.runAsync(
+      `UPDATE inventory SET item_supplier = ? WHERE item_supplier = ?`,
+      [clean, prev.name]
+    );
+  }
+
+  // 🔥 RESTORE THE DEBT UPDATE BLOCK
+  if (newDebt !== undefined) {
+    const now = new Date().toISOString();
+    await db.runAsync(
+      `INSERT INTO supplier_balances (supplier_id, balance, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(supplier_id) DO UPDATE SET balance = ?, updated_at = ?`,
+      [id, newDebt, now, newDebt, now]
+    );
+  }
+}
+
+export async function deleteSupplier(id: string): Promise<void> {
+  const db = await getDb();
+  const prev = await db.getFirstAsync<Supplier>(`SELECT * FROM suppliers WHERE id = ?`, [id]);
+  await db.runAsync(`DELETE FROM suppliers WHERE id = ?`, [id]);
+  if (prev) {
+    await db.runAsync(
+      `UPDATE inventory SET item_supplier = NULL WHERE item_supplier = ?`,
+      [prev.name]
+    );
+  }
+}
+
+export async function getLowStockBySupplier(
+  threshold: number = 5
+): Promise<LowStockItemBySupplier[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<InventoryItem>(
+    `SELECT * FROM inventory WHERE item_quantity < ? ORDER BY item_supplier ASC, item_type ASC`,
+    [threshold]
+  );
+  const grouped = new Map<string, InventoryItem[]>();
+  for (const r of rows) {
+    const key = (r.item_supplier || '').trim() || 'Unassigned Supplier';
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(r);
+  }
+  return Array.from(grouped.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([supplier_name, items]) => ({ supplier_name, items }));
+}
+
+export interface CleanupResult {
+  customersDeleted: number;
+  vehiclesDeleted: number;
+  servicesDeleted: number;
+  serviceItemsDeleted: number;
+}
+
+export async function deleteAllWalkinData(): Promise<CleanupResult> {
+  const db = await getDb();
+  const BATCH_SIZE = 500;
+  
+  console.log('🗑️ Starting walk-in data cleanup...');
+  
+  // 1. Find all walk-in customer IDs - ONLY by NAME!
+  const walkinCustomers = await db.getAllAsync<{ id: string }>(
+    `SELECT id FROM customers 
+     WHERE LOWER(name) LIKE '%walkin%' 
+     OR LOWER(name) LIKE '%walk-in%'
+     OR LOWER(name) LIKE '%walk in%'`
+  );
+  
+  const customerIds = walkinCustomers.map(c => c.id);
+  console.log(`🔍 Found ${customerIds.length} walk-in customers`);
+  
+  if (customerIds.length === 0) {
+    return { customersDeleted: 0, vehiclesDeleted: 0, servicesDeleted: 0, serviceItemsDeleted: 0 };
+  }
+  
+  // 2. Find vehicles belonging to walk-in customers
+  let vehicleIds: string[] = [];
+  if (customerIds.length > 0) {
+    for (let i = 0; i < customerIds.length; i += BATCH_SIZE) {
+      const batch = customerIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const vehicles = await db.getAllAsync<{ id: string }>(
+        `SELECT id FROM vehicles WHERE customer_id IN (${placeholders})`,
+        batch
+      );
+      vehicleIds = vehicleIds.concat(vehicles.map(v => v.id));
+    }
+  }
+  console.log(`🔍 Found ${vehicleIds.length} walk-in vehicles`);
+  
+  // 3. Find services belonging to walk-in vehicles or customers
+  let serviceIds: string[] = [];
+  
+  if (vehicleIds.length > 0) {
+    for (let i = 0; i < vehicleIds.length; i += BATCH_SIZE) {
+      const batch = vehicleIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const services = await db.getAllAsync<{ id: string }>(
+        `SELECT id FROM services WHERE vehicle_id IN (${placeholders})`,
+        batch
+      );
+      serviceIds = serviceIds.concat(services.map(s => s.id));
+    }
+  }
+  
+  if (customerIds.length > 0) {
+    for (let i = 0; i < customerIds.length; i += BATCH_SIZE) {
+      const batch = customerIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const services = await db.getAllAsync<{ id: string }>(
+        `SELECT id FROM services WHERE customer_id IN (${placeholders})`,
+        batch
+      );
+      serviceIds = serviceIds.concat(services.map(s => s.id));
+    }
+  }
+  
+  serviceIds = [...new Set(serviceIds)];
+  console.log(`🔍 Found ${serviceIds.length} walk-in services`);
+  
+  // 4. Delete service_items
+  let serviceItemsDeleted = 0;
+  if (serviceIds.length > 0) {
+    for (let i = 0; i < serviceIds.length; i += BATCH_SIZE) {
+      const batch = serviceIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const result = await db.runAsync(
+        `DELETE FROM service_items WHERE service_id IN (${placeholders})`,
+        batch
+      );
+      serviceItemsDeleted += result.changes || 0;
+    }
+    console.log(`🗑️ Deleted ${serviceItemsDeleted} service items`);
+  }
+  
+  // 5. Delete services
+  let servicesDeleted = 0;
+  if (serviceIds.length > 0) {
+    for (let i = 0; i < serviceIds.length; i += BATCH_SIZE) {
+      const batch = serviceIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const result = await db.runAsync(
+        `DELETE FROM services WHERE id IN (${placeholders})`,
+        batch
+      );
+      servicesDeleted += result.changes || 0;
+    }
+    console.log(`🗑️ Deleted ${servicesDeleted} services`);
+  }
+  
+  // 6. Delete vehicles
+  let vehiclesDeleted = 0;
+  if (vehicleIds.length > 0) {
+    for (let i = 0; i < vehicleIds.length; i += BATCH_SIZE) {
+      const batch = vehicleIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const result = await db.runAsync(
+        `DELETE FROM vehicles WHERE id IN (${placeholders})`,
+        batch
+      );
+      vehiclesDeleted += result.changes || 0;
+    }
+    console.log(`🗑️ Deleted ${vehiclesDeleted} vehicles`);
+  }
+  
+  // 7. Delete customers
+  let customersDeleted = 0;
+  if (customerIds.length > 0) {
+    for (let i = 0; i < customerIds.length; i += BATCH_SIZE) {
+      const batch = customerIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const result = await db.runAsync(
+        `DELETE FROM customers WHERE id IN (${placeholders})`,
+        batch
+      );
+      customersDeleted += result.changes || 0;
+    }
+    console.log(`🗑️ Deleted ${customersDeleted} customers`);
+  }
+  
+  console.log('✅ Walk-in cleanup complete!');
+  
+  return {
+    customersDeleted,
+    vehiclesDeleted,
+    servicesDeleted,
+    serviceItemsDeleted,
+  };
+}
+
+export async function checkWalkinData(): Promise<{
+  customers: number;
+  vehicles: number;
+  services: number;
+}> {
+  const db = await getDb();
+  
+  // ONLY check by NAME!
+  const customers = await db.getAllAsync<{ count: number }>(
+    `SELECT COUNT(*) as count FROM customers 
+     WHERE LOWER(name) LIKE '%walkin%' 
+     OR LOWER(name) LIKE '%walk-in%'
+     OR LOWER(name) LIKE '%walk in%'`
+  );
+  
+  const customerResult = customers[0]?.count || 0;
+  
+  let vehicles = 0;
+  let services = 0;
+  
+  // Only count vehicles/services if there are walk-in customers
+  if (customerResult > 0) {
+    const vehicleResult = await db.getAllAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM vehicles 
+       WHERE customer_id IN (
+         SELECT id FROM customers 
+         WHERE LOWER(name) LIKE '%walkin%' 
+         OR LOWER(name) LIKE '%walk-in%'
+         OR LOWER(name) LIKE '%walk in%'
+       )`
+    );
+    vehicles = vehicleResult[0]?.count || 0;
+    
+    const serviceResult = await db.getAllAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM services 
+       WHERE customer_id IN (
+         SELECT id FROM customers 
+         WHERE LOWER(name) LIKE '%walkin%' 
+         OR LOWER(name) LIKE '%walk-in%'
+         OR LOWER(name) LIKE '%walk in%'
+       )`
+    );
+    services = serviceResult[0]?.count || 0;
+  }
+  
+  return {
+    customers: customerResult,
+    vehicles,
+    services,
+  };
 }
 
 export async function createQuickWalkinService(
@@ -2194,223 +2219,165 @@ export async function createWalkinProductSale(
   };
 }
 
-export async function getLowStockBySupplier(
-  threshold: number = 5
-): Promise<LowStockItemBySupplier[]> {
+// 🔥 FIXED: getSupplierBalances with error catching
+export async function getSupplierBalances(): Promise<{ id: string; name: string; balance: number }[]> {
   const db = await getDb();
-  const rows = await db.getAllAsync<InventoryItem>(
-    `SELECT * FROM inventory WHERE item_quantity < ? ORDER BY item_supplier ASC, item_type ASC`,
-    [threshold]
-  );
-  const grouped = new Map<string, InventoryItem[]>();
-  for (const r of rows) {
-    const key = (r.item_supplier || '').trim() || 'Unassigned Supplier';
-    if (!grouped.has(key)) grouped.set(key, []);
-    grouped.get(key)!.push(r);
+  try {
+    const rows = await db.getAllAsync<{ id: string; name: string; balance: number }>(
+      `SELECT s.id, s.name, COALESCE(b.balance, 0) as balance
+       FROM suppliers s
+       LEFT JOIN supplier_balances b ON s.id = b.supplier_id
+       ORDER BY s.name ASC`
+    );
+    return rows;
+  } catch (error) {
+    console.error("❌ getSupplierBalances failed:", error);
+    // Return empty array instead of crashing
+    return [];
   }
-  return Array.from(grouped.entries())
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([supplier_name, items]) => ({ supplier_name, items }));
 }
 
-export interface LowStockItemBySupplier {
-  supplier_name: string;
-  items: InventoryItem[];
-}
-
-export interface CleanupResult {
-  customersDeleted: number;
-  vehiclesDeleted: number;
-  servicesDeleted: number;
-  serviceItemsDeleted: number;
-}
-
-export async function deleteAllWalkinData(): Promise<CleanupResult> {
+export async function updateSupplierBalance(supplierId: string, newBalance: number): Promise<void> {
   const db = await getDb();
-  const BATCH_SIZE = 500;
+  const now = new Date().toISOString();
   
-  console.log('🗑️ Starting walk-in data cleanup...');
-  
-  const walkinCustomers = await db.getAllAsync<{ id: string }>(
-    `SELECT id FROM customers 
-     WHERE LOWER(name) LIKE '%walkin%' 
-     OR LOWER(name) LIKE '%walk-in%'
-     OR LOWER(name) LIKE '%walk in%'`
+  await db.runAsync(
+    `INSERT INTO supplier_balances (supplier_id, balance, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(supplier_id) DO UPDATE SET balance = ?, updated_at = ?`,
+    [supplierId, newBalance, now, newBalance, now]
   );
-  
-  const customerIds = walkinCustomers.map(c => c.id);
-  console.log(`🔍 Found ${customerIds.length} walk-in customers`);
-  
-  if (customerIds.length === 0) {
-    return { customersDeleted: 0, vehiclesDeleted: 0, servicesDeleted: 0, serviceItemsDeleted: 0 };
-  }
-  
-  let vehicleIds: string[] = [];
-  if (customerIds.length > 0) {
-    for (let i = 0; i < customerIds.length; i += BATCH_SIZE) {
-      const batch = customerIds.slice(i, i + BATCH_SIZE);
-      const placeholders = batch.map(() => '?').join(',');
-      const vehicles = await db.getAllAsync<{ id: string }>(
-        `SELECT id FROM vehicles WHERE customer_id IN (${placeholders})`,
-        batch
-      );
-      vehicleIds = vehicleIds.concat(vehicles.map(v => v.id));
-    }
-  }
-  console.log(`🔍 Found ${vehicleIds.length} walk-in vehicles`);
-  
-  let serviceIds: string[] = [];
-  
-  if (vehicleIds.length > 0) {
-    for (let i = 0; i < vehicleIds.length; i += BATCH_SIZE) {
-      const batch = vehicleIds.slice(i, i + BATCH_SIZE);
-      const placeholders = batch.map(() => '?').join(',');
-      const services = await db.getAllAsync<{ id: string }>(
-        `SELECT id FROM services WHERE vehicle_id IN (${placeholders})`,
-        batch
-      );
-      serviceIds = serviceIds.concat(services.map(s => s.id));
-    }
-  }
-  
-  if (customerIds.length > 0) {
-    for (let i = 0; i < customerIds.length; i += BATCH_SIZE) {
-      const batch = customerIds.slice(i, i + BATCH_SIZE);
-      const placeholders = batch.map(() => '?').join(',');
-      const services = await db.getAllAsync<{ id: string }>(
-        `SELECT id FROM services WHERE customer_id IN (${placeholders})`,
-        batch
-      );
-      serviceIds = serviceIds.concat(services.map(s => s.id));
-    }
-  }
-  
-  serviceIds = [...new Set(serviceIds)];
-  console.log(`🔍 Found ${serviceIds.length} walk-in services`);
-  
-  let serviceItemsDeleted = 0;
-  if (serviceIds.length > 0) {
-    for (let i = 0; i < serviceIds.length; i += BATCH_SIZE) {
-      const batch = serviceIds.slice(i, i + BATCH_SIZE);
-      const placeholders = batch.map(() => '?').join(',');
-      const result = await db.runAsync(
-        `DELETE FROM service_items WHERE service_id IN (${placeholders})`,
-        batch
-      );
-      serviceItemsDeleted += result.changes || 0;
-    }
-    console.log(`🗑️ Deleted ${serviceItemsDeleted} service items`);
-  }
-  
-  let servicesDeleted = 0;
-  if (serviceIds.length > 0) {
-    for (let i = 0; i < serviceIds.length; i += BATCH_SIZE) {
-      const batch = serviceIds.slice(i, i + BATCH_SIZE);
-      const placeholders = batch.map(() => '?').join(',');
-      const result = await db.runAsync(
-        `DELETE FROM services WHERE id IN (${placeholders})`,
-        batch
-      );
-      servicesDeleted += result.changes || 0;
-    }
-    console.log(`🗑️ Deleted ${servicesDeleted} services`);
-  }
-  
-  let vehiclesDeleted = 0;
-  if (vehicleIds.length > 0) {
-    for (let i = 0; i < vehicleIds.length; i += BATCH_SIZE) {
-      const batch = vehicleIds.slice(i, i + BATCH_SIZE);
-      const placeholders = batch.map(() => '?').join(',');
-      const result = await db.runAsync(
-        `DELETE FROM vehicles WHERE id IN (${placeholders})`,
-        batch
-      );
-      vehiclesDeleted += result.changes || 0;
-    }
-    console.log(`🗑️ Deleted ${vehiclesDeleted} vehicles`);
-  }
-  
-  let customersDeleted = 0;
-  if (customerIds.length > 0) {
-    for (let i = 0; i < customerIds.length; i += BATCH_SIZE) {
-      const batch = customerIds.slice(i, i + BATCH_SIZE);
-      const placeholders = batch.map(() => '?').join(',');
-      const result = await db.runAsync(
-        `DELETE FROM customers WHERE id IN (${placeholders})`,
-        batch
-      );
-      customersDeleted += result.changes || 0;
-    }
-    console.log(`🗑️ Deleted ${customersDeleted} customers`);
-  }
-  
-  console.log('✅ Walk-in cleanup complete!');
-  
-  return {
-    customersDeleted,
-    vehiclesDeleted,
-    servicesDeleted,
-    serviceItemsDeleted,
-  };
 }
 
-export async function checkWalkinData(): Promise<{
-  customers: number;
-  vehicles: number;
-  services: number;
+export async function saveWeeklyWages(amount: number): Promise<void> {
+  const db = await getDb();
+  const now = new Date().toISOString();
+  
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - diffToMonday);
+  const mondayStr = monday.toISOString().slice(0, 10);
+
+  await db.runAsync(
+    `DELETE FROM wages_paid WHERE DATE(date) >= ? AND DATE(date) <= ?`,
+    [mondayStr, mondayStr]
+  );
+
+  await db.runAsync(
+    `INSERT INTO wages_paid (date, amount, created_at) VALUES (?, ?, ?)`,
+    [mondayStr, amount, now]
+  );
+}
+
+export async function getWeeklyCashSummary(): Promise<{
+  revenue: number;
+  totalOutstandingDebt: number;
+  paidTowardsDebtToday: number;
+  wages: number;
+  netDrawer: number;
 }> {
   const db = await getDb();
   
-  const customers = await db.getAllAsync<{ count: number }>(
-    `SELECT COUNT(*) as count FROM customers 
-     WHERE LOWER(name) LIKE '%walkin%' 
-     OR LOWER(name) LIKE '%walk-in%'
-     OR LOWER(name) LIKE '%walk in%'`
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - diffToMonday);
+  const mondayStr = monday.toISOString().slice(0, 10);
+  const todayStr = today.toISOString().slice(0, 10);
+
+  const revenueResult = await db.getFirstAsync<{ total: number }>(
+    `SELECT COALESCE(SUM(cost), 0) as total FROM services 
+     WHERE DATE(service_date) >= ? AND DATE(service_date) <= ? AND (is_paid = 1 OR partial_paid > 0)`,
+    [mondayStr, todayStr]
   );
-  
-  const customerResult = customers[0]?.count || 0;
-  
-  let vehicles = 0;
-  let services = 0;
-  
-  if (customerResult > 0) {
-    const vehicleResult = await db.getAllAsync<{ count: number }>(
-      `SELECT COUNT(*) as count FROM vehicles 
-       WHERE customer_id IN (
-         SELECT id FROM customers 
-         WHERE LOWER(name) LIKE '%walkin%' 
-         OR LOWER(name) LIKE '%walk-in%'
-         OR LOWER(name) LIKE '%walk in%'
-       )`
+  const revenue = revenueResult?.total || 0;
+
+  const debtResult = await db.getFirstAsync<{ total: number }>(
+    `SELECT COALESCE(SUM(balance), 0) as total FROM supplier_balances WHERE balance > 0`
+  );
+  const totalDebt = debtResult?.total || 0;
+
+  let paidToday = 0;
+  try {
+    const paidResult = await db.getFirstAsync<{ total: number }>(
+      `SELECT COALESCE(SUM(
+        CASE 
+          WHEN DATE(updated_at) >= ? AND DATE(updated_at) <= ? THEN balance - COALESCE(prev_balance, 0)
+          ELSE 0 
+        END
+      ), 0) as total 
+      FROM (
+        SELECT 
+          supplier_id,
+          balance,
+          updated_at,
+          LAG(balance, 1) OVER (PARTITION BY supplier_id ORDER BY updated_at) as prev_balance
+        FROM supplier_balances
+      ) 
+      WHERE balance < prev_balance`,
+      [mondayStr, todayStr]
     );
-    vehicles = vehicleResult[0]?.count || 0;
-    
-    const serviceResult = await db.getAllAsync<{ count: number }>(
-      `SELECT COUNT(*) as count FROM services 
-       WHERE customer_id IN (
-         SELECT id FROM customers 
-         WHERE LOWER(name) LIKE '%walkin%' 
-         OR LOWER(name) LIKE '%walk-in%'
-         OR LOWER(name) LIKE '%walk in%'
-       )`
-    );
-    services = serviceResult[0]?.count || 0;
+    paidToday = Math.abs(paidResult?.total || 0);
+  } catch (e) {
+    paidToday = 0;
   }
-  
+
+  const wagesResult = await db.getFirstAsync<{ total: number }>(
+    `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid 
+     WHERE DATE(date) >= ? AND DATE(date) <= ?`,
+    [mondayStr, todayStr]
+  );
+  const wages = wagesResult?.total || 0;
+
+  const netDrawer = revenue - paidToday - wages;
+
   return {
-    customers: customerResult,
-    vehicles,
-    services,
+    revenue,
+    totalOutstandingDebt: totalDebt,
+    paidTowardsDebtToday: paidToday,
+    wages,
+    netDrawer,
   };
 }
-// 🔥 GLOBAL CRASH CATCHER
-import { Alert } from 'react-native';
 
-// This runs when the app first loads the database file
-try {
-  console.log("✅ database.ts loaded successfully");
-} catch (error: any) {
-  // If something else crashes before our functions, this will show a popup
-  Alert.alert("FATAL ERROR", `database.ts crashed: ${error.message}`);
-  throw error;
+export async function emergencyNukeDatabase() {
+  try {
+    const db = await getDb();
+    
+    // 🔥 SAFE NUKE: Only drops the broken supplier and wages tables
+    await db.execAsync(`
+      PRAGMA foreign_keys = OFF;
+      
+      DROP TABLE IF EXISTS supplier_balances;
+      DROP TABLE IF EXISTS wages_paid;
+      
+      PRAGMA foreign_keys = ON;
+    `);
+    
+    console.log("💥 Corrupted supplier/wage tables wiped safely!");
+    
+    // IMPORTANT: Recreate the empty tables immediately
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS supplier_balances (
+        supplier_id TEXT PRIMARY KEY,
+        balance REAL NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE
+      );
+      
+      CREATE TABLE IF NOT EXISTS wages_paid (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL,
+        amount REAL NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      );
+    `);
+    
+    return true;
+  } catch (error) {
+    console.error("Safe Nuke failed:", error);
+    return false;
+  }
 }
