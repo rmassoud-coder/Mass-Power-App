@@ -1485,6 +1485,483 @@ export async function triggerAutoPush(): Promise<void> {
   console.log("Auto push triggered");
 }
 
+export async function exportAllData(): Promise<string> {
+  const db = await getDb();
+  const customers = await db.getAllAsync<Customer>(`SELECT * FROM customers`);
+  const vehicles = await db.getAllAsync<Vehicle>(`SELECT * FROM vehicles`);
+  const rawServices = await db.getAllAsync<any>(`SELECT * FROM services`);
+  const services: Service[] = rawServices.map((s) => ({
+    ...s,
+    is_paid: s.is_paid === 1,
+    partial_paid: Number(s.partial_paid) || 0,
+    dash_abs: s.dash_abs === 1,
+    dash_check_engine: s.dash_check_engine === 1,
+    dash_brake: s.dash_brake === 1,
+    dash_airbag: s.dash_airbag === 1,
+    dash_immobilizer: s.dash_immobilizer === 1,
+    dash_tpms: s.dash_tpms === 1,
+    dash_oil_leak: s.dash_oil_leak === 1,
+    oil_filter_changed: s.oil_filter_changed === 1,
+    battery_parasitic_tested: s.battery_parasitic_tested === 1,
+    hvac_leak_tested: s.hvac_leak_tested === 1,
+  }));
+  const exportData = {
+    version: 1,
+    exported_at: new Date().toISOString(),
+    customers,
+    vehicles,
+    services,
+  };
+  return JSON.stringify(exportData, null, 2);
+}
+
+export async function getAllVehiclesWithDetails(): Promise<
+  { customer: Customer; vehicle: Vehicle; services: Service[] }[]
+> {
+  const db = await getDb();
+  const customers = await db.getAllAsync<Customer>(`SELECT * FROM customers`);
+  const vehicles = await db.getAllAsync<Vehicle>(`SELECT * FROM vehicles`);
+  const rawServices = await db.getAllAsync<any>(`SELECT * FROM services`);
+  const services: Service[] = rawServices.map((s) => ({
+    ...s,
+    is_paid: s.is_paid === 1,
+    partial_paid: Number(s.partial_paid) || 0,
+    dash_abs: s.dash_abs === 1,
+    dash_check_engine: s.dash_check_engine === 1,
+    dash_brake: s.dash_brake === 1,
+    dash_airbag: s.dash_airbag === 1,
+    dash_immobilizer: s.dash_immobilizer === 1,
+    dash_tpms: s.dash_tpms === 1,
+    dash_oil_leak: s.dash_oil_leak === 1,
+    oil_filter_changed: s.oil_filter_changed === 1,
+    battery_parasitic_tested: s.battery_parasitic_tested === 1,
+    hvac_leak_tested: s.hvac_leak_tested === 1,
+  }));
+
+  const customerById = new Map(customers.map((c) => [c.id, c]));
+  const out: { customer: Customer; vehicle: Vehicle; services: Service[] }[] = [];
+  for (const v of vehicles) {
+    const customer = customerById.get(v.customer_id);
+    if (!customer) continue;
+    const vehicleServices = services
+      .filter((s) => s.vehicle_id === v.id)
+      .sort((a, b) => (a.service_date < b.service_date ? 1 : -1));
+    out.push({ customer, vehicle: v, services: vehicleServices });
+  }
+  return out;
+}
+
+export async function importData(jsonString: string, mergeMode: boolean): Promise<{
+  customers: number;
+  vehicles: number;
+  services: number;
+}> {
+  const data = JSON.parse(jsonString);
+  if (!data.customers || !data.vehicles || !data.services) {
+    throw new Error('Invalid backup file');
+  }
+
+  const db = await getDb();
+
+  if (!mergeMode) {
+    await db.execAsync(`DELETE FROM services; DELETE FROM vehicles; DELETE FROM customers;`);
+  }
+
+  let customersAdded = 0;
+  let vehiclesAdded = 0;
+  let servicesAdded = 0;
+
+  for (const c of data.customers) {
+    const result = await db.runAsync(
+      `INSERT OR IGNORE INTO customers (id, name, mobile_number, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      [c.id, c.name, c.mobile_number, c.created_at, c.updated_at]
+    );
+    if (result.changes > 0) customersAdded++;
+  }
+  for (const v of data.vehicles) {
+    const result = await db.runAsync(
+      `INSERT OR IGNORE INTO vehicles (id, customer_id, vin, plate_number, make, model, year, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [v.id, v.customer_id, v.vin, v.plate_number, v.make, v.model, v.year || null, v.created_at]
+    );
+    if (result.changes > 0) vehiclesAdded++;
+  }
+  for (const s of data.services) {
+    const result = await db.runAsync(
+      `INSERT OR IGNORE INTO services (id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, service_date, created_at, dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, dash_tpms, dash_oil_leak) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        s.id,
+        s.vehicle_id,
+        s.customer_id,
+        s.service_description,
+        s.additional_info || null,
+        s.cost,
+        s.is_paid === false ? 0 : 1,
+        s.service_date,
+        s.created_at,
+        s.dash_abs ? 1 : 0,
+        s.dash_check_engine ? 1 : 0,
+        s.dash_brake ? 1 : 0,
+        s.dash_airbag ? 1 : 0,
+        s.dash_immobilizer ? 1 : 0,
+        s.dash_tpms ? 1 : 0,
+        s.dash_oil_leak ? 1 : 0,
+      ]
+    );
+    if (result.changes > 0) servicesAdded++;
+  }
+
+  return { customers: customersAdded, vehicles: vehiclesAdded, services: servicesAdded };
+}
+
+export interface FullDbSnapshot {
+  version: number;
+  exported_at: string;
+  customers: Customer[];
+  vehicles: Vehicle[];
+  services: Service[];
+  service_items: ServiceItem[];
+  inventory: InventoryItem[];
+  suppliers?: Supplier[];
+  supplierBalances?: { supplier_id: string; balance: number }[];
+  wagesPaid?: { id: number; date: string; amount: number }[];
+}
+
+export async function exportFullDatabase(): Promise<FullDbSnapshot> {
+  const db = await getDb();
+  const customers = await db.getAllAsync<Customer>(`SELECT * FROM customers`);
+  const vehicles = await db.getAllAsync<Vehicle>(`SELECT * FROM vehicles`);
+  const rawServices = await db.getAllAsync<any>(`SELECT * FROM services`);
+  const services: Service[] = rawServices.map((s) => ({
+    ...s,
+    is_paid: s.is_paid === 1,
+    partial_paid: Number(s.partial_paid) || 0,
+    dash_abs: s.dash_abs === 1,
+    dash_check_engine: s.dash_check_engine === 1,
+    dash_brake: s.dash_brake === 1,
+    dash_airbag: s.dash_airbag === 1,
+    dash_immobilizer: s.dash_immobilizer === 1,
+    dash_tpms: s.dash_tpms === 1,
+    dash_oil_leak: s.dash_oil_leak === 1,
+    oil_filter_changed: s.oil_filter_changed === 1,
+    battery_parasitic_tested: s.battery_parasitic_tested === 1,
+    hvac_leak_tested: s.hvac_leak_tested === 1,
+    reminder_dismissed: s.reminder_dismissed === 1,
+  }));
+  const service_items = await db.getAllAsync<ServiceItem>(`SELECT * FROM service_items`);
+  const inventory = await db.getAllAsync<InventoryItem>(`SELECT * FROM inventory`);
+  const suppliers = await db.getAllAsync<Supplier>(`SELECT * FROM suppliers`);
+  
+  const supplierBalances = await db.getAllAsync<{ supplier_id: string; balance: number }>(
+    `SELECT * FROM supplier_balances`
+  );
+  const wagesPaid = await db.getAllAsync<{ id: number; date: string; amount: number }>(
+    `SELECT * FROM wages_paid`
+  );
+
+  return {
+    version: 3,
+    exported_at: new Date().toISOString(),
+    customers,
+    vehicles,
+    services,
+    service_items,
+    inventory,
+    suppliers,
+    supplierBalances,
+    wagesPaid,
+  };
+}
+
+export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
+  if (!snap || !Array.isArray(snap.customers) || !Array.isArray(snap.vehicles) || !Array.isArray(snap.services)) {
+    throw new Error('Invalid snapshot');
+  }
+  const db = await getDb();
+  await db.execAsync(
+    `DELETE FROM service_items; DELETE FROM services; DELETE FROM vehicles; DELETE FROM customers; DELETE FROM inventory; DELETE FROM suppliers;`
+  );
+  for (const c of snap.customers) {
+    await db.runAsync(
+      `INSERT INTO customers (id, name, mobile_number, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      [c.id, c.name, c.mobile_number, c.created_at, c.updated_at]
+    );
+  }
+  for (const v of snap.vehicles) {
+    await db.runAsync(
+      `INSERT INTO vehicles (id, customer_id, vin, plate_number, make, model, year, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [v.id, v.customer_id, v.vin, v.plate_number, v.make, v.model, v.year || null, v.created_at]
+    );
+  }
+  for (const s of snap.services) {
+    await db.runAsync(
+      `INSERT INTO services (
+         id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, partial_paid,
+         service_date, created_at,
+         dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, dash_tpms, dash_oil_leak,
+         current_mileage, next_service_date, next_service_mileage, oil_grade, oil_filter_changed,
+         battery_amp_rate, battery_install_date, battery_warranty_months, battery_parasitic_tested,
+         hvac_freon_date, hvac_leak_tested, outsource_cost, reminder_dismissed
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        s.id, s.vehicle_id, s.customer_id, s.service_description, s.additional_info || null,
+        s.cost, s.is_paid ? 1 : 0, s.partial_paid || 0, s.service_date, s.created_at,
+        s.dash_abs ? 1 : 0, s.dash_check_engine ? 1 : 0, s.dash_brake ? 1 : 0,
+        s.dash_airbag ? 1 : 0, s.dash_immobilizer ? 1 : 0, s.dash_tpms ? 1 : 0, s.dash_oil_leak ? 1 : 0,
+        s.current_mileage || null, s.next_service_date || null, s.next_service_mileage || null,
+        s.oil_grade || null, s.oil_filter_changed ? 1 : 0,
+        s.battery_amp_rate || null, s.battery_install_date || null, s.battery_warranty_months ?? null,
+        s.battery_parasitic_tested ? 1 : 0,
+        s.hvac_freon_date || null, s.hvac_leak_tested ? 1 : 0,
+        s.outsource_cost || 0, s.reminder_dismissed ? 1 : 0,
+      ]
+    );
+  }
+  if (Array.isArray(snap.inventory)) {
+    for (const it of snap.inventory) {
+      await db.runAsync(
+        `INSERT INTO inventory (id, item_number, item_type, item_quantity, item_price, item_retail_price, item_supplier, item_code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          it.id,
+          it.item_number,
+          it.item_type,
+          it.item_quantity,
+          it.item_price,
+          it.item_retail_price ?? 0,
+          it.item_supplier ?? null,
+          it.item_code ?? null,
+          it.created_at,
+          it.updated_at,
+        ]
+      );
+    }
+  }
+  if (Array.isArray(snap.service_items)) {
+    for (const si of snap.service_items) {
+      await db.runAsync(
+        `INSERT INTO service_items (id, service_id, inventory_id, item_type, quantity, unit_price, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [si.id, si.service_id, si.inventory_id, si.item_type, si.quantity, si.unit_price, si.created_at]
+      );
+    }
+  }
+  if (Array.isArray((snap as any).suppliers)) {
+    for (const sup of (snap as any).suppliers as Supplier[]) {
+      await db.runAsync(
+        `INSERT INTO suppliers (id, name, contact_info, created_at) VALUES (?, ?, ?, ?)`,
+        [sup.id, sup.name, sup.contact_info ?? null, sup.created_at]
+      );
+    }
+  }
+  
+  if (Array.isArray(snap.supplierBalances)) {
+    for (const sb of snap.supplierBalances) {
+      await db.runAsync(
+        `INSERT OR REPLACE INTO supplier_balances (supplier_id, balance, updated_at) VALUES (?, ?, ?)`,
+        [sb.supplier_id, sb.balance, sb.updated_at || snap.exported_at]
+      );
+    }
+  }
+
+  if (Array.isArray(snap.wagesPaid)) {
+    for (const wp of snap.wagesPaid) {
+      await db.runAsync(
+        `INSERT OR REPLACE INTO wages_paid (id, date, amount, created_at) VALUES (?, ?, ?, ?)`,
+        [wp.id, wp.date, wp.amount, wp.created_at || snap.exported_at]
+      );
+    }
+  }
+}
+
+export interface MergeResult {
+  customers: { inserted: number; updated: number };
+  vehicles: { inserted: number; updated: number };
+  services: { inserted: number; updated: number };
+  inventory: { inserted: number; updated: number };
+  suppliers: { inserted: number; updated: number };
+  service_items: { inserted: number; updated: number };
+}
+
+function newer(a?: string | null, b?: string | null): boolean {
+  const ta = a ? Date.parse(a) : 0;
+  const tb = b ? Date.parse(b) : 0;
+  return ta > tb;
+}
+
+export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeResult> {
+  const db = await getDb();
+  const result: MergeResult = {
+    customers: { inserted: 0, updated: 0 },
+    vehicles: { inserted: 0, updated: 0 },
+    services: { inserted: 0, updated: 0 },
+    inventory: { inserted: 0, updated: 0 },
+    suppliers: { inserted: 0, updated: 0 },
+    service_items: { inserted: 0, updated: 0 }
+  };
+
+  if (Array.isArray(snap.customers)) {
+    for (const c of snap.customers) {
+      const existing = await db.getFirstAsync<{ updated_at: string }>(
+        'SELECT updated_at FROM customers WHERE id = ?',
+        [c.id]
+      );
+      if (!existing || newer(c.updated_at, existing.updated_at)) {
+        await db.runAsync(
+          `INSERT INTO customers (id, name, mobile_number, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             name = excluded.name,
+             mobile_number = excluded.mobile_number,
+             updated_at = excluded.updated_at`,
+          [c.id, c.name, c.mobile_number, c.created_at, c.updated_at]
+        );
+        existing ? result.customers.updated++ : result.customers.inserted++;
+      }
+    }
+  }
+
+  if (Array.isArray(snap.vehicles)) {
+    for (const v of snap.vehicles) {
+      const existing = await db.getFirstAsync<{ created_at: string }>(
+        'SELECT created_at FROM vehicles WHERE id = ?',
+        [v.id]
+      );
+      if (!existing || newer(v.created_at, existing.created_at)) {
+        await db.runAsync(
+          `INSERT INTO vehicles (id, customer_id, vin, plate_number, make, model, year, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             customer_id = excluded.customer_id,
+             vin = excluded.vin,
+             plate_number = excluded.plate_number,
+             make = excluded.make,
+             model = excluded.model,
+             year = excluded.year,
+             created_at = excluded.created_at`,
+          [v.id, v.customer_id, v.vin, v.plate_number, v.make, v.model, v.year || null, v.created_at]
+        );
+        existing ? result.vehicles.updated++ : result.vehicles.inserted++;
+      }
+    }
+  }
+
+  if (Array.isArray(snap.services)) {
+    for (const s of snap.services) {
+      const existing = await db.getFirstAsync<{ created_at: string }>(
+        'SELECT created_at FROM services WHERE id = ?',
+        [s.id]
+      );
+      if (!existing || newer(s.created_at, existing.created_at)) {
+        await db.runAsync(
+          `INSERT INTO services (
+            id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, partial_paid,
+            service_date, created_at,
+            dash_abs, dash_check_engine, dash_brake, dash_airbag, dash_immobilizer, dash_tpms, dash_oil_leak,
+            current_mileage, next_service_date, next_service_mileage, oil_grade, oil_filter_changed,
+            battery_amp_rate, battery_install_date, battery_warranty_months, battery_parasitic_tested,
+            hvac_freon_date, hvac_leak_tested, outsource_cost, reminder_dismissed
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            vehicle_id = excluded.vehicle_id,
+            customer_id = excluded.customer_id,
+            service_description = excluded.service_description,
+            additional_info = excluded.additional_info,
+            cost = excluded.cost,
+            is_paid = excluded.is_paid,
+            partial_paid = excluded.partial_paid,
+            service_date = excluded.service_date,
+            dash_abs = excluded.dash_abs,
+            dash_check_engine = excluded.dash_check_engine,
+            dash_brake = excluded.dash_brake,
+            dash_airbag = excluded.dash_airbag,
+            dash_immobilizer = excluded.dash_immobilizer,
+            dash_tpms = excluded.dash_tpms,
+            dash_oil_leak = excluded.dash_oil_leak,
+            current_mileage = excluded.current_mileage,
+            next_service_date = excluded.next_service_date,
+            next_service_mileage = excluded.next_service_mileage,
+            oil_grade = excluded.oil_grade,
+            oil_filter_changed = excluded.oil_filter_changed,
+            battery_amp_rate = excluded.battery_amp_rate,
+            battery_install_date = excluded.battery_install_date,
+            battery_warranty_months = excluded.battery_warranty_months,
+            battery_parasitic_tested = excluded.battery_parasitic_tested,
+            hvac_freon_date = excluded.hvac_freon_date,
+            hvac_leak_tested = excluded.hvac_leak_tested,
+            outsource_cost = excluded.outsource_cost,
+            reminder_dismissed = excluded.reminder_dismissed,
+            created_at = excluded.created_at`,
+          [
+            s.id, s.vehicle_id, s.customer_id, s.service_description, s.additional_info || null,
+            s.cost, s.is_paid ? 1 : 0, s.partial_paid || 0, s.service_date, s.created_at,
+            s.dash_abs ? 1 : 0, s.dash_check_engine ? 1 : 0, s.dash_brake ? 1 : 0,
+            s.dash_airbag ? 1 : 0, s.dash_immobilizer ? 1 : 0, s.dash_tpms ? 1 : 0, s.dash_oil_leak ? 1 : 0,
+            s.current_mileage || null, s.next_service_date || null, s.next_service_mileage || null,
+            s.oil_grade || null, s.oil_filter_changed ? 1 : 0,
+            s.battery_amp_rate || null, s.battery_install_date || null, s.battery_warranty_months ?? null,
+            s.battery_parasitic_tested ? 1 : 0,
+            s.hvac_freon_date || null, s.hvac_leak_tested ? 1 : 0,
+            s.outsource_cost || 0, s.reminder_dismissed ? 1 : 0,
+          ]
+        );
+        existing ? result.services.updated++ : result.services.inserted++;
+      }
+    }
+  }
+
+  if (Array.isArray(snap.inventory)) {
+    for (const item of snap.inventory) {
+      const existing = await db.getFirstAsync<{ updated_at: string }>(
+        'SELECT updated_at FROM inventory WHERE id = ?',
+        [item.id]
+      );
+      if (!existing || newer(item.updated_at, existing.updated_at)) {
+        await db.runAsync(
+          `INSERT INTO inventory (id, item_number, item_type, item_quantity, item_price, item_retail_price, item_supplier, item_code, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             item_number = excluded.item_number,
+             item_type = excluded.item_type,
+             item_quantity = excluded.item_quantity,
+             item_price = excluded.item_price,
+             item_retail_price = excluded.item_retail_price,
+             item_supplier = excluded.item_supplier,
+             item_code = excluded.item_code,
+             updated_at = excluded.updated_at`,
+          [item.id, item.item_number, item.item_type, item.item_quantity, item.item_price, item.item_retail_price ?? 0, item.item_supplier ?? null, item.item_code ?? null, item.created_at, item.updated_at]
+        );
+        existing ? result.inventory.updated++ : result.inventory.inserted++;
+      }
+    }
+  }
+
+  if (Array.isArray(snap.suppliers)) {
+    for (const sup of snap.suppliers) {
+      const existing = await db.getFirstAsync<{ created_at: string }>(
+        'SELECT created_at FROM suppliers WHERE id = ?',
+        [sup.id]
+      );
+      if (!existing || newer(sup.created_at, existing.created_at)) {
+        await db.runAsync(
+          `INSERT INTO suppliers (id, name, contact_info, created_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             name = excluded.name,
+             contact_info = excluded.contact_info`,
+          [sup.id, sup.name, sup.contact_info ?? null, sup.created_at]
+        );
+        existing ? result.suppliers.updated++ : result.suppliers.inserted++;
+      }
+    }
+  }
+
+  if (Array.isArray(snap.service_items)) {
+    for (const si of snap.service_items) {
+      const existing = await db.getFirstAsync<{ created_at: string }>(
+        'SELECT created_at FROM service_items WHERE id = ?',
+        [si.id]
+      );
+      if (!existing || newer(si.created_at, existing.created_at)) {
+        await db.runAsync(
+          `INSERT INTO service_items (id, service_id, inventory_id, item_type, quantity, 
 export async function createQuickWalkinService(
   customerName: string | undefined,
   description: string,
