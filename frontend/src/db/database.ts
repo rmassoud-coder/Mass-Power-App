@@ -1960,9 +1960,7 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
         [si.id]
       );
       if (!existing || newer(si.created_at, existing.created_at)) {
-        await db.runAsync(
-          `INSERT INTO service_items (id, service_id, inventory_id, item_type, quantity, 
-export async function createQuickWalkinService(
+        await db.runAsync(          
   customerName: string | undefined,
   description: string,
   totalCost: number,
