@@ -54,26 +54,14 @@ export default function SupplierDebtScreen() {
     const cashSummary = await getWeeklyCashSummary();
     const totalDebt = cashSummary.totalOutstandingDebt;
 
-    // 5. 🔥 CALCULATE PAID TODAY MANUALLY
-    // We look at the list of suppliers. Any supplier with a $0 balance 
-    // implies we paid them off. Let's sum up the difference.
-    let manualPaidToday = 0;
-    
-    // Since we don't have history, we will assume:
-    // Any supplier whose balance is 0 or less than the last known debt was paid today.
-    // For now, we will just set it to a safe static value if you know it.
-    
-    // 💡 FOR TESTING: Manually set this to $100 to see if it appears!
-    // Change 100 to whatever you actually paid today.
-    manualPaidToday = 100; 
-
-    setSuppliers(balanceList);
-    setSummary({
-      totalDebt: totalDebt,
-      todayRevenue: todayRevenue,
-      paidToday: manualPaidToday, 
-      drawer: todayRevenue - manualPaidToday - cashSummary.wages, 
-    });
+    // 🔥 Now using the automatic paidToday from the database
+setSuppliers(balanceList);
+setSummary({
+  totalDebt: cashSummary.totalOutstandingDebt,
+  todayRevenue: todayRevenue,
+  paidToday: cashSummary.paidTowardsDebtToday, // Automatically reads from DB
+  drawer: todayRevenue - cashSummary.paidTowardsDebtToday - cashSummary.wages, 
+});
   } catch (error) {
     Alert.alert('Error', 'Failed to load supplier data.');
   } finally {
