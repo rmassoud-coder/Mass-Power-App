@@ -120,13 +120,15 @@ export default function AddServiceScreen() {
         return;
       }
     }
-// 🔥 SAFETY CHECK: Ensure every picked item has an inventory_id
-const validItems = pickedItems.filter(p => p.inventory_id || p.id);
-if (pickedItems.length > 0 && validItems.length === 0) {
-  Alert.alert('Error', 'Selected inventory items are missing valid IDs.');
-  setLoading(false);
-  return;
-}
+
+    // 🔥 SAFETY CHECK: Ensure every picked item has an inventory_id
+    const validItems = pickedItems.filter(p => p.inventory_id || p.id);
+    if (pickedItems.length > 0 && validItems.length === 0) {
+      Alert.alert('Error', 'Selected inventory items are missing valid IDs.');
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       await createService(
@@ -137,14 +139,13 @@ if (pickedItems.length > 0 && validItems.length === 0) {
         isPaid,
         dashLights,
         isOilService ? oilReminder : EMPTY_OIL_REMINDER,
-        pickedItems.map((p) => ({ inventory_id: p.inventory_id, quantity: p.quantity })),
+        validItems.map((p) => ({ inventory_id: p.inventory_id || p.id, quantity: p.quantity })),
         partialPaidNumber,
         isBatteryService ? batteryReplacement : undefined,
         isHvacService ? hvacService : undefined,
         parseFloat(outsourceCost || '0') || 0
       );
       triggerAutoPush();
-
       router.back();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to add service');
