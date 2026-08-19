@@ -965,13 +965,22 @@ async function attachItemsToService(
 ): Promise<ServiceItem[]> {
   const db = await getDb();
   const saved: ServiceItem[] = [];
+  
+  // If no items, return empty array immediately
+  if (!items || items.length === 0) {
+    return saved;
+  }
+
   for (const it of items) {
+    // Skip invalid items
     if (!it.inventory_id || !it.quantity || it.quantity <= 0) continue;
+    
     const inv = await db.getFirstAsync<InventoryItem>(
       `SELECT * FROM inventory WHERE id = ?`,
       [it.inventory_id]
     );
     if (!inv) continue;
+
     const qty = Math.floor(it.quantity);
     const rowId = generateId();
     const now = new Date().toISOString();
@@ -979,6 +988,7 @@ async function attachItemsToService(
       inv.item_retail_price && inv.item_retail_price > 0
         ? inv.item_retail_price
         : inv.item_price;
+
     await db.runAsync(
       `INSERT INTO service_items (id, service_id, inventory_id, item_type, quantity, unit_price, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
