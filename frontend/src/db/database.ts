@@ -247,7 +247,7 @@ export async function initDatabase() {
       contact_info TEXT,
       created_at TEXT NOT NULL
     );
-// 🔥 Add this new table to track every payment
+
 CREATE TABLE IF NOT EXISTS supplier_payments (
   id TEXT PRIMARY KEY,
   supplier_id TEXT NOT NULL,
