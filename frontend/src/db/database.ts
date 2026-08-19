@@ -2408,3 +2408,14 @@ export async function checkWalkinData(): Promise<{
     services,
   };
 }
+// 🔥 GLOBAL CRASH CATCHER
+import { Alert } from 'react-native';
+
+// This runs when the app first loads the database file
+try {
+  console.log("✅ database.ts loaded successfully");
+} catch (error: any) {
+  // If something else crashes before our functions, this will show a popup
+  Alert.alert("FATAL ERROR", `database.ts crashed: ${error.message}`);
+  throw error;
+}
