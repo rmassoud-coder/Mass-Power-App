@@ -2299,30 +2299,28 @@ export async function getWeeklyCashSummary(): Promise<{
   );
   const totalDebt = debtResult?.total || 0;
 
-  let paidToday = 0;
-  try {
-    const paidResult = await db.getFirstAsync<{ total: number }>(
-      `SELECT COALESCE(SUM(
-        CASE 
-          WHEN DATE(updated_at) >= ? AND DATE(updated_at) <= ? THEN balance - COALESCE(prev_balance, 0)
-          ELSE 0 
-        END
-      ), 0) as total 
-      FROM (
-        SELECT 
-          supplier_id,
-          balance,
-          updated_at,
-          LAG(balance, 1) OVER (PARTITION BY supplier_id ORDER BY updated_at) as prev_balance
-        FROM supplier_balances
-      ) 
-      WHERE balance < prev_balance`,
-      [mondayStr, todayStr]
-    );
-    paidToday = Math.abs(paidResult?.total || 0);
-  } catch (e) {
-    paidToday = 0;
-  }
+// 🔥 FIX: Simple, cross-version SQLite math (No LAG, no window functions)
+let paidToday = 0;
+try {
+  // Get total debt at the beginning of the week (Monday morning)
+  const prevDebtResult = await db.getFirstAsync<{ total: number }>(
+    `SELECT COALESCE(SUM(balance), 0) as total FROM supplier_balances 
+     WHERE DATE(updated_at) < ?`,
+    [mondayStr]
+  );
+  const prevTotalDebt = prevDebtResult?.total || 0;
+
+  // Get total debt right now
+  const currentDebtResult = await db.getFirstAsync<{ total: number }>(
+    `SELECT COALESCE(SUM(balance), 0) as total FROM supplier_balances`
+  );
+  const currentTotalDebt = currentDebtResult?.total || 0;
+
+  // Paid today = what we owed at the start of the week - what we owe now
+  paidToday = Math.max(0, prevTotalDebt - currentTotalDebt);
+} catch (e) {
+  paidToday = 0;
+}
 
   const wagesResult = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid 
