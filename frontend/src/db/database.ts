@@ -988,12 +988,16 @@ export async function getWeeklyCashSummary(): Promise<{
 // 🔥 FIX: Simple, bulletproof way to calculate what was paid today
 let paidToday = 0;
 try {
-  // This fetches the current total debt balance
-  const currentDebtResult = await db.getFirstAsync<{ total: number }>(
-    `SELECT COALESCE(SUM(balance), 0) as total FROM supplier_balances`
+  const paidResult = await db.getFirstAsync<{ total: number }>(
+    `SELECT COALESCE(SUM(amount_paid), 0) as total FROM supplier_payments 
+     WHERE paid_at >= ? AND paid_at <= ?`,
+    [`${mondayStr}T00:00:00`, `${todayStr}T23:59:59`]  // 🔥 CHANGE HERE
   );
-  const currentTotalDebt = currentDebtResult?.total || 0;
-
+  paidToday = paidResult?.total || 0;
+} catch (e) {
+  paidToday = 0;
+}
+  
   // This calculates what the debt was before today (Monday to Yesterday)
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
