@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getSupplierBalances, updateSupplierBalance, getWeeklyCashSummary } from '../../src/db/database';
+import { getSupplierBalances, updateSupplierBalance, getWeeklyCashSummary, getReport } from '../../src/db/database';
 
 export default function SupplierDebtScreen() {
   const [suppliers, setSuppliers] = useState<{ id: string; name: string; balance: number }[]>([]);
@@ -23,11 +23,13 @@ export default function SupplierDebtScreen() {
   const [summary, setSummary] = useState<{ 
     totalDebt: number; 
     todayRevenue: number; 
+    wtdIncome: number; 
     paidToday: number;
     drawer: number 
   }>({
     totalDebt: 0,
     todayRevenue: 0,
+    wtdIncome: 0,
     paidToday: 0,
     drawer: 0,
   });
@@ -36,16 +38,42 @@ export default function SupplierDebtScreen() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
+      // 1. Get date ranges
+      const today = new Date();
+      const todayStr = today.toISOString().slice(0, 10);
+      const dayOfWeek = today.getDay();
+      const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - diffToMonday);
+      const mondayStr = monday.toISOString().slice(0, 10);
+
+      // 2. Fetch Today's Income
+      const todayReport = await getReport(
+        `${todayStr}T00:00:00`,
+        `${todayStr}T23:59:59`
+      );
+      const todayRevenue = todayReport.total_cost;
+
+      // 3. Fetch Week-to-Date Income
+      const wtdReport = await getReport(
+        `${mondayStr}T00:00:00`,
+        `${todayStr}T23:59:59`
+      );
+      const wtdIncome = wtdReport.total_cost;
+
+      // 4. Fetch Supplier Balances & Debts
       const [balanceList, cashSummary] = await Promise.all([
         getSupplierBalances(),
         getWeeklyCashSummary(),
       ]);
+
       setSuppliers(balanceList);
       setSummary({
         totalDebt: cashSummary.totalOutstandingDebt,
-        todayRevenue: cashSummary.revenue,
+        todayRevenue: todayRevenue,
+        wtdIncome: wtdIncome,
         paidToday: cashSummary.paidTowardsDebtToday,
-        drawer: cashSummary.netDrawer,
+        drawer: todayRevenue - cashSummary.paidTowardsDebtToday - cashSummary.wages, 
       });
     } catch (error) {
       Alert.alert('Error', 'Failed to load supplier data.');
@@ -119,7 +147,7 @@ export default function SupplierDebtScreen() {
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         
-        {/* 🔥 Summary Card (Moved from Management) */}
+        {/* Summary Card */}
         <View style={styles.cashCard}>
           <View style={styles.cashHeaderRow}>
             <Ionicons name="cash-outline" size={22} color="#5b21b6" />
@@ -136,7 +164,7 @@ export default function SupplierDebtScreen() {
 
           <View style={styles.cashRow}>
             <Text style={styles.cashLabel}>Week-to-Date Income</Text>
-            <Text style={styles.cashValue}>${summary.todayRevenue.toFixed(2)}</Text>
+            <Text style={styles.cashValue}>${summary.wtdIncome.toFixed(2)}</Text>
           </View>
 
           <View style={styles.cashRow}>
