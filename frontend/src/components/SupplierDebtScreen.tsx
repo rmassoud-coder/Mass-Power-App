@@ -23,13 +23,17 @@ export default function SupplierDebtScreen() {
   const [summary, setSummary] = useState<{ 
     totalDebt: number; 
     todayRevenue: number; 
-    wtdIncome: number; 
+    wtdIncome: number;
+    todayOutsource: number;
+    wtdOutsource: number;
     paidToday: number;
     drawer: number 
   }>({
     totalDebt: 0,
     todayRevenue: 0,
     wtdIncome: 0,
+    todayOutsource: 0,
+    wtdOutsource: 0,
     paidToday: 0,
     drawer: 0,
   });
@@ -47,19 +51,21 @@ export default function SupplierDebtScreen() {
       monday.setDate(today.getDate() - diffToMonday);
       const mondayStr = monday.toISOString().slice(0, 10);
 
-      // 2. Fetch Today's Income
+      // 2. Fetch Today's Report (Income + Outsource)
       const todayReport = await getReport(
         `${todayStr}T00:00:00`,
         `${todayStr}T23:59:59`
       );
       const todayRevenue = todayReport.total_cost;
+      const todayOutsource = todayReport.outsource_total;
 
-      // 3. Fetch Week-to-Date Income
+      // 3. Fetch Week-to-Date Report (Income + Outsource)
       const wtdReport = await getReport(
         `${mondayStr}T00:00:00`,
         `${todayStr}T23:59:59`
       );
       const wtdIncome = wtdReport.total_cost;
+      const wtdOutsource = wtdReport.outsource_total;
 
       // 4. Fetch Supplier Balances & Debts
       const [balanceList, cashSummary] = await Promise.all([
@@ -72,8 +78,10 @@ export default function SupplierDebtScreen() {
         totalDebt: cashSummary.totalOutstandingDebt,
         todayRevenue: todayRevenue,
         wtdIncome: wtdIncome,
+        todayOutsource: todayOutsource,
+        wtdOutsource: wtdOutsource,
         paidToday: cashSummary.paidTowardsDebtToday,
-        drawer: todayRevenue - cashSummary.paidTowardsDebtToday - cashSummary.wages, 
+        drawer: (todayRevenue - todayOutsource) - cashSummary.paidTowardsDebtToday - cashSummary.wages, 
       });
     } catch (error) {
       Alert.alert('Error', 'Failed to load supplier data.');
@@ -163,8 +171,20 @@ export default function SupplierDebtScreen() {
           </View>
 
           <View style={styles.cashRow}>
+            <Text style={[styles.cashLabel, { color: '#dc2626' }]}>− Outsource</Text>
+            <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${summary.todayOutsource.toFixed(2)}</Text>
+          </View>
+
+          <View style={styles.cashDivider} />
+
+          <View style={styles.cashRow}>
             <Text style={styles.cashLabel}>Week-to-Date Income</Text>
             <Text style={styles.cashValue}>${summary.wtdIncome.toFixed(2)}</Text>
+          </View>
+
+          <View style={styles.cashRow}>
+            <Text style={[styles.cashLabel, { color: '#dc2626' }]}>− Outsource (WTD)</Text>
+            <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${summary.wtdOutsource.toFixed(2)}</Text>
           </View>
 
           <View style={styles.cashRow}>
@@ -181,7 +201,7 @@ export default function SupplierDebtScreen() {
 
           <View style={styles.cashRow}>
             <Text style={[styles.cashLabel, { fontWeight: '800', color: '#0f172a' }]}>
-              Net Cash Drawer
+              Net Cash Drawer (Today)
             </Text>
             <Text style={[styles.cashValue, { fontWeight: '900', color: summary.drawer >= 0 ? '#059669' : '#dc2626' }]}>
               ${summary.drawer.toFixed(2)}
