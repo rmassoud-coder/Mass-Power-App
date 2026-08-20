@@ -115,7 +115,7 @@ export default function OilReminderForm({ value, onChange, make, model }: Props)
     onChange({ ...value, oilGrade: grade });
   };
 
-  const COMMON_GRADES = ['0W-20', '5W-30', '5W-40', '10W-40'];
+  const COMMON_GRADES = ['5W-30', '5W-40', '10W-30', '10W-40'];
 
   return (
     <View>
