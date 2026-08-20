@@ -42,15 +42,15 @@ export default function ManagementScreen() {
 
         // 1. GET TODAY'S DATE AND MONDAY'S DATE
         const today = new Date();
-        const todayStr = today.toISOString().slice(0, 10); // 2026-08-18
+        const todayStr = today.toISOString().slice(0, 10);
 
         const dayOfWeek = today.getDay();
         const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
         const monday = new Date(today);
         monday.setDate(today.getDate() - diffToMonday);
-        const mondayStr = monday.toISOString().slice(0, 10); // 2026-08-17
+        const mondayStr = monday.toISOString().slice(0, 10);
 
-        // 2. GET TODAY'S REPORT (18-08 only)
+        // 2. GET TODAY'S REPORT
         const todayReport = await getReport(
           `${todayStr}T00:00:00`,
           `${todayStr}T23:59:59`
@@ -58,7 +58,7 @@ export default function ManagementScreen() {
         setTodayIncome(todayReport.total_cost);
         setOutsourceTotal(todayReport.outsource_total);
 
-        // 3. GET WEEK-TO-DATE REPORT (17-08 to 18-08)
+        // 3. GET WEEK-TO-DATE REPORT
         const wtdReport = await getReport(
           `${mondayStr}T00:00:00`,
           `${todayStr}T23:59:59`
@@ -167,19 +167,16 @@ export default function ManagementScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {/* 1. Today Income */}
                 <View style={styles.cashRow}>
                   <Text style={styles.cashLabel}>Today's Income</Text>
                   <Text style={styles.cashValue}>${todayIncome.toFixed(2)}</Text>
                 </View>
 
-                {/* 2. Week-to-Date Income */}
                 <View style={styles.cashRow}>
                   <Text style={styles.cashLabel}>Week-to-Date Income</Text>
                   <Text style={styles.cashValue}>${wtdIncome.toFixed(2)}</Text>
                 </View>
 
-                {/* 3. Outsource Amount */}
                 <View style={styles.cashRow}>
                   <Text style={[styles.cashLabel, { color: '#dc2626' }]}>− Outsource</Text>
                   <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${outsourceTotal.toFixed(2)}</Text>
@@ -187,13 +184,11 @@ export default function ManagementScreen() {
 
                 <View style={styles.cashDivider} />
 
-                {/* 4. Total Supplier Debts */}
                 <View style={styles.cashRow}>
                   <Text style={[styles.cashLabel, { color: '#dc2626' }]}>Total Supplier Debts</Text>
                   <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${totalSupplierDebt.toFixed(2)}</Text>
                 </View>
 
-                {/* 5. Debt Paid This Week */}
                 <View style={styles.cashRow}>
                   <Text style={[styles.cashLabel, { color: '#eab308' }]}>Paid This Week</Text>
                   <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${debtPaidThisWeek.toFixed(2)}</Text>
@@ -216,9 +211,9 @@ export default function ManagementScreen() {
           </TouchableOpacity>
         </View>
         <View style={styles.dashboardGrid}>
-          <TouchableOpacity style={[styles.dashCard, styles.supplierDebtCard]} onPress={() => router.push('/supplier-debts')}>
+          <TouchableOpacity style={[styles.dashCard, styles.supplierDebtCard]} onPress={() => router.push('/supplier-debt')}>
             <Ionicons name="cash-outline" size={32} color="#fff" />
-            <Text style={styles.dashTitle}>Supplier Debt</Text>
+            <Text style={styles.dashTitle}>Supplier Debts</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.dashCard, styles.warrantyCard]} onPress={() => router.push('/warranty-stickers')}>
             <Ionicons name="shield-checkmark-outline" size={32} color="#fff" />
@@ -240,8 +235,6 @@ export default function ManagementScreen() {
             <Ionicons name="pricetag-outline" size={32} color="#fff" />
             <Text style={styles.dashTitle}>Price Stickers</Text>
           </TouchableOpacity>
-          {/* Empty placeholder to keep the grid balanced if needed */}
-          <View style={[styles.dashCard, { backgroundColor: 'transparent' }]} />
         </View>
 
       </ScrollView>
@@ -343,7 +336,7 @@ const styles = StyleSheet.create({
   dashTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginTop: 8, textAlign: 'center' },
   reportCard: { backgroundColor: '#10b981' },
   settingsCard: { backgroundColor: '#2563eb' },
-  supplierDebtCard: { backgroundColor: '#8b5cf6' }, // 🔥 NEW PURPLE CARD
+  supplierDebtCard: { backgroundColor: '#8b5cf6' },
   warrantyCard: { backgroundColor: '#d97706' },
   catPrinterCard: { backgroundColor: '#0ea5e9' },
   inventoryCard: { backgroundColor: '#0f766e' },
