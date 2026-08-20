@@ -30,10 +30,10 @@ export default function ManagementScreen() {
   const [wagesInput, setWagesInput] = useState('');
 
   // SECURITY
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+ /* const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [pinInput, setPinInput] = useState('');
-  const SECRET_PIN = '3945';
+  const SECRET_PIN = '3945'; */
 
   useEffect(() => {
     const loadFinances = async () => {
