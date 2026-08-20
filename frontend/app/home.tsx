@@ -43,6 +43,11 @@ export default function HomeScreen() {
   const cardMargin = isSmallScreen ? 10 : 16;
   const buttonPadding = isSmallScreen ? 10 : 14;
 
+  // 🔥 PIN STATE FOR BACKEND MANAGEMENT
+  const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const SECRET_PIN = '3945';
+
   // Out-of-stock reminder
   useEffect(() => {
     if (outOfStockReminderShown) return;
@@ -187,8 +192,23 @@ export default function HomeScreen() {
     }
   };
 
+  // 🔥 HANDLE BACKEND MANAGEMENT BUTTON WITH PIN
+  const handleBackendPress = () => {
+    setPinModalVisible(true);
+  };
+
+  const handlePinAuth = () => {
+    if (pinInput === SECRET_PIN) {
+      setPinModalVisible(false);
+      setPinInput('');
+      router.push('/management');
+    } else {
+      Alert.alert('Error', 'Incorrect PIN. Please try again.');
+      setPinInput('');
+    }
+  };
+
   // 🔥 Safety function kept inside the file just in case you ever need it again
-  // 🔥 DIRECT SQL NUKE (No imports needed)
   const handleNukeDatabase = async () => {
     Alert.alert(
       '⚠️ DANGER',
@@ -200,11 +220,9 @@ export default function HomeScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // 1. Open the database directly
               const SQLite = require('expo-sqlite');
               const db = await SQLite.openDatabaseAsync('mass_power.db');
               
-              // 2. Drop and recreate only the bad tables
               await db.execAsync(`
                 PRAGMA foreign_keys = OFF;
                 DROP TABLE IF EXISTS supplier_balances;
@@ -271,7 +289,7 @@ export default function HomeScreen() {
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
         >
-          {/* Unified Search - works with mobile, VIN, or plate */}
+          {/* Unified Search */}
           <View style={[styles.searchCard, { padding: cardPadding, marginBottom: cardMargin }]}>
             <View style={styles.searchHeader}>
               <Ionicons name="search-outline" size={isSmallScreen ? 20 : 24} color="#2563eb" />
@@ -322,7 +340,7 @@ export default function HomeScreen() {
             <Text style={styles.walkinButtonText}>Walk-in Customer</Text>
           </TouchableOpacity>
 
-          {/* 🔥 NEW: Order List Button */}
+          {/* Order List Button */}
           <TouchableOpacity
             style={[styles.orderButton, { paddingVertical: buttonPadding }]}
             onPress={() => router.push('/order-list')}
@@ -331,10 +349,10 @@ export default function HomeScreen() {
             <Text style={styles.orderButtonText}>Order List</Text>
           </TouchableOpacity>
 
-          {/* Backend Management */}
+          {/* 🔥 BACKEND MANAGEMENT WITH PIN */}
           <TouchableOpacity
             style={[styles.reportButton, styles.managementButton, { paddingVertical: buttonPadding }]}
-            onPress={() => router.push('/management')}
+            onPress={handleBackendPress}
             testID="management-button"
           >
             <Ionicons name="construct-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
@@ -347,216 +365,132 @@ export default function HomeScreen() {
               ? `Last update: ${new Date(Updates.createdAt).toLocaleString()}`
               : 'Local Dev Mode'}
           </Text>
-
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* 🔥 PIN ENTRY MODAL FOR BACKEND MANAGEMENT */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={pinModalVisible}
+        onRequestClose={() => setPinModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Enter PIN</Text>
+            <Text style={styles.modalSubtitle}>Enter your 4-digit security code</Text>
+            
+            <TextInput
+              style={styles.pinInput}
+              placeholder="****"
+              keyboardType="number-pad"
+              maxLength={4}
+              secureTextEntry={true}
+              value={pinInput}
+              onChangeText={setPinInput}
+              autoFocus={true}
+            />
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setPinModalVisible(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalConfirmBtn} onPress={handlePinAuth}>
+                <Text style={styles.modalConfirmText}>Unlock</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  keyboardView: {
-    flex: 1,
-  },
+  container: { flex: 1, backgroundColor: '#f8fafc' },
+  keyboardView: { flex: 1 },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 24, paddingVertical: 16, backgroundColor: '#fff',
+    borderBottomWidth: 1, borderBottomColor: '#e2e8f0',
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   headerAddButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#2563eb',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    width: 44, height: 44, borderRadius: 22, backgroundColor: '#2563eb',
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: '#2563eb', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3, shadowRadius: 4, elevation: 3,
   },
-  headerLogo: {
-    width: 52,
-    height: 52,
-    marginRight: 12,
-    borderRadius: 26,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1e293b',
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#64748b',
-    marginTop: 2,
-  },
-  content: {
-    flex: 1,
-  },
-  contentContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 30,
-  },
+  headerLogo: { width: 52, height: 52, marginRight: 12, borderRadius: 26 },
+  headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#1e293b' },
+  headerSubtitle: { fontSize: 14, color: '#64748b', marginTop: 2 },
+  content: { flex: 1 },
+  contentContainer: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 30 },
   searchCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    backgroundColor: '#fff', borderRadius: 16, padding: 20, marginBottom: 16,
+    borderWidth: 1, borderColor: '#e2e8f0',
   },
-  searchHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  searchTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1e293b',
-    marginLeft: 12,
-  },
-  searchHint: {
-    fontSize: 12,
-    color: '#94a3b8',
-    marginBottom: 12,
-    marginLeft: 36,
-  },
+  searchHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  searchTitle: { fontSize: 16, fontWeight: '600', color: '#1e293b', marginLeft: 12 },
+  searchHint: { fontSize: 12, color: '#94a3b8', marginBottom: 12, marginLeft: 36 },
   inputContainer: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc', borderRadius: 12, marginBottom: 12,
+    borderWidth: 1, borderColor: '#e2e8f0',
   },
-  input: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#1e293b',
-  },
+  input: { paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#1e293b' },
   searchButton: {
-    backgroundColor: '#2563eb',
-    borderRadius: 12,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#2563eb', borderRadius: 12, paddingVertical: 12,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
   },
-  searchButtonDisabled: {
-    opacity: 0.6,
-  },
-  searchButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
+  searchButtonDisabled: { opacity: 0.6 },
+  searchButtonText: { color: '#fff', fontSize: 16, fontWeight: '600', marginLeft: 8 },
   addCustomerButton: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#2563eb',
-    backgroundColor: '#fff',
-    marginTop: 8,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+    paddingVertical: 14, borderRadius: 12, borderWidth: 2, borderColor: '#2563eb',
+    backgroundColor: '#fff', marginTop: 8,
   },
-  addCustomerButtonText: {
-    color: '#2563eb',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
+  addCustomerButtonText: { color: '#2563eb', fontSize: 16, fontWeight: '600', marginLeft: 8 },
   walkinButton: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#d97706',
-    marginTop: 8,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+    paddingVertical: 14, borderRadius: 12, backgroundColor: '#d97706', marginTop: 8,
   },
-  walkinButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  // 🔥 NEW: Order List Button
+  walkinButtonText: { color: '#fff', fontSize: 16, fontWeight: '600', marginLeft: 8 },
   orderButton: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#059669',
-    marginTop: 8,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+    paddingVertical: 14, borderRadius: 12, backgroundColor: '#059669', marginTop: 8,
   },
-  orderButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
+  orderButtonText: { color: '#fff', fontSize: 16, fontWeight: '600', marginLeft: 8 },
   reportButton: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#10b981',
-    marginTop: 12,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+    paddingVertical: 14, borderRadius: 12, backgroundColor: '#10b981', marginTop: 12,
   },
-  reportButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
+  reportButtonText: { color: '#fff', fontSize: 16, fontWeight: '600', marginLeft: 8 },
+  managementButton: { backgroundColor: '#0f172a' },
+  buildStamp: { marginTop: 20, marginBottom: 8, textAlign: 'center', fontSize: 11, color: '#94a3b8' },
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center',
   },
-  managementButton: {
-    backgroundColor: '#0f172a',
+  modalContent: {
+    width: '80%', backgroundColor: '#fff', borderRadius: 20, padding: 24,
+    alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25, shadowRadius: 4, elevation: 5,
   },
-  buildStamp: {
-    marginTop: 20,
-    marginBottom: 8,
-    textAlign: 'center',
-    fontSize: 11,
-    color: '#94a3b8',
+  modalTitle: { fontSize: 22, fontWeight: 'bold', color: '#1e293b', marginBottom: 4 },
+  modalSubtitle: { fontSize: 14, color: '#64748b', marginBottom: 20 },
+  pinInput: {
+    width: '100%', borderWidth: 1, borderColor: '#2563eb', borderRadius: 10,
+    paddingVertical: 12, paddingHorizontal: 16, fontSize: 24, fontWeight: '700',
+    textAlign: 'center', letterSpacing: 8, color: '#0f172a', marginBottom: 24,
+    backgroundColor: '#f8fafc',
   },
-  nukeButton: {
-    backgroundColor: '#dc2626',
-    borderRadius: 12,
-    paddingVertical: 16,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 16,
+  modalButtons: { flexDirection: 'row', gap: 12, width: '100%' },
+  modalCancelBtn: {
+    flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#f1f5f9', alignItems: 'center',
   },
-  nukeButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-    marginLeft: 8,
+  modalCancelText: { color: '#64748b', fontSize: 16, fontWeight: '600' },
+  modalConfirmBtn: {
+    flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#2563eb', alignItems: 'center',
   },
+  modalConfirmText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });
