@@ -30,10 +30,10 @@ export default function ManagementScreen() {
   const [wagesInput, setWagesInput] = useState('');
 
   // SECURITY
- /* const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [pinInput, setPinInput] = useState('');
-  const SECRET_PIN = '3945'; */
+  const SECRET_PIN = '3945';
 
   useEffect(() => {
     const loadFinances = async () => {
@@ -79,7 +79,7 @@ export default function ManagementScreen() {
     loadFinances();
   }, []);
 
-  const handlePinAuth = () => {
+/*  const handlePinAuth = () => {
     if (pinInput === SECRET_PIN) {
       setIsAuthenticated(true);
       setPinModalVisible(false);
@@ -89,7 +89,7 @@ export default function ManagementScreen() {
       Alert.alert('Error', 'Incorrect PIN. Please try again.');
       setPinInput('');
     }
-  };
+  }; */
 
   const handlePush = async () => {
     try {
