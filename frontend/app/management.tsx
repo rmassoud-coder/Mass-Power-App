@@ -8,7 +8,6 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
-  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -19,57 +18,15 @@ import { pushToCloud, pullFromCloud } from '../src/utils/dbSync';
 export default function ManagementScreen() {
   const router = useRouter();
 
-  // 5 NUMBERS YOU ASKED FOR
-  const [todayIncome, setTodayIncome] = useState(0);
-  const [wtdIncome, setWtdIncome] = useState(0);
-  const [outsourceTotal, setOutsourceTotal] = useState(0);
-  const [totalSupplierDebt, setTotalSupplierDebt] = useState(0);
-  const [debtPaidThisWeek, setDebtPaidThisWeek] = useState(0);
-
   const [loading, setLoading] = useState(true);
   const [wagesInput, setWagesInput] = useState('');
-
-  // SECURITY
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [pinModalVisible, setPinModalVisible] = useState(false);
-  const [pinInput, setPinInput] = useState('');
-  const SECRET_PIN = '3945';
 
   useEffect(() => {
     const loadFinances = async () => {
       try {
         setLoading(true);
-
-        // 1. GET TODAY'S DATE AND MONDAY'S DATE
-        const today = new Date();
-        const todayStr = today.toISOString().slice(0, 10);
-
-        const dayOfWeek = today.getDay();
-        const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
-        const monday = new Date(today);
-        monday.setDate(today.getDate() - diffToMonday);
-        const mondayStr = monday.toISOString().slice(0, 10);
-
-        // 2. GET TODAY'S REPORT
-        const todayReport = await getReport(
-          `${todayStr}T00:00:00`,
-          `${todayStr}T23:59:59`
-        );
-        setTodayIncome(todayReport.total_cost);
-        setOutsourceTotal(todayReport.outsource_total);
-
-        // 3. GET WEEK-TO-DATE REPORT
-        const wtdReport = await getReport(
-          `${mondayStr}T00:00:00`,
-          `${todayStr}T23:59:59`
-        );
-        setWtdIncome(wtdReport.total_cost);
-
-        // 4. GET SUPPLIER DEBTS & PAID THIS WEEK
-        const summary = await getWeeklyCashSummary();
-        setTotalSupplierDebt(summary.totalOutstandingDebt);
-        setDebtPaidThisWeek(summary.paidTowardsDebtToday);
-
+        // Just load data silently (we don't display it here anymore)
+        await getWeeklyCashSummary();
       } catch (e) {
         console.warn("Failed to load finances:", e);
       } finally {
@@ -78,18 +35,6 @@ export default function ManagementScreen() {
     };
     loadFinances();
   }, []);
-
-  const handlePinAuth = () => {
-    if (pinInput === SECRET_PIN) {
-      setIsAuthenticated(true);
-      setPinModalVisible(false);
-      setPinInput('');
-      Alert.alert('Success', 'Access granted!');
-    } else {
-      Alert.alert('Error', 'Incorrect PIN. Please try again.');
-      setPinInput('');
-    }
-  };
 
   const handlePush = async () => {
     try {
@@ -123,6 +68,7 @@ export default function ManagementScreen() {
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         
+        {/* Cloud Sync */}
         <View style={styles.syncCard}>
           <Text style={styles.syncTitle}>Cloud Sync</Text>
           <View style={styles.syncButtonsRow}>
@@ -138,65 +84,11 @@ export default function ManagementScreen() {
           <Text style={styles.syncHint}>Push uploads data. Pull merges cloud copy.</Text>
         </View>
 
-        {!isAuthenticated && (
-          <TouchableOpacity style={styles.lockButton} onPress={() => setPinModalVisible(true)}>
-            <Ionicons name="lock-closed" size={24} color="#fff" />
-            <Text style={styles.lockButtonText}>🔒 Tap to Unlock Backend</Text>
-          </TouchableOpacity>
-        )}
-
-        {!isAuthenticated ? (
-          <View style={styles.lockedCard}>
-            <Ionicons name="lock-closed" size={32} color="#94a3b8" />
-            <Text style={styles.lockedText}>Backend is locked. Tap the button above to unlock.</Text>
+        {loading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#5b21b6" />
+            <Text style={styles.loadingText}>Loading...</Text>
           </View>
-        ) : (
-          <>
-            {loading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#5b21b6" />
-                <Text style={styles.loadingText}>Loading finances...</Text>
-              </View>
-            ) : (
-              <View style={styles.cashCard}>
-                <View style={styles.cashHeaderRow}>
-                  <Ionicons name="cash-outline" size={22} color="#5b21b6" />
-                  <Text style={styles.cashHeader}>WEEKLY CASH FLOW</Text>
-                  <TouchableOpacity style={styles.viewBtn} onPress={() => router.push('/report')}>
-                    <Text style={styles.viewBtnText}>Details</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.cashRow}>
-                  <Text style={styles.cashLabel}>Today's Income</Text>
-                  <Text style={styles.cashValue}>${todayIncome.toFixed(2)}</Text>
-                </View>
-
-                <View style={styles.cashRow}>
-                  <Text style={styles.cashLabel}>Week-to-Date Income</Text>
-                  <Text style={styles.cashValue}>${wtdIncome.toFixed(2)}</Text>
-                </View>
-
-                <View style={styles.cashRow}>
-                  <Text style={[styles.cashLabel, { color: '#dc2626' }]}>− Outsource</Text>
-                  <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${outsourceTotal.toFixed(2)}</Text>
-                </View>
-
-                <View style={styles.cashDivider} />
-
-                <View style={styles.cashRow}>
-                  <Text style={[styles.cashLabel, { color: '#dc2626' }]}>Total Supplier Debts</Text>
-                  <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${totalSupplierDebt.toFixed(2)}</Text>
-                </View>
-
-                <View style={styles.cashRow}>
-                  <Text style={[styles.cashLabel, { color: '#eab308' }]}>Paid This Week</Text>
-                  <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${debtPaidThisWeek.toFixed(2)}</Text>
-                </View>
-
-              </View>
-            )}
-          </>
         )}
 
         {/* 7-Button Grid */}
@@ -210,6 +102,7 @@ export default function ManagementScreen() {
             <Text style={styles.dashTitle}>Settings</Text>
           </TouchableOpacity>
         </View>
+
         <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.supplierDebtCard]} onPress={() => router.push('/supplier-debt')}>
             <Ionicons name="cash-outline" size={32} color="#fff" />
@@ -220,6 +113,7 @@ export default function ManagementScreen() {
             <Text style={styles.dashTitle}>Warranty Stickers</Text>
           </TouchableOpacity>
         </View>
+
         <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.catPrinterCard]} onPress={() => router.push('/cat-printer')}>
             <Ionicons name="print-outline" size={32} color="#fff" />
@@ -230,6 +124,7 @@ export default function ManagementScreen() {
             <Text style={styles.dashTitle}>Inventory</Text>
           </TouchableOpacity>
         </View>
+
         <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.stickerCard]} onPress={() => router.push('/price-stickers')}>
             <Ionicons name="pricetag-outline" size={32} color="#fff" />
@@ -238,34 +133,6 @@ export default function ManagementScreen() {
         </View>
 
       </ScrollView>
-
-      <Modal animationType="slide" transparent visible={pinModalVisible} onRequestClose={() => setPinModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Enter PIN</Text>
-            <Text style={styles.modalSubtitle}>Enter your 4-digit security code</Text>
-            <TextInput
-              style={styles.pinInput}
-              placeholder="****"
-              keyboardType="number-pad"
-              maxLength={4}
-              secureTextEntry
-              value={pinInput}
-              onChangeText={setPinInput}
-              autoFocus
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setPinModalVisible(false)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalConfirmBtn} onPress={handlePinAuth}>
-                <Text style={styles.modalConfirmText}>Unlock</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
     </SafeAreaView>
   );
 }
@@ -296,38 +163,8 @@ const styles = StyleSheet.create({
   },
   syncBtnText: { color: '#fff', fontWeight: '700', marginLeft: 6 },
   syncHint: { color: '#94a3b8', fontSize: 12, marginTop: 6 },
-  lockButton: {
-    backgroundColor: '#2563eb', borderRadius: 12, paddingVertical: 14,
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 16,
-  },
-  lockButtonText: { color: '#fff', fontSize: 16, fontWeight: '600', marginLeft: 8 },
-  lockedCard: {
-    backgroundColor: '#f1f5f9', borderRadius: 16, padding: 20, alignItems: 'center',
-    marginBottom: 16, borderWidth: 1, borderColor: '#e2e8f0',
-  },
-  lockedText: { color: '#64748b', fontSize: 14, marginTop: 8 },
-  loadingContainer: { alignItems: 'center', padding: 20 },
+  loadingContainer: { alignItems: 'center', padding: 20, marginBottom: 16 },
   loadingText: { color: '#64748b', marginTop: 8 },
-  cashCard: {
-    backgroundColor: '#f3e8ff', borderRadius: 16, padding: 16, marginBottom: 16,
-    borderWidth: 1, borderColor: '#d8b4fe',
-  },
-  cashHeaderRow: {
-    flexDirection: 'row', alignItems: 'center', marginBottom: 12,
-  },
-  cashHeader: {
-    fontSize: 16, fontWeight: '800', color: '#5b21b6', marginLeft: 8, flex: 1,
-  },
-  viewBtn: {
-    backgroundColor: '#7c3aed', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20,
-  },
-  viewBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  cashRow: {
-    flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4,
-  },
-  cashLabel: { fontSize: 15, color: '#1e293b', fontWeight: '500' },
-  cashValue: { fontSize: 15, fontWeight: '700', color: '#1e293b' },
-  cashDivider: { height: 1, backgroundColor: '#c4b5fd', marginVertical: 8 },
   dashboardGrid: { flexDirection: 'row', gap: 12, marginBottom: 12 },
   dashCard: {
     flex: 1, borderRadius: 16, padding: 20, alignItems: 'center',
@@ -341,29 +178,4 @@ const styles = StyleSheet.create({
   catPrinterCard: { backgroundColor: '#0ea5e9' },
   inventoryCard: { backgroundColor: '#0f766e' },
   stickerCard: { backgroundColor: '#9333ea' },
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center',
-  },
-  modalContent: {
-    width: '80%', backgroundColor: '#fff', borderRadius: 20, padding: 24,
-    alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25, shadowRadius: 4, elevation: 5,
-  },
-  modalTitle: { fontSize: 22, fontWeight: 'bold', color: '#1e293b', marginBottom: 4 },
-  modalSubtitle: { fontSize: 14, color: '#64748b', marginBottom: 20 },
-  pinInput: {
-    width: '100%', borderWidth: 1, borderColor: '#2563eb', borderRadius: 10,
-    paddingVertical: 12, paddingHorizontal: 16, fontSize: 24, fontWeight: '700',
-    textAlign: 'center', letterSpacing: 8, color: '#0f172a', marginBottom: 24,
-    backgroundColor: '#f8fafc',
-  },
-  modalButtons: { flexDirection: 'row', gap: 12, width: '100%' },
-  modalCancelBtn: {
-    flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#f1f5f9', alignItems: 'center',
-  },
-  modalCancelText: { color: '#64748b', fontSize: 16, fontWeight: '600' },
-  modalConfirmBtn: {
-    flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#2563eb', alignItems: 'center',
-  },
-  modalConfirmText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });
