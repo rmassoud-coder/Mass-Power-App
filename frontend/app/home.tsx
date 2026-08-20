@@ -43,11 +43,6 @@ export default function HomeScreen() {
   const cardMargin = isSmallScreen ? 10 : 16;
   const buttonPadding = isSmallScreen ? 10 : 14;
 
-  // 🔥 PIN STATE
-  const [pinModalVisible, setPinModalVisible] = useState(false);
-  const [pinInput, setPinInput] = useState('');
-  const SECRET_PIN = '3945';
-
   // Out-of-stock reminder
   useEffect(() => {
     if (outOfStockReminderShown) return;
@@ -189,22 +184,6 @@ export default function HomeScreen() {
       Alert.alert('Error', error?.message || 'Failed to search. Please try again.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  // 🔥 PIN HANDLER FOR SUPPLIER DEBTS
-  const handleSupplierDebtsPress = () => {
-    setPinModalVisible(true);
-  };
-
-  const handlePinAuth = () => {
-    if (pinInput === SECRET_PIN) {
-      setPinModalVisible(false);
-      setPinInput('');
-      router.push('/supplier-debt');
-    } else {
-      Alert.alert('Error', 'Incorrect PIN. Please try again.');
-      setPinInput('');
     }
   };
 
@@ -352,15 +331,6 @@ export default function HomeScreen() {
             <Text style={styles.orderButtonText}>Order List</Text>
           </TouchableOpacity>
 
-          {/* Supplier Debts Button - NEW */}
-          <TouchableOpacity
-            style={[styles.debtButton, { paddingVertical: buttonPadding }]}
-            onPress={handleSupplierDebtsPress}
-          >
-            <Ionicons name="receipt-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
-            <Text style={styles.debtButtonText}>Supplier Debts</Text>
-          </TouchableOpacity>
-
           {/* Backend Management */}
           <TouchableOpacity
             style={[styles.reportButton, styles.managementButton, { paddingVertical: buttonPadding }]}
@@ -378,57 +348,8 @@ export default function HomeScreen() {
               : 'Local Dev Mode'}
           </Text>
 
-          {/* 
-          ****************************************************
-          * NUKE DATABASE BUTTON - HIDDEN (Commented out)    *
-          * If you ever need it, just uncomment this block.   *
-          ****************************************************
-          <TouchableOpacity
-            style={styles.nukeButton}
-            onPress={handleNukeDatabase}
-          >
-            <Ionicons name="trash-bin" size={20} color="#fff" />
-            <Text style={styles.nukeButtonText}>🗑️ NUKE 34MB DATABASE</Text>
-          </TouchableOpacity>
-          */}
-
         </ScrollView>
       </KeyboardAvoidingView>
-
-      {/* 🔥 PIN ENTRY MODAL FOR SUPPLIER DEBTS */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={pinModalVisible}
-        onRequestClose={() => setPinModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Enter PIN</Text>
-            <Text style={styles.modalSubtitle}>Enter your 4-digit security code</Text>
-            
-            <TextInput
-              style={styles.pinInput}
-              placeholder="****"
-              keyboardType="number-pad"
-              maxLength={4}
-              secureTextEntry={true}
-              value={pinInput}
-              onChangeText={setPinInput}
-              autoFocus={true}
-            />
-            
-            <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setPinModalVisible(false)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalConfirmBtn} onPress={handlePinAuth}>
-                <Text style={styles.modalConfirmText}>Unlock</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
     </SafeAreaView>
   );
@@ -597,21 +518,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
-  debtButton: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#8b5cf6',
-    marginTop: 8,
-  },
-  debtButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
   reportButton: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -652,80 +558,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
-  },
-
-  // 🔥 MODAL STYLES
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    width: '80%',
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1e293b',
-    marginBottom: 4,
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: '#64748b',
-    marginBottom: 20,
-  },
-  pinInput: {
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#2563eb',
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    fontSize: 24,
-    fontWeight: '700',
-    textAlign: 'center',
-    letterSpacing: 8,
-    color: '#0f172a',
-    marginBottom: 24,
-    backgroundColor: '#f8fafc',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    width: '100%',
-  },
-  modalCancelBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: '#f1f5f9',
-    alignItems: 'center',
-  },
-  modalCancelText: {
-    color: '#64748b',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalConfirmBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: '#2563eb',
-    alignItems: 'center',
-  },
-  modalConfirmText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
