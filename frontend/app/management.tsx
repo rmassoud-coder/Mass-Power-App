@@ -79,7 +79,7 @@ export default function ManagementScreen() {
     loadFinances();
   }, []);
 
-/*  const handlePinAuth = () => {
+  const handlePinAuth = () => {
     if (pinInput === SECRET_PIN) {
       setIsAuthenticated(true);
       setPinModalVisible(false);
@@ -89,7 +89,7 @@ export default function ManagementScreen() {
       Alert.alert('Error', 'Incorrect PIN. Please try again.');
       setPinInput('');
     }
-  }; */
+  };
 
   const handlePush = async () => {
     try {
