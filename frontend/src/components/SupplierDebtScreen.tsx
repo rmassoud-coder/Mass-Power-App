@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getSupplierBalances, updateSupplierBalance, getWeeklyCashSummary, getReport } from '../db/database';
+import { getSupplierBalances, updateSupplierBalance, getWeeklyCashSummary } from '../src/db/database';
 
 export default function SupplierDebtScreen() {
   const [suppliers, setSuppliers] = useState<{ id: string; name: string; balance: number }[]>([]);
@@ -34,46 +34,30 @@ export default function SupplierDebtScreen() {
   const router = useRouter();
 
   const loadData = useCallback(async () => {
-  setLoading(true);
-  try {
-    // 1. Get Today's date
-    const today = new Date();
-    const todayStr = today.toISOString().slice(0, 10);
-
-    // 2. Fetch Supplier Balances (The current list)
-    const balanceList = await getSupplierBalances();
-
-    // 3. Fetch Today's Revenue using getReport
-    const todayReport = await getReport(
-      `${todayStr}T00:00:00`,
-      `${todayStr}T23:59:59`
-    );
-    const todayRevenue = todayReport.total_cost;
-
-    // 4. Fetch total debt from the summary (we know this is correct)
-    const cashSummary = await getWeeklyCashSummary();
-    const totalDebt = cashSummary.totalOutstandingDebt;
-
-    // 🔥 Now using the automatic paidToday from the database
-setSuppliers(balanceList);
-setSummary({
-  totalDebt: cashSummary.totalOutstandingDebt,
-  todayRevenue: todayRevenue,
-  paidToday: cashSummary.paidTowardsDebtToday, // Automatically reads from DB
-  drawer: todayRevenue - cashSummary.paidTowardsDebtToday - cashSummary.wages, 
-});
-  } catch (error) {
-    Alert.alert('Error', 'Failed to load supplier data.');
-  } finally {
-    setLoading(false);
-  }
-}, []);
+    setLoading(true);
+    try {
+      const [balanceList, cashSummary] = await Promise.all([
+        getSupplierBalances(),
+        getWeeklyCashSummary(),
+      ]);
+      setSuppliers(balanceList);
+      setSummary({
+        totalDebt: cashSummary.totalOutstandingDebt,
+        todayRevenue: cashSummary.revenue,
+        paidToday: cashSummary.paidTowardsDebtToday,
+        drawer: cashSummary.netDrawer,
+      });
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load supplier data.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  // ✅ FIXED: Correctly sets the supplier ID instead of null
   const handleEditPress = (id: string) => {
     setEditingId(id);
     setPayTodayValue('');
@@ -101,7 +85,7 @@ setSummary({
       await updateSupplierBalance(editingId, newBalance);
       setEditingId(null);
       setPayTodayValue('');
-      setTimeout(() => loadData(), 300); // Small delay to let DB settle
+      loadData();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to update balance.');
     } finally {
@@ -135,25 +119,43 @@ setSummary({
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         
-        {/* Summary Card */}
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Cash Drawer Summary</Text>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Today's Revenue</Text>
-            <Text style={styles.summaryValue}>${summary.todayRevenue.toFixed(2)}</Text>
+        {/* 🔥 Summary Card (Moved from Management) */}
+        <View style={styles.cashCard}>
+          <View style={styles.cashHeaderRow}>
+            <Ionicons name="cash-outline" size={22} color="#5b21b6" />
+            <Text style={styles.cashHeader}>WEEKLY CASH FLOW</Text>
+            <TouchableOpacity style={styles.viewBtn} onPress={() => router.push('/report')}>
+              <Text style={styles.viewBtnText}>Details</Text>
+            </TouchableOpacity>
           </View>
-          <View style={styles.summaryRow}>
-            <Text style={[styles.summaryLabel, { color: '#dc2626' }]}>Total Outstanding Debt</Text>
-            <Text style={[styles.summaryValue, { color: '#dc2626' }]}>- ${summary.totalDebt.toFixed(2)}</Text>
+
+          <View style={styles.cashRow}>
+            <Text style={styles.cashLabel}>Today's Income</Text>
+            <Text style={styles.cashValue}>${summary.todayRevenue.toFixed(2)}</Text>
           </View>
-          <View style={styles.summaryRow}>
-            <Text style={[styles.summaryLabel, { color: '#eab308' }]}>Paid Towards Debt Today</Text>
-            <Text style={[styles.summaryValue, { color: '#eab308' }]}>- ${summary.paidToday.toFixed(2)}</Text>
+
+          <View style={styles.cashRow}>
+            <Text style={styles.cashLabel}>Week-to-Date Income</Text>
+            <Text style={styles.cashValue}>${summary.todayRevenue.toFixed(2)}</Text>
           </View>
-          <View style={styles.divider} />
-          <View style={styles.summaryRow}>
-            <Text style={styles.drawerLabel}>Net Cash Drawer</Text>
-            <Text style={[styles.drawerValue, { color: summary.drawer >= 0 ? '#059669' : '#dc2626' }]}>
+
+          <View style={styles.cashRow}>
+            <Text style={[styles.cashLabel, { color: '#dc2626' }]}>− Total Supplier Debts</Text>
+            <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${summary.totalDebt.toFixed(2)}</Text>
+          </View>
+
+          <View style={styles.cashDivider} />
+
+          <View style={styles.cashRow}>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]}>Paid This Week</Text>
+            <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${summary.paidToday.toFixed(2)}</Text>
+          </View>
+
+          <View style={styles.cashRow}>
+            <Text style={[styles.cashLabel, { fontWeight: '800', color: '#0f172a' }]}>
+              Net Cash Drawer
+            </Text>
+            <Text style={[styles.cashValue, { fontWeight: '900', color: summary.drawer >= 0 ? '#059669' : '#dc2626' }]}>
               ${summary.drawer.toFixed(2)}
             </Text>
           </View>
@@ -225,17 +227,57 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#1e293b' },
   content: { flex: 1 },
   contentContainer: { padding: 16, paddingBottom: 40 },
-  summaryCard: {
-    backgroundColor: '#fff', borderRadius: 16, padding: 20, marginBottom: 20,
-    borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4,
+  cashCard: {
+    backgroundColor: '#f3e8ff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#d8b4fe',
   },
-  summaryTitle: { fontSize: 16, fontWeight: '700', color: '#1e293b', marginBottom: 16 },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  summaryLabel: { fontSize: 14, color: '#475569' },
-  summaryValue: { fontSize: 14, fontWeight: '600' },
-  divider: { height: 1, backgroundColor: '#e2e8f0', marginVertical: 12 },
-  drawerLabel: { fontSize: 18, fontWeight: '700', color: '#1e293b' },
-  drawerValue: { fontSize: 20, fontWeight: '900' },
+  cashHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  cashHeader: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#5b21b6',
+    marginLeft: 8,
+    flex: 1,
+  },
+  viewBtn: {
+    backgroundColor: '#7c3aed',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  viewBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  cashRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  cashLabel: {
+    fontSize: 15,
+    color: '#1e293b',
+    fontWeight: '500',
+  },
+  cashValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  cashDivider: {
+    height: 1,
+    backgroundColor: '#c4b5fd',
+    marginVertical: 8,
+  },
   listTitle: { fontSize: 16, fontWeight: '600', color: '#1e293b', marginBottom: 12 },
   emptyText: { textAlign: 'center', color: '#94a3b8', marginTop: 20, fontStyle: 'italic' },
   supplierItem: {
