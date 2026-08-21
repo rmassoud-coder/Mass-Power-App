@@ -222,7 +222,7 @@ export default function HomeScreen() {
               style={styles.headerLogo}
               resizeMode="contain"
             />
-            <Text style={styles.headerSubtitle}>خدمات السيارات</Text>
+            <Text style={styles.headerSubtitle}>Auto Services</Text>
           </View>
         </View>
 
