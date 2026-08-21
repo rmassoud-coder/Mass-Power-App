@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export interface OrderItem {
   id: string;
   text: string;
+  quantity: number; // ✅ ADDED
   isCompleted: boolean;
   createdAt: string;
 }
@@ -39,7 +40,13 @@ export default function OrderListScreen() {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
       if (stored) {
-        setOrders(JSON.parse(stored));
+        const parsed = JSON.parse(stored);
+        // Ensure old items without quantity default to 1
+        const withQuantity = parsed.map((item: any) => ({
+          ...item,
+          quantity: item.quantity || 1,
+        }));
+        setOrders(withQuantity);
       }
     } catch (e) {
       console.warn('Failed to load orders:', e);
@@ -66,6 +73,7 @@ export default function OrderListScreen() {
     const newItem: OrderItem = {
       id: Date.now().toString(),
       text,
+      quantity: 1, // ✅ DEFAULT TO 1
       isCompleted: false,
       createdAt: new Date().toISOString(),
     };
@@ -82,6 +90,22 @@ export default function OrderListScreen() {
 
   const deleteOrder = (id: string) => {
     const updated = orders.filter((item) => item.id !== id);
+    saveOrders(updated);
+  };
+
+  // ✅ NEW: Increase quantity
+  const increaseQty = (id: string) => {
+    const updated = orders.map((item) =>
+      item.id === id ? { ...item, quantity: item.quantity + 1 } : item
+    );
+    saveOrders(updated);
+  };
+
+  // ✅ NEW: Decrease quantity (min 1)
+  const decreaseQty = (id: string) => {
+    const updated = orders.map((item) =>
+      item.id === id ? { ...item, quantity: Math.max(1, item.quantity - 1) } : item
+    );
     saveOrders(updated);
   };
 
@@ -110,6 +134,7 @@ export default function OrderListScreen() {
           ) : (
             orders.map((item) => (
               <View key={item.id} style={styles.orderItem}>
+                {/* Checkbox */}
                 <TouchableOpacity
                   style={styles.checkboxContainer}
                   onPress={() => toggleComplete(item.id)}
@@ -119,10 +144,26 @@ export default function OrderListScreen() {
                   </View>
                 </TouchableOpacity>
 
-                <Text style={[styles.orderText, item.isCompleted && styles.orderTextCompleted]}>
-                  {item.text}
-                </Text>
+                {/* Text and Quantity */}
+                <View style={styles.itemContent}>
+                  <Text style={[styles.orderText, item.isCompleted && styles.orderTextCompleted]}>
+                    {item.text}
+                  </Text>
+                  <Text style={styles.qtyText}>Qty: {item.quantity}</Text>
+                </View>
 
+                {/* Quantity Controls */}
+                <View style={styles.qtyControls}>
+                  <TouchableOpacity style={styles.qtyBtn} onPress={() => decreaseQty(item.id)}>
+                    <Ionicons name="remove" size={18} color="#0f172a" />
+                  </TouchableOpacity>
+                  <Text style={styles.qtyNumber}>{item.quantity}</Text>
+                  <TouchableOpacity style={styles.qtyBtn} onPress={() => increaseQty(item.id)}>
+                    <Ionicons name="add" size={18} color="#0f172a" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Delete */}
                 <TouchableOpacity onPress={() => deleteOrder(item.id)} style={styles.deleteBtn}>
                   <Ionicons name="trash-outline" size={20} color="#ef4444" />
                 </TouchableOpacity>
@@ -191,10 +232,34 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   checkboxChecked: { backgroundColor: '#10b981', borderColor: '#10b981' },
-  orderText: { flex: 1, fontSize: 16, color: '#1e293b', marginHorizontal: 12 },
+  itemContent: { flex: 1, marginHorizontal: 12 },
+  orderText: { fontSize: 16, color: '#1e293b' },
   orderTextCompleted: {
     textDecorationLine: 'line-through',
     color: '#94a3b8',
+  },
+  qtyText: { fontSize: 12, color: '#64748b', marginTop: 4 },
+  qtyControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginRight: 8,
+  },
+  qtyBtn: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  qtyNumber: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+    minWidth: 24,
+    textAlign: 'center',
   },
   deleteBtn: { padding: 4 },
   inputContainer: {
