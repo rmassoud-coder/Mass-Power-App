@@ -214,9 +214,9 @@ export default function HomeScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        {/* 🔥 ENLARGED CENTERED LOGO */}
+        {/* 🔥 LOGO BESIDE AUTO SERVICES TEXT */}
         <View style={styles.header}>
-          <View style={styles.logoContainer}>
+          <View style={styles.logoRow}>
             <Image
               source={require('../assets/images/mass-power-logo.png')}
               style={styles.headerLogo}
@@ -353,7 +353,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   keyboardView: { flex: 1 },
   
-  // 🔥 ENLARGED CENTERED LOGO STYLES
+  // 🔥 LOGO BESIDE TEXT STYLES
   header: {
     alignItems: 'center',
     paddingVertical: 20,
@@ -361,18 +361,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
-  logoContainer: {
+  logoRow: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
   headerLogo: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 12,
   },
   headerSubtitle: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#64748b',
-    marginTop: 8,
     fontWeight: '600',
   },
   
