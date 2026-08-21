@@ -144,7 +144,7 @@ export default function HomeScreen() {
   const handleSearch = async () => {
     const query = searchQuery.trim();
     if (!query) {
-      Alert.alert('Error', 'Please enter a search term');
+      Alert.alert('خطأ', 'الرجاء إدخال كلمة للبحث');
       return;
     }
 
@@ -172,11 +172,11 @@ export default function HomeScreen() {
 
       if (results.length === 0) {
         Alert.alert(
-          'No Results Found',
-          'Would you like to create a new customer?',
+          'لا توجد نتائج',
+          'هل تريد إنشاء عميل جديد؟',
           [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Create', onPress: () => router.push('/add-customer') },
+            { text: 'إلغاء', style: 'cancel' },
+            { text: 'إنشاء', onPress: () => router.push('/add-customer') },
           ]
         );
       } else {
@@ -186,7 +186,7 @@ export default function HomeScreen() {
         });
       }
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to search. Please try again.');
+      Alert.alert('خطأ', error?.message || 'فشل البحث. الرجاء المحاولة مرة أخرى.');
     } finally {
       setLoading(false);
     }
@@ -203,7 +203,7 @@ export default function HomeScreen() {
       setPinInput('');
       router.push('/management');
     } else {
-      Alert.alert('Error', 'Incorrect PIN. Please try again.');
+      Alert.alert('خطأ', 'رمز PIN غير صحيح. الرجاء المحاولة مرة أخرى.');
       setPinInput('');
     }
   };
@@ -222,7 +222,7 @@ export default function HomeScreen() {
               style={styles.headerLogo}
               resizeMode="contain"
             />
-            <Text style={styles.headerSubtitle}>Auto Services</Text>
+            <Text style={styles.headerSubtitle}>خدمات السيارات</Text>
           </View>
         </View>
 
@@ -235,15 +235,15 @@ export default function HomeScreen() {
           <View style={[styles.searchCard, { padding: cardPadding, marginBottom: cardMargin }]}>
             <View style={styles.searchHeader}>
               <Ionicons name="search-outline" size={isSmallScreen ? 20 : 24} color="#2563eb" />
-              <Text style={styles.searchTitle}>Search Customer</Text>
+              <Text style={styles.searchTitle}>ابحث عن عميل</Text>
             </View>
             <Text style={styles.searchHint}>
-              Enter mobile, VIN, or plate number
+              أدخل رقم الموبايل، رقم الهيكل، أو رقم اللوحة
             </Text>
             <View style={styles.inputContainer}>
               <TextInput
                 style={styles.input}
-                placeholder="Mobile • VIN • Plate"
+                placeholder="موبايل • هيكل • لوحة"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 autoCapitalize="characters"
@@ -258,7 +258,7 @@ export default function HomeScreen() {
               testID="unified-search-button"
             >
               <Ionicons name="search" size={isSmallScreen ? 16 : 20} color="#fff" />
-              <Text style={styles.searchButtonText}>Search</Text>
+              <Text style={styles.searchButtonText}>بحث</Text>
             </TouchableOpacity>
           </View>
 
@@ -269,7 +269,7 @@ export default function HomeScreen() {
             testID="add-customer-button"
           >
             <Ionicons name="person-add-outline" size={isSmallScreen ? 16 : 20} color="#2563eb" />
-            <Text style={styles.addCustomerButtonText}>Add New Customer</Text>
+            <Text style={styles.addCustomerButtonText}>إضافة عميل جديد</Text>
           </TouchableOpacity>
 
           {/* Quick Walk-in Button */}
@@ -279,7 +279,7 @@ export default function HomeScreen() {
             testID="quick-walkin-button"
           >
             <Ionicons name="walk-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
-            <Text style={styles.walkinButtonText}>Walk-in Customer</Text>
+            <Text style={styles.walkinButtonText}>عميل بدون موعد</Text>
           </TouchableOpacity>
 
           {/* Order List Button */}
@@ -288,7 +288,7 @@ export default function HomeScreen() {
             onPress={() => router.push('/order-list')}
           >
             <Ionicons name="list-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
-            <Text style={styles.orderButtonText}>Order List</Text>
+            <Text style={styles.orderButtonText}>قائمة الطلبات</Text>
           </TouchableOpacity>
 
           {/* 🔥 BACKEND MANAGEMENT WITH PIN */}
@@ -298,14 +298,14 @@ export default function HomeScreen() {
             testID="management-button"
           >
             <Ionicons name="construct-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
-            <Text style={styles.reportButtonText}>Backend Management</Text>
+            <Text style={styles.reportButtonText}>الإدارة الخلفية</Text>
           </TouchableOpacity>
 
           {/* Build timestamp */}
           <Text style={styles.buildStamp} testID="build-timestamp">
             {Updates.createdAt
-              ? `Last update: ${new Date(Updates.createdAt).toLocaleString()}`
-              : 'Local Dev Mode'}
+              ? `آخر تحديث: ${new Date(Updates.createdAt).toLocaleString()}`
+              : 'وضع التطوير المحلي'}
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -319,8 +319,8 @@ export default function HomeScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Enter PIN</Text>
-            <Text style={styles.modalSubtitle}>Enter your 4-digit security code</Text>
+            <Text style={styles.modalTitle}>أدخل رمز PIN</Text>
+            <Text style={styles.modalSubtitle}>أدخل رمز الأمان المكوّن من 4 أرقام</Text>
             
             <TextInput
               style={styles.pinInput}
@@ -335,10 +335,10 @@ export default function HomeScreen() {
             
             <View style={styles.modalButtons}>
               <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setPinModalVisible(false)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={styles.modalCancelText}>إلغاء</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalConfirmBtn} onPress={handlePinAuth}>
-                <Text style={styles.modalConfirmText}>Unlock</Text>
+                <Text style={styles.modalConfirmText}>فتح</Text>
               </TouchableOpacity>
             </View>
           </View>
