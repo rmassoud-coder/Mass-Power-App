@@ -214,18 +214,16 @@ export default function HomeScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        {/* 🔥 CENTERED HEADER */}
+        {/* 🔥 ENLARGED CENTERED LOGO */}
         <View style={styles.header}>
-          <Image
-            source={require('../assets/images/mass-power-logo.png')}
-            style={styles.headerLogo}
-            resizeMode="contain"
-          />
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.headerTitle}>Mass Power</Text>
+          <View style={styles.logoContainer}>
+            <Image
+              source={require('../assets/images/mass-power-logo.png')}
+              style={styles.headerLogo}
+              resizeMode="contain"
+            />
             <Text style={styles.headerSubtitle}>Auto Services</Text>
           </View>
-          <View style={{ width: 52 }} /> {/* Balances the layout since logo is 52 wide */}
         </View>
 
         <ScrollView
@@ -355,35 +353,27 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   keyboardView: { flex: 1 },
   
-  // 🔥 CENTERED HEADER STYLES
+  // 🔥 ENLARGED CENTERED LOGO STYLES
   header: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 20,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
+  logoContainer: {
+    alignItems: 'center',
+  },
   headerLogo: {
-    width: 52,
-    height: 52,
-    marginRight: 12,
-    borderRadius: 26,
-  },
-  headerTextContainer: {
-    alignItems: 'flex-start',
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1e293b',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#64748b',
-    marginTop: 2,
+    marginTop: 8,
+    fontWeight: '600',
   },
   
   content: { flex: 1 },
