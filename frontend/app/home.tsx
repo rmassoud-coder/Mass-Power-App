@@ -1,191 +1,352 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  ScrollView,
-  Alert,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  ScrollView,
+  Image,
+  useWindowDimensions,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Updates from 'expo-updates';
+import {
+  searchCustomers,
+  searchVehiclesByVin,
+  searchVehiclesByPlate,
+  listInventory,
+  listDueOilReminders,
+} from '@/src/db/database';
+import SyncStatusPill from '@/src/components/SyncStatusPill';
 
-export interface OrderItem {
-  id: string;
-  text: string;
-  quantity: number; // ✅ ADDED
-  isCompleted: boolean;
-  createdAt: string;
-}
+// Module-level flag so the out-of-stock + reminder alerts only trigger once per app session
+let outOfStockReminderShown = false;
+let oilReminderShown = false;
 
-const STORAGE_KEY = '@purchase_orders';
-
-export default function OrderListScreen() {
+export default function HomeScreen() {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(false);
+  
   const router = useRouter();
-  const [orders, setOrders] = useState<OrderItem[]>([]);
-  const [inputText, setInputText] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const { height } = useWindowDimensions();
 
-  // Load orders from AsyncStorage
+  // Responsive sizing
+  const isSmallScreen = height < 700;
+  const cardPadding = isSmallScreen ? 14 : 20;
+  const cardMargin = isSmallScreen ? 10 : 16;
+  const buttonPadding = isSmallScreen ? 10 : 14;
+
+  // 🔥 PIN STATE FOR BACKEND MANAGEMENT
+  const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const SECRET_PIN = '3945';
+
+  // Out-of-stock reminder
   useEffect(() => {
-    loadOrders();
-  }, []);
+    if (outOfStockReminderShown) return;
+    outOfStockReminderShown = true;
 
-  const loadOrders = async () => {
-    try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        // Ensure old items without quantity default to 1
-        const withQuantity = parsed.map((item: any) => ({
-          ...item,
-          quantity: item.quantity || 1,
-        }));
-        setOrders(withQuantity);
+    const checkOutOfStock = async () => {
+      try {
+        const items = await listInventory();
+        const outOfStock = items.filter((it) => Number(it.item_quantity) === 0);
+        if (outOfStock.length === 0) return;
+
+        const preview = outOfStock
+          .slice(0, 8)
+          .map((it) => `• ${it.item_number} — ${it.item_type}`)
+          .join('\n');
+        const extra =
+          outOfStock.length > 8 ? `\n…and ${outOfStock.length - 8} more` : '';
+
+        setTimeout(() => {
+          Alert.alert(
+            `Out of Stock (${outOfStock.length})`,
+            `The following inventory item${outOfStock.length === 1 ? '' : 's'} ` +
+              `${outOfStock.length === 1 ? 'is' : 'are'} at zero quantity:\n\n${preview}${extra}`,
+            [
+              { text: 'Dismiss', style: 'cancel' },
+              {
+                text: 'View Inventory',
+                onPress: () => router.push('/inventory'),
+              },
+            ],
+            { cancelable: true }
+          );
+        }, 350);
+      } catch (e) {
+        console.warn('Out-of-stock check failed:', e);
       }
-    } catch (e) {
-      console.warn('Failed to load orders:', e);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    };
 
-  const saveOrders = async (newOrders: OrderItem[]) => {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newOrders));
-      setOrders(newOrders);
-    } catch (e) {
-      Alert.alert('Error', 'Failed to save order list.');
-    }
-  };
+    checkOutOfStock();
+  }, [router]);
 
-  const addOrder = () => {
-    const text = inputText.trim();
-    if (!text) {
-      Alert.alert('Error', 'Please enter an item to order.');
+  // Oil-change reminders
+  useEffect(() => {
+    if (oilReminderShown) return;
+    
+    const checkDueReminders = async () => {
+      try {
+        const due = await listDueOilReminders();
+        
+        // If empty, we stop here and mark it as done
+        if (due.length === 0) {
+          oilReminderShown = true;
+          return;
+        }
+
+        const preview = due
+          .slice(0, 6)
+          .map(
+            (r) =>
+              `• ${r.customer_name} — ${[r.vehicle_make, r.vehicle_model]
+                .filter(Boolean)
+                .join(' ') || 'vehicle'}`
+          )
+          .join('\n');
+        const extra = due.length > 6 ? `\n…and ${due.length - 6} more` : '';
+
+        setTimeout(() => {
+          Alert.alert(
+            `Oil Change Reminders (${due.length})`,
+            `${due.length} customer${due.length === 1 ? ' is' : 's are'} due for an oil change:\n\n${preview}${extra}`,
+            [
+              { text: 'Later', style: 'cancel' },
+              {
+                text: 'Open Reminders',
+                onPress: () => router.push('/reminders'),
+              },
+            ],
+            { cancelable: true }
+          );
+          oilReminderShown = true;
+        }, 900);
+      } catch (e) {
+        console.warn('Oil reminder check failed:', e);
+        
+        // ⚠️ CRITICAL FIX: If an error happens, we MUST mark this as true
+        // so the app NEVER retries this in an infinite loop.
+        oilReminderShown = true; 
+      }
+    };
+
+    checkDueReminders();
+  }, [router]);
+
+  const handleSearch = async () => {
+    const query = searchQuery.trim();
+    if (!query) {
+      Alert.alert('Error', 'Please enter a search term');
       return;
     }
-    const newItem: OrderItem = {
-      id: Date.now().toString(),
-      text,
-      quantity: 1, // ✅ DEFAULT TO 1
-      isCompleted: false,
-      createdAt: new Date().toISOString(),
-    };
-    saveOrders([...orders, newItem]);
-    setInputText('');
+
+    setLoading(true);
+    try {
+      let results: any[] = [];
+
+      // Try searching by mobile
+      const mobileResults = await searchCustomers(query);
+      if (mobileResults.length > 0) {
+        results = mobileResults;
+      } else {
+        // Try searching by VIN
+        const vinResults = await searchVehiclesByVin(query);
+        if (vinResults.length > 0) {
+          results = vinResults;
+        } else {
+          // Try searching by Plate
+          const plateResults = await searchVehiclesByPlate(query);
+          if (plateResults.length > 0) {
+            results = plateResults;
+          }
+        }
+      }
+
+      if (results.length === 0) {
+        Alert.alert(
+          'No Results Found',
+          'Would you like to create a new customer?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Create', onPress: () => router.push('/add-customer') },
+          ]
+        );
+      } else {
+        router.push({
+          pathname: '/search-results',
+          params: { results: JSON.stringify(results) },
+        });
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to search. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const toggleComplete = (id: string) => {
-    const updated = orders.map((item) =>
-      item.id === id ? { ...item, isCompleted: !item.isCompleted } : item
-    );
-    saveOrders(updated);
+  // 🔥 HANDLE BACKEND MANAGEMENT BUTTON WITH PIN
+  const handleBackendPress = () => {
+    setPinModalVisible(true);
   };
 
-  const deleteOrder = (id: string) => {
-    const updated = orders.filter((item) => item.id !== id);
-    saveOrders(updated);
-  };
-
-  // ✅ NEW: Increase quantity
-  const increaseQty = (id: string) => {
-    const updated = orders.map((item) =>
-      item.id === id ? { ...item, quantity: item.quantity + 1 } : item
-    );
-    saveOrders(updated);
-  };
-
-  // ✅ NEW: Decrease quantity (min 1)
-  const decreaseQty = (id: string) => {
-    const updated = orders.map((item) =>
-      item.id === id ? { ...item, quantity: Math.max(1, item.quantity - 1) } : item
-    );
-    saveOrders(updated);
+  const handlePinAuth = () => {
+    if (pinInput === SECRET_PIN) {
+      setPinModalVisible(false);
+      setPinInput('');
+      router.push('/management');
+    } else {
+      Alert.alert('Error', 'Incorrect PIN. Please try again.');
+      setPinInput('');
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1e293b" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Order List</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-          {isLoading ? (
-            <Text style={styles.loadingText}>Loading orders...</Text>
-          ) : orders.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Ionicons name="clipboard-outline" size={48} color="#94a3b8" />
-              <Text style={styles.emptyText}>No orders yet. Add items you need to purchase.</Text>
-            </View>
-          ) : (
-            orders.map((item) => (
-              <View key={item.id} style={styles.orderItem}>
-                {/* Checkbox */}
-                <TouchableOpacity
-                  style={styles.checkboxContainer}
-                  onPress={() => toggleComplete(item.id)}
-                >
-                  <View style={[styles.checkbox, item.isCompleted && styles.checkboxChecked]}>
-                    {item.isCompleted && <Ionicons name="checkmark" size={16} color="#fff" />}
-                  </View>
-                </TouchableOpacity>
-
-                {/* Text and Quantity */}
-                <View style={styles.itemContent}>
-                  <Text style={[styles.orderText, item.isCompleted && styles.orderTextCompleted]}>
-                    {item.text}
-                  </Text>
-                  <Text style={styles.qtyText}>Qty: {item.quantity}</Text>
-                </View>
-
-                {/* Quantity Controls */}
-                <View style={styles.qtyControls}>
-                  <TouchableOpacity style={styles.qtyBtn} onPress={() => decreaseQty(item.id)}>
-                    <Ionicons name="remove" size={18} color="#0f172a" />
-                  </TouchableOpacity>
-                  <Text style={styles.qtyNumber}>{item.quantity}</Text>
-                  <TouchableOpacity style={styles.qtyBtn} onPress={() => increaseQty(item.id)}>
-                    <Ionicons name="add" size={18} color="#0f172a" />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Delete */}
-                <TouchableOpacity onPress={() => deleteOrder(item.id)} style={styles.deleteBtn}>
-                  <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                </TouchableOpacity>
-              </View>
-            ))
-          )}
-        </ScrollView>
-
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter item to order..."
-            value={inputText}
-            onChangeText={setInputText}
-            returnKeyType="done"
-            onSubmitEditing={addOrder}
+        {/* 🔥 CENTERED HEADER */}
+        <View style={styles.header}>
+          <Image
+            source={require('../assets/images/mass-power-logo.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
           />
-          <TouchableOpacity style={styles.addBtn} onPress={addOrder}>
-            <Ionicons name="add" size={24} color="#fff" />
-          </TouchableOpacity>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.headerTitle}>Mass Power</Text>
+            <Text style={styles.headerSubtitle}>Auto Services</Text>
+          </View>
+          <View style={{ width: 52 }} /> {/* Balances the layout since logo is 52 wide */}
         </View>
+
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Unified Search */}
+          <View style={[styles.searchCard, { padding: cardPadding, marginBottom: cardMargin }]}>
+            <View style={styles.searchHeader}>
+              <Ionicons name="search-outline" size={isSmallScreen ? 20 : 24} color="#2563eb" />
+              <Text style={styles.searchTitle}>Search Customer</Text>
+            </View>
+            <Text style={styles.searchHint}>
+              Enter mobile, VIN, or plate number
+            </Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="Mobile • VIN • Plate"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCapitalize="characters"
+                keyboardType="phone-pad"
+                testID="unified-search-input"
+              />
+            </View>
+            <TouchableOpacity
+              style={[styles.searchButton, loading && styles.searchButtonDisabled]}
+              onPress={handleSearch}
+              disabled={loading}
+              testID="unified-search-button"
+            >
+              <Ionicons name="search" size={isSmallScreen ? 16 : 20} color="#fff" />
+              <Text style={styles.searchButtonText}>Search</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Add New Customer */}
+          <TouchableOpacity
+            style={[styles.addCustomerButton, { paddingVertical: buttonPadding }]}
+            onPress={() => router.push('/add-customer')}
+            testID="add-customer-button"
+          >
+            <Ionicons name="person-add-outline" size={isSmallScreen ? 16 : 20} color="#2563eb" />
+            <Text style={styles.addCustomerButtonText}>Add New Customer</Text>
+          </TouchableOpacity>
+
+          {/* Quick Walk-in Button */}
+          <TouchableOpacity
+            style={[styles.walkinButton, { paddingVertical: buttonPadding }]}
+            onPress={() => router.push('/quick-walkin')}
+            testID="quick-walkin-button"
+          >
+            <Ionicons name="walk-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
+            <Text style={styles.walkinButtonText}>Walk-in Customer</Text>
+          </TouchableOpacity>
+
+          {/* Order List Button */}
+          <TouchableOpacity
+            style={[styles.orderButton, { paddingVertical: buttonPadding }]}
+            onPress={() => router.push('/order-list')}
+          >
+            <Ionicons name="list-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
+            <Text style={styles.orderButtonText}>Order List</Text>
+          </TouchableOpacity>
+
+          {/* 🔥 BACKEND MANAGEMENT WITH PIN */}
+          <TouchableOpacity
+            style={[styles.reportButton, styles.managementButton, { paddingVertical: buttonPadding }]}
+            onPress={handleBackendPress}
+            testID="management-button"
+          >
+            <Ionicons name="construct-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
+            <Text style={styles.reportButtonText}>Backend Management</Text>
+          </TouchableOpacity>
+
+          {/* Build timestamp */}
+          <Text style={styles.buildStamp} testID="build-timestamp">
+            {Updates.createdAt
+              ? `Last update: ${new Date(Updates.createdAt).toLocaleString()}`
+              : 'Local Dev Mode'}
+          </Text>
+        </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* 🔥 PIN ENTRY MODAL FOR BACKEND MANAGEMENT */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={pinModalVisible}
+        onRequestClose={() => setPinModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Enter PIN</Text>
+            <Text style={styles.modalSubtitle}>Enter your 4-digit security code</Text>
+            
+            <TextInput
+              style={styles.pinInput}
+              placeholder="****"
+              keyboardType="number-pad"
+              maxLength={4}
+              secureTextEntry={true}
+              value={pinInput}
+              onChangeText={setPinInput}
+              autoFocus={true}
+            />
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setPinModalVisible(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalConfirmBtn} onPress={handlePinAuth}>
+                <Text style={styles.modalConfirmText}>Unlock</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -193,106 +354,238 @@ export default function OrderListScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   keyboardView: { flex: 1 },
+  
+  // 🔥 CENTERED HEADER STYLES
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
     paddingVertical: 16,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
-  backButton: { padding: 8 },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#1e293b' },
+  headerLogo: {
+    width: 52,
+    height: 52,
+    marginRight: 12,
+    borderRadius: 26,
+  },
+  headerTextContainer: {
+    alignItems: 'flex-start',
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1e293b',
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  
   content: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 100 },
-  loadingText: { textAlign: 'center', color: '#94a3b8', marginTop: 20 },
-  emptyContainer: { alignItems: 'center', marginTop: 60 },
-  emptyText: { color: '#94a3b8', fontSize: 14, marginTop: 12, textAlign: 'center' },
-  orderItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  contentContainer: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 30 },
+  searchCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 10,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
-  checkboxContainer: { padding: 4 },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#cbd5e1',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-  },
-  checkboxChecked: { backgroundColor: '#10b981', borderColor: '#10b981' },
-  itemContent: { flex: 1, marginHorizontal: 12 },
-  orderText: { fontSize: 16, color: '#1e293b' },
-  orderTextCompleted: {
-    textDecorationLine: 'line-through',
-    color: '#94a3b8',
-  },
-  qtyText: { fontSize: 12, color: '#64748b', marginTop: 4 },
-  qtyControls: {
+  searchHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    marginRight: 8,
+    marginBottom: 4,
   },
-  qtyBtn: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  qtyNumber: {
+  searchTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#0f172a',
-    minWidth: 24,
-    textAlign: 'center',
+    fontWeight: '600',
+    color: '#1e293b',
+    marginLeft: 12,
   },
-  deleteBtn: { padding: 4 },
+  searchHint: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginBottom: 12,
+    marginLeft: 36,
+  },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   input: {
-    flex: 1,
-    fontSize: 16,
-    color: '#1e293b',
-    backgroundColor: '#f8fafc',
-    borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    marginRight: 12,
+    fontSize: 16,
+    color: '#1e293b',
   },
-  addBtn: {
+  searchButton: {
     backgroundColor: '#2563eb',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    borderRadius: 12,
+    paddingVertical: 12,
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  searchButtonDisabled: {
+    opacity: 0.6,
+  },
+  searchButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  addCustomerButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#2563eb',
+    backgroundColor: '#fff',
+    marginTop: 8,
+  },
+  addCustomerButtonText: {
+    color: '#2563eb',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  walkinButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#d97706',
+    marginTop: 8,
+  },
+  walkinButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  orderButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#059669',
+    marginTop: 8,
+  },
+  orderButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  reportButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#10b981',
+    marginTop: 12,
+  },
+  reportButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  managementButton: {
+    backgroundColor: '#0f172a',
+  },
+  buildStamp: {
+    marginTop: 20,
+    marginBottom: 8,
+    textAlign: 'center',
+    fontSize: 11,
+    color: '#94a3b8',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 20,
+  },
+  pinInput: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#2563eb',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    fontSize: 24,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: 8,
+    color: '#0f172a',
+    marginBottom: 24,
+    backgroundColor: '#f8fafc',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    color: '#64748b',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalConfirmBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
