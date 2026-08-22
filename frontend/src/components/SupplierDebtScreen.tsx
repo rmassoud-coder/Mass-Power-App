@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getSupplierBalances, updateSupplierBalance, getWeeklyCashSummary, getReport } from '../../src/db/database';
+import { getSupplierBalances, updateSupplierBalance, getWeeklyCashSummary, getReport, getDb } from '../../src/db/database';
 
 export default function SupplierDebtScreen() {
   const [suppliers, setSuppliers] = useState<{ id: string; name: string; balance: number }[]>([]);
@@ -69,16 +69,19 @@ export default function SupplierDebtScreen() {
         getWeeklyCashSummary(),
       ]);
 
-      // 🔥 SAFE CALCULATION FOR PAID THIS WEEK (NO REQUIRES)
-      // We compare current debt vs. debt at start of week using summary
-      const currentTotalDebt = cashSummary.totalOutstandingDebt;
-      const paidToday = cashSummary.paidTowardsDebtToday;
+      // 5. 🔥 SAFE: Get today's payments and this week's payments directly from DB
+      const db = await getDb();
+      const paidTodayRow = await db.getFirstAsync<{ total: number }>(
+        `SELECT COALESCE(SUM(amount_paid), 0) as total FROM supplier_payments WHERE DATE(paid_at) = ?`,
+        [todayStr]
+      );
+      const paidToday = paidTodayRow?.total || 0;
 
-      // To get "Paid This Week", we use the total outstanding debt.
-      // However, without a direct DB query, we approximate by using paidToday
-      // and reading total outstanding debt. For now, the correct value for
-      // "Paid This Week" is just `paidToday` (since there is no week history stored locally).
-      const paidWeek = paidToday; // ✅ No crash, uses safe value
+      const paidWeekRow = await db.getFirstAsync<{ total: number }>(
+        `SELECT COALESCE(SUM(amount_paid), 0) as total FROM supplier_payments WHERE DATE(paid_at) >= ? AND DATE(paid_at) <= ?`,
+        [mondayStr, todayStr]
+      );
+      const paidWeek = paidWeekRow?.total || 0;
 
       setSuppliers(balanceList);
       setSummary({
@@ -86,9 +89,9 @@ export default function SupplierDebtScreen() {
         todayOutsource: todayReport.outsource_total,
         wtdIncome: wtdReport.total_cost,
         wtdOutsource: wtdReport.outsource_total,
-        totalDebt: currentTotalDebt,
+        totalDebt: cashSummary.totalOutstandingDebt,
         paidToday: paidToday,
-        paidWeek: paidWeek, // ✅ Safe, no crash
+        paidWeek: paidWeek, // ✅ Now this is the correct weekly figure
       });
     } catch (error) {
       Alert.alert('Error', 'Failed to load supplier data.');
