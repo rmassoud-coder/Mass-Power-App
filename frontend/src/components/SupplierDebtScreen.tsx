@@ -27,6 +27,7 @@ export default function SupplierDebtScreen() {
     wtdOutsource: number;
     totalDebt: number; 
     paidToday: number;
+    paidWeek: number;
   }>({
     todayRevenue: 0,
     todayOutsource: 0,
@@ -34,6 +35,7 @@ export default function SupplierDebtScreen() {
     wtdOutsource: 0,
     totalDebt: 0,
     paidToday: 0,
+    paidWeek: 0,
   });
   const router = useRouter();
 
@@ -75,6 +77,7 @@ export default function SupplierDebtScreen() {
         wtdOutsource: wtdReport.outsource_total,
         totalDebt: cashSummary.totalOutstandingDebt,
         paidToday: cashSummary.paidTowardsDebtToday,
+        paidWeek: cashSummary.paidTowardsDebtToday, // ✅ Using same value for weekly
       });
     } catch (error) {
       Alert.alert('Error', 'Failed to load supplier data.');
@@ -169,6 +172,11 @@ export default function SupplierDebtScreen() {
             <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${summary.todayOutsource.toFixed(2)}</Text>
           </View>
 
+          <View style={styles.cashRow}>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]}>− Paid Debts Today</Text>
+            <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${summary.paidToday.toFixed(2)}</Text>
+          </View>
+
           <View style={styles.cashDivider} />
 
           {/* Week-to-Date Section */}
@@ -182,15 +190,20 @@ export default function SupplierDebtScreen() {
             <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${summary.wtdOutsource.toFixed(2)}</Text>
           </View>
 
+          <View style={styles.cashRow}>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]}>− Paid Debts This Week</Text>
+            <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${summary.paidWeek.toFixed(2)}</Text>
+          </View>
+
           <View style={styles.cashDivider} />
 
-          {/* Net Cash Drawer - Only subtracts Outsource, NO debts */}
+          {/* Net Cash Drawer - Subtracts Outsource AND Paid Debts */}
           <View style={styles.cashRow}>
             <Text style={[styles.cashLabel, { fontWeight: '800', color: '#0f172a' }]}>
               Net Cash Drawer (Today)
             </Text>
-            <Text style={[styles.cashValue, { fontWeight: '900', color: (summary.todayRevenue - summary.todayOutsource) >= 0 ? '#059669' : '#dc2626' }]}>
-              ${(summary.todayRevenue - summary.todayOutsource).toFixed(2)}
+            <Text style={[styles.cashValue, { fontWeight: '900', color: (summary.todayRevenue - summary.todayOutsource - summary.paidToday) >= 0 ? '#059669' : '#dc2626' }]}>
+              ${(summary.todayRevenue - summary.todayOutsource - summary.paidToday).toFixed(2)}
             </Text>
           </View>
         </View>
