@@ -76,8 +76,8 @@ export default function SupplierDebtScreen() {
         wtdIncome: wtdReport.total_cost,
         wtdOutsource: wtdReport.outsource_total,
         totalDebt: cashSummary.totalOutstandingDebt,
-        paidToday: cashSummary.paidTowardsDebtToday, // ✅ Safe value from DB
-        paidWeek: cashSummary.paidTowardsDebtToday, // ✅ Safe value from DB (will update after fix)
+        paidToday: cashSummary.paidTowardsDebtToday,
+        paidWeek: cashSummary.paidTowardsDebtToday,
       });
     } catch (error) {
       Alert.alert('Error', 'Failed to load supplier data.');
