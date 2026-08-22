@@ -69,6 +69,31 @@ export default function SupplierDebtScreen() {
         getWeeklyCashSummary(),
       ]);
 
+      // 5. Get "Paid This Week" by calculating start-of-week debt vs today's debt
+      const prevWeekDebtResult = await getWeeklyCashSummary(); // Has total debt today
+      const startOfWeekDebt = await getSupplierBalances(); // Not enough, need to query separately
+      
+      // Instead, we can calculate paidWeek using the start-of-week and current totals
+      // We will do this manually:
+      const startOfWeekDebtQuery = await getWeeklyCashSummary(); // Keep here for consistency
+      
+      // Calculate paidWeek by creating a full-week debt check
+      // Quick approach: Since getWeeklyCashSummary gives paidToday, we can just use that for now
+      // but for accurate weekly, we need to query DB for Monday's total debt.
+      // For now, to make it accurate, we will do:
+      const todayTotalDebt = cashSummary.totalOutstandingDebt; // Current total debt
+      
+      // Temporary fix for accurate weekly figure - we will just sum all payments in DB
+      // This comes from the supplier_payments table we added earlier
+      const { getDb } = require('../../src/db/database');
+      const db = await getDb();
+      const paymentWeekRow = await db.getFirstAsync<{ total: number }>(
+        `SELECT COALESCE(SUM(amount_paid), 0) as total FROM supplier_payments 
+         WHERE DATE(paid_at) >= ? AND DATE(paid_at) <= ?`,
+        [mondayStr, todayStr]
+      );
+      const paidWeek = paymentWeekRow?.total || 0;
+
       setSuppliers(balanceList);
       setSummary({
         todayRevenue: todayReport.total_cost,
@@ -77,7 +102,7 @@ export default function SupplierDebtScreen() {
         wtdOutsource: wtdReport.outsource_total,
         totalDebt: cashSummary.totalOutstandingDebt,
         paidToday: cashSummary.paidTowardsDebtToday,
-        paidWeek: cashSummary.paidTowardsDebtToday, // ✅ Using same value for weekly
+        paidWeek: paidWeek, // ✅ Now this is the correct weekly figure
       });
     } catch (error) {
       Alert.alert('Error', 'Failed to load supplier data.');
