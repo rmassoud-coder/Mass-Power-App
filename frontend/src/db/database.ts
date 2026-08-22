@@ -282,14 +282,15 @@ export async function initDatabase() {
       contact_info TEXT,
       created_at TEXT NOT NULL
     );
-    
-CREATE TABLE IF NOT EXISTS supplier_payments (
-  id TEXT PRIMARY KEY,
-  supplier_id TEXT NOT NULL,
-  amount_paid REAL NOT NULL,
-  paid_at TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
+
+    CREATE TABLE IF NOT EXISTS supplier_payments (
+      id TEXT PRIMARY KEY,
+      supplier_id TEXT NOT NULL,
+      amount_paid REAL NOT NULL,
+      paid_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS service_items (
       id TEXT PRIMARY KEY,
       service_id TEXT NOT NULL,
@@ -1481,7 +1482,6 @@ export async function exportFullDatabase(): Promise<FullDbSnapshot> {
   const inventory = await db.getAllAsync<InventoryItem>(`SELECT * FROM inventory`);
   const suppliers = await db.getAllAsync<Supplier>(`SELECT * FROM suppliers`);
   
-  // 🔥 FETCH THE SUPPLIER BALANCES AND WAGES
   const supplierBalances = await db.getAllAsync<{ supplier_id: string; balance: number }>(
     `SELECT * FROM supplier_balances`
   );
@@ -1503,10 +1503,6 @@ export async function exportFullDatabase(): Promise<FullDbSnapshot> {
   };
 }
 
-/** Wipes every table and re-inserts the cloud snapshot. Cloud-wins semantics.
- *  Used only for: (1) restoring your own local pre-Pull safety snapshot,
- *  (2) explicit "Replace" in manual Backup & Restore. Never used by the
- *  normal Push/Pull flow — that uses mergeCloudIntoLocal instead. */
 export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
   if (!snap || !Array.isArray(snap.customers) || !Array.isArray(snap.vehicles) || !Array.isArray(snap.services)) {
     throw new Error('Invalid snapshot');
@@ -1587,7 +1583,6 @@ export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
     }
   }
   
-  // 🔥 RESTORE SUPPLIER BALANCES FROM CLOUD
   if (Array.isArray(snap.supplierBalances)) {
     for (const sb of snap.supplierBalances) {
       await db.runAsync(
@@ -1597,7 +1592,6 @@ export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
     }
   }
 
-  // 🔥 RESTORE WAGES FROM CLOUD
   if (Array.isArray(snap.wagesPaid)) {
     for (const wp of snap.wagesPaid) {
       await db.runAsync(
@@ -1791,7 +1785,6 @@ export async function updateSupplier(
   
   const prev = await db.getFirstAsync<Supplier>(`SELECT * FROM suppliers WHERE id = ?`, [id]);
   
-  // Update the supplier's name and contact info
   await db.runAsync(
     `UPDATE suppliers SET name = ?, contact_info = ? WHERE id = ?`,
     [clean, (contactInfo || '').trim() || null, id]
@@ -1803,7 +1796,6 @@ export async function updateSupplier(
     );
   }
 
-  // 🔥 RESTORE THE DEBT UPDATE BLOCK
   if (newDebt !== undefined) {
     const now = new Date().toISOString();
     await db.runAsync(
@@ -1826,407 +1818,6 @@ export async function deleteSupplier(id: string): Promise<void> {
   }
 }
 
-export async function getLowStockBySupplier(
-  threshold: number = 5
-): Promise<LowStockItemBySupplier[]> {
-  const db = await getDb();
-  const rows = await db.getAllAsync<InventoryItem>(
-    `SELECT * FROM inventory WHERE item_quantity < ? ORDER BY item_supplier ASC, item_type ASC`,
-    [threshold]
-  );
-  const grouped = new Map<string, InventoryItem[]>();
-  for (const r of rows) {
-    const key = (r.item_supplier || '').trim() || 'Unassigned Supplier';
-    if (!grouped.has(key)) grouped.set(key, []);
-    grouped.get(key)!.push(r);
-  }
-  return Array.from(grouped.entries())
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([supplier_name, items]) => ({ supplier_name, items }));
-}
-
-export interface CleanupResult {
-  customersDeleted: number;
-  vehiclesDeleted: number;
-  servicesDeleted: number;
-  serviceItemsDeleted: number;
-}
-
-export async function deleteAllWalkinData(): Promise<CleanupResult> {
-  const db = await getDb();
-  const BATCH_SIZE = 500;
-  
-  console.log('🗑️ Starting walk-in data cleanup...');
-  
-  // 1. Find all walk-in customer IDs - ONLY by NAME!
-  const walkinCustomers = await db.getAllAsync<{ id: string }>(
-    `SELECT id FROM customers 
-     WHERE LOWER(name) LIKE '%walkin%' 
-     OR LOWER(name) LIKE '%walk-in%'
-     OR LOWER(name) LIKE '%walk in%'`
-  );
-  
-  const customerIds = walkinCustomers.map(c => c.id);
-  console.log(`🔍 Found ${customerIds.length} walk-in customers`);
-  
-  if (customerIds.length === 0) {
-    return { customersDeleted: 0, vehiclesDeleted: 0, servicesDeleted: 0, serviceItemsDeleted: 0 };
-  }
-  
-  // 2. Find vehicles belonging to walk-in customers
-  let vehicleIds: string[] = [];
-  if (customerIds.length > 0) {
-    for (let i = 0; i < customerIds.length; i += BATCH_SIZE) {
-      const batch = customerIds.slice(i, i + BATCH_SIZE);
-      const placeholders = batch.map(() => '?').join(',');
-      const vehicles = await db.getAllAsync<{ id: string }>(
-        `SELECT id FROM vehicles WHERE customer_id IN (${placeholders})`,
-        batch
-      );
-      vehicleIds = vehicleIds.concat(vehicles.map(v => v.id));
-    }
-  }
-  console.log(`🔍 Found ${vehicleIds.length} walk-in vehicles`);
-  
-  // 3. Find services belonging to walk-in vehicles or customers
-  let serviceIds: string[] = [];
-  
-  if (vehicleIds.length > 0) {
-    for (let i = 0; i < vehicleIds.length; i += BATCH_SIZE) {
-      const batch = vehicleIds.slice(i, i + BATCH_SIZE);
-      const placeholders = batch.map(() => '?').join(',');
-      const services = await db.getAllAsync<{ id: string }>(
-        `SELECT id FROM services WHERE vehicle_id IN (${placeholders})`,
-        batch
-      );
-      serviceIds = serviceIds.concat(services.map(s => s.id));
-    }
-  }
-  
-  if (customerIds.length > 0) {
-    for (let i = 0; i < customerIds.length; i += BATCH_SIZE) {
-      const batch = customerIds.slice(i, i + BATCH_SIZE);
-      const placeholders = batch.map(() => '?').join(',');
-      const services = await db.getAllAsync<{ id: string }>(
-        `SELECT id FROM services WHERE customer_id IN (${placeholders})`,
-        batch
-      );
-      serviceIds = serviceIds.concat(services.map(s => s.id));
-    }
-  }
-  
-  serviceIds = [...new Set(serviceIds)];
-  console.log(`🔍 Found ${serviceIds.length} walk-in services`);
-  
-  // 4. Delete service_items
-  let serviceItemsDeleted = 0;
-  if (serviceIds.length > 0) {
-    for (let i = 0; i < serviceIds.length; i += BATCH_SIZE) {
-      const batch = serviceIds.slice(i, i + BATCH_SIZE);
-      const placeholders = batch.map(() => '?').join(',');
-      const result = await db.runAsync(
-        `DELETE FROM service_items WHERE service_id IN (${placeholders})`,
-        batch
-      );
-      serviceItemsDeleted += result.changes || 0;
-    }
-    console.log(`🗑️ Deleted ${serviceItemsDeleted} service items`);
-  }
-  
-  // 5. Delete services
-  let servicesDeleted = 0;
-  if (serviceIds.length > 0) {
-    for (let i = 0; i < serviceIds.length; i += BATCH_SIZE) {
-      const batch = serviceIds.slice(i, i + BATCH_SIZE);
-      const placeholders = batch.map(() => '?').join(',');
-      const result = await db.runAsync(
-        `DELETE FROM services WHERE id IN (${placeholders})`,
-        batch
-      );
-      servicesDeleted += result.changes || 0;
-    }
-    console.log(`🗑️ Deleted ${servicesDeleted} services`);
-  }
-  
-  // 6. Delete vehicles
-  let vehiclesDeleted = 0;
-  if (vehicleIds.length > 0) {
-    for (let i = 0; i < vehicleIds.length; i += BATCH_SIZE) {
-      const batch = vehicleIds.slice(i, i + BATCH_SIZE);
-      const placeholders = batch.map(() => '?').join(',');
-      const result = await db.runAsync(
-        `DELETE FROM vehicles WHERE id IN (${placeholders})`,
-        batch
-      );
-      vehiclesDeleted += result.changes || 0;
-    }
-    console.log(`🗑️ Deleted ${vehiclesDeleted} vehicles`);
-  }
-  
-  // 7. Delete customers
-  let customersDeleted = 0;
-  if (customerIds.length > 0) {
-    for (let i = 0; i < customerIds.length; i += BATCH_SIZE) {
-      const batch = customerIds.slice(i, i + BATCH_SIZE);
-      const placeholders = batch.map(() => '?').join(',');
-      const result = await db.runAsync(
-        `DELETE FROM customers WHERE id IN (${placeholders})`,
-        batch
-      );
-      customersDeleted += result.changes || 0;
-    }
-    console.log(`🗑️ Deleted ${customersDeleted} customers`);
-  }
-  
-  console.log('✅ Walk-in cleanup complete!');
-  
-  return {
-    customersDeleted,
-    vehiclesDeleted,
-    servicesDeleted,
-    serviceItemsDeleted,
-  };
-}
-
-export async function checkWalkinData(): Promise<{
-  customers: number;
-  vehicles: number;
-  services: number;
-}> {
-  const db = await getDb();
-  
-  // ONLY check by NAME!
-  const customers = await db.getAllAsync<{ count: number }>(
-    `SELECT COUNT(*) as count FROM customers 
-     WHERE LOWER(name) LIKE '%walkin%' 
-     OR LOWER(name) LIKE '%walk-in%'
-     OR LOWER(name) LIKE '%walk in%'`
-  );
-  
-  const customerResult = customers[0]?.count || 0;
-  
-  let vehicles = 0;
-  let services = 0;
-  
-  // Only count vehicles/services if there are walk-in customers
-  if (customerResult > 0) {
-    const vehicleResult = await db.getAllAsync<{ count: number }>(
-      `SELECT COUNT(*) as count FROM vehicles 
-       WHERE customer_id IN (
-         SELECT id FROM customers 
-         WHERE LOWER(name) LIKE '%walkin%' 
-         OR LOWER(name) LIKE '%walk-in%'
-         OR LOWER(name) LIKE '%walk in%'
-       )`
-    );
-    vehicles = vehicleResult[0]?.count || 0;
-    
-    const serviceResult = await db.getAllAsync<{ count: number }>(
-      `SELECT COUNT(*) as count FROM services 
-       WHERE customer_id IN (
-         SELECT id FROM customers 
-         WHERE LOWER(name) LIKE '%walkin%' 
-         OR LOWER(name) LIKE '%walk-in%'
-         OR LOWER(name) LIKE '%walk in%'
-       )`
-    );
-    services = serviceResult[0]?.count || 0;
-  }
-  
-  return {
-    customers: customerResult,
-    vehicles,
-    services,
-  };
-}
-
-export async function createQuickWalkinService(
-  customerName: string | undefined,
-  description: string,
-  totalCost: number,
-  isPaid: boolean,
-  partialPaid: number = 0,
-  outsourceCost: number = 0
-): Promise<Service> {
-  const db = await getDb();
-  const now = new Date().toISOString();
-  
-  const finalName = (customerName && customerName.trim()) 
-    ? customerName.trim() 
-    : 'Walk-in';
-
-  let walkinCustomer = await db.getFirstAsync<Customer>(
-    `SELECT * FROM customers WHERE name = ? AND mobile_number = 'N/A' LIMIT 1`,
-    [finalName]
-  );
-
-  if (!walkinCustomer) {
-    const walkinId = generateId();
-    await db.runAsync(
-      `INSERT INTO customers (id, name, mobile_number, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
-      [walkinId, finalName, 'N/A', now, now]
-    );
-    walkinCustomer = await db.getFirstAsync<Customer>(
-      `SELECT * FROM customers WHERE id = ?`, [walkinId]
-    );
-  }
-
-  let walkinVehicle = await db.getFirstAsync<Vehicle>(
-    `SELECT * FROM vehicles WHERE customer_id = ? AND plate_number = 'WALK-IN' LIMIT 1`,
-    [walkinCustomer!.id]
-  );
-
-  if (!walkinVehicle) {
-    const vehicleId = generateId();
-    await db.runAsync(
-      `INSERT INTO vehicles (id, customer_id, vin, plate_number, make, model, year, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [vehicleId, walkinCustomer!.id, 'N/A', 'WALK-IN', 'Walk-in', 'Vehicle', null, now]
-    );
-    walkinVehicle = await db.getFirstAsync<Vehicle>(
-      `SELECT * FROM vehicles WHERE id = ?`, [vehicleId]
-    );
-  }
-
-  const serviceId = generateId();
-  const pp = Math.max(0, Number(partialPaid) || 0);
-  const oc = Math.max(0, Number(outsourceCost) || 0);
-  const finalCost = Math.max(0, Number(totalCost) || 0);
-
-  await db.runAsync(
-    `INSERT INTO services (
-      id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, partial_paid, 
-      service_date, created_at, outsource_cost
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      serviceId,
-      walkinVehicle!.id,
-      walkinCustomer!.id,
-      description.trim() || 'Quick Walk-in Service',
-      null,
-      finalCost,
-      isPaid ? 1 : 0,
-      pp,
-      now,
-      now,
-      oc
-    ]
-  );
-
-  return {
-    id: serviceId,
-    vehicle_id: walkinVehicle!.id,
-    customer_id: walkinCustomer!.id,
-    service_description: description.trim() || 'Quick Walk-in Service',
-    additional_info: undefined,
-    cost: finalCost,
-    is_paid: isPaid,
-    service_date: now,
-    created_at: now,
-    partial_paid: pp,
-    outsource_cost: oc,
-  };
-}
-
-export async function createWalkinProductSale(
-  inventoryId: string,
-  quantity: number,
-): Promise<Service> {
-  const db = await getDb();
-  const now = new Date().toISOString();
-
-  const inv = await db.getFirstAsync<InventoryItem>(
-    `SELECT * FROM inventory WHERE id = ?`,
-    [inventoryId]
-  );
-  if (!inv) {
-    throw new Error('Product not found in inventory.');
-  }
-  if (inv.item_quantity < quantity) {
-    throw new Error(`Insufficient stock. Only ${inv.item_quantity} available.`);
-  }
-
-  let walkinCustomer = await db.getFirstAsync<Customer>(
-    `SELECT * FROM customers WHERE name = 'Walk-in' AND mobile_number = 'N/A' LIMIT 1`
-  );
-  if (!walkinCustomer) {
-    const walkinId = generateId();
-    await db.runAsync(
-      `INSERT INTO customers (id, name, mobile_number, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
-      [walkinId, 'Walk-in', 'N/A', now, now]
-    );
-    walkinCustomer = await db.getFirstAsync<Customer>(`SELECT * FROM customers WHERE id = ?`, [walkinId]);
-  }
-
-  let walkinVehicle = await db.getFirstAsync<Vehicle>(
-    `SELECT * FROM vehicles WHERE customer_id = ? AND plate_number = 'WALK-IN' LIMIT 1`,
-    [walkinCustomer!.id]
-  );
-  if (!walkinVehicle) {
-    const vehicleId = generateId();
-    await db.runAsync(
-      `INSERT INTO vehicles (id, customer_id, vin, plate_number, make, model, year, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [vehicleId, walkinCustomer!.id, 'N/A', 'WALK-IN', 'Walk-in', 'Vehicle', null, now]
-    );
-    walkinVehicle = await db.getFirstAsync<Vehicle>(
-      `SELECT * FROM vehicles WHERE id = ?`, [vehicleId]
-    );
-  }
-
-  const unitPrice = (inv.item_retail_price && inv.item_retail_price > 0) 
-    ? inv.item_retail_price 
-    : inv.item_price;
-  const totalCost = unitPrice * quantity;
-
-  const serviceId = generateId();
-  await db.runAsync(
-    `INSERT INTO services (
-      id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, partial_paid,
-      service_date, created_at, outsource_cost
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      serviceId,
-      walkinVehicle!.id,
-      walkinCustomer!.id,
-      `Product Sale: ${inv.item_type} (x${quantity})`,
-      null,
-      totalCost,
-      1,
-      0,
-      now,
-      now,
-      0
-    ]
-  );
-
-  const newQty = Math.max(0, inv.item_quantity - quantity);
-  await db.runAsync(
-    `UPDATE inventory SET item_quantity = ?, updated_at = ? WHERE id = ?`,
-    [newQty, now, inv.id]
-  );
-
-  const rowId = generateId();
-  await db.runAsync(
-    `INSERT INTO service_items (id, service_id, inventory_id, item_type, quantity, unit_price, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [rowId, serviceId, inv.id, inv.item_type, quantity, unitPrice, now]
-  );
-
-  return {
-    id: serviceId,
-    vehicle_id: walkinVehicle!.id,
-    customer_id: walkinCustomer!.id,
-    service_description: `Product Sale: ${inv.item_type}`,
-    additional_info: undefined,
-    cost: totalCost,
-    is_paid: true,
-    service_date: now,
-    created_at: now,
-    partial_paid: 0,
-    outsource_cost: 0,
-  };
-}
-
-// 🔥 FIXED: getSupplierBalances with error catching
 export async function getSupplierBalances(): Promise<{ id: string; name: string; balance: number }[]> {
   const db = await getDb();
   try {
@@ -2239,7 +1830,6 @@ export async function getSupplierBalances(): Promise<{ id: string; name: string;
     return rows;
   } catch (error) {
     console.error("❌ getSupplierBalances failed:", error);
-    // Return empty array instead of crashing
     return [];
   }
 }
@@ -2354,29 +1944,11 @@ export async function getWeeklyCashSummary(): Promise<{
     netDrawer,
   };
 }
-  const wagesResult = await db.getFirstAsync<{ total: number }>(
-    `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid 
-     WHERE DATE(date) >= ? AND DATE(date) <= ?`,
-    [mondayStr, todayStr]
-  );
-  const wages = wagesResult?.total || 0;
-
-  const netDrawer = revenue - paidToday - wages;
-
-  return {
-    revenue,
-    totalOutstandingDebt: totalDebt,
-    paidTowardsDebtToday: paidToday,
-    wages,
-    netDrawer,
-  };
-}
 
 export async function emergencyNukeDatabase() {
   try {
     const db = await getDb();
     
-    // 🔥 SAFE NUKE: Only drops the broken supplier and wages tables
     await db.execAsync(`
       PRAGMA foreign_keys = OFF;
       
@@ -2388,7 +1960,6 @@ export async function emergencyNukeDatabase() {
     
     console.log("💥 Corrupted supplier/wage tables wiped safely!");
     
-    // IMPORTANT: Recreate the empty tables immediately
     await db.execAsync(`
       CREATE TABLE IF NOT EXISTS supplier_balances (
         supplier_id TEXT PRIMARY KEY,
