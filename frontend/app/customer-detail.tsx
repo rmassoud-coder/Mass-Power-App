@@ -84,7 +84,7 @@ export default function CustomerDetailScreen() {
       const data = await getCustomerDetails(params.customerId as string);
       setDetails(data);
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to load customer details');
+      Alert.alert('خطأ', error?.message || 'فشل تحميل تفاصيل العميل');
       router.back();
     } finally {
       setLoading(false);
@@ -113,7 +113,7 @@ export default function CustomerDetailScreen() {
         await fetchCustomerDetails();
       }
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to delete. Please try again.');
+      Alert.alert('خطأ', error?.message || 'فشل الحذف. الرجاء المحاولة مرة أخرى.');
     } finally {
       setDeleting(false);
     }
@@ -125,21 +125,21 @@ export default function CustomerDetailScreen() {
     }
     if (deleteTarget.type === 'customer') {
       return {
-        title: 'Delete Customer?',
+        title: 'حذف العميل؟',
         message:
-          'This will permanently delete the customer, all their vehicles, and all service records. This action cannot be undone.',
+          'سيؤدي هذا إلى حذف العميل وجميع سياراته وجميع سجلات الخدمة نهائياً. لا يمكن التراجع عن هذا الإجراء.',
       };
     }
     if (deleteTarget.type === 'vehicle') {
       return {
-        title: 'Delete Vehicle?',
+        title: 'حذف السيارة؟',
         message:
-          'This will permanently delete this vehicle and all its service records. This action cannot be undone.',
+          'سيؤدي هذا إلى حذف هذه السيارة وجميع سجلات الخدمة الخاصة بها نهائياً. لا يمكن التراجع عن هذا الإجراء.',
       };
     }
     return {
-      title: 'Delete Service?',
-      message: 'This will permanently delete this service record. This action cannot be undone.',
+      title: 'حذف الخدمة؟',
+      message: 'سيؤدي هذا إلى حذف سجل الخدمة هذا نهائياً. لا يمكن التراجع عن هذا الإجراء.',
     };
   };
 
@@ -165,9 +165,9 @@ export default function CustomerDetailScreen() {
       await printJob(html, { jobName: 'Receipt', thermal });
     } catch (e: any) {
       Alert.alert(
-        'Print failed',
+        'فشل الطباعة',
         e?.message ||
-          'Unable to open printer. Make sure your Bluetooth thermal printer is paired and a print service is installed (e.g. PrinterShare / RawBT).'
+          'تعذر فتح الطابعة. تأكد من إقران طابعة Bluetooth الحرارية وتثبيت خدمة طباعة (مثل PrinterShare / RawBT).'
       );
     } finally {
       setPrintingId(null);
@@ -184,9 +184,9 @@ export default function CustomerDetailScreen() {
       await printJob(html, { jobName: 'Oil Sticker', thermal });
     } catch (e: any) {
       Alert.alert(
-        'Print failed',
+        'فشل الطباعة',
         e?.message ||
-          'Unable to open printer. Make sure your Bluetooth thermal printer is paired and a print service is installed (e.g. PrinterShare / RawBT).'
+          'تعذر فتح الطابعة. تأكد من إقران طابعة Bluetooth الحرارية وتثبيت خدمة طباعة (مثل PrinterShare / RawBT).'
       );
     } finally {
       setPrintingStickerId(null);
@@ -203,9 +203,9 @@ export default function CustomerDetailScreen() {
       await printJob(html, { jobName: 'Battery Sticker', thermal });
     } catch (e: any) {
       Alert.alert(
-        'Print failed',
+        'فشل الطباعة',
         e?.message ||
-          'Unable to open printer. Make sure your Bluetooth thermal printer is paired and a print service is installed (e.g. PrinterShare / RawBT).'
+          'تعذر فتح الطابعة. تأكد من إقران طابعة Bluetooth الحرارية وتثبيت خدمة طباعة (مثل PrinterShare / RawBT).'
       );
     } finally {
       setPrintingBatteryStickerId(null);
@@ -222,9 +222,9 @@ export default function CustomerDetailScreen() {
       await printJob(html, { jobName: 'HVAC Sticker', thermal });
     } catch (e: any) {
       Alert.alert(
-        'Print failed',
+        'فشل الطباعة',
         e?.message ||
-          'Unable to open printer. Make sure your Bluetooth thermal printer is paired and a print service is installed (e.g. PrinterShare / RawBT).'
+          'تعذر فتح الطابعة. تأكد من إقران طابعة Bluetooth الحرارية وتثبيت خدمة طباعة (مثل PrinterShare / RawBT).'
       );
     } finally {
       setPrintingHvacStickerId(null);
@@ -258,7 +258,7 @@ export default function CustomerDetailScreen() {
       await printJob(html, { jobName: 'Combined Invoice', thermal });
       // Ask if the user wants to mark these as paid now that the invoice is out.
       const unpaidInSelection = selectedServices.filter((s) => !s.is_paid);
-      const promptText = `Mark ${unpaidInSelection.length} service${unpaidInSelection.length === 1 ? '' : 's'} as paid?\n\nThey will flip to green ✓ in the customer's history.`;
+      const promptText = `هل تريد تحديد ${unpaidInSelection.length} خدمة كمدفوعة؟\n\nستتحول إلى اللون الأخضر ✓ في سجل العميل.`;
       const doMark = async () => {
         try {
           await markServicesPaid(unpaidInSelection.map((s) => s.id));
@@ -266,7 +266,7 @@ export default function CustomerDetailScreen() {
           await fetchCustomerDetails();
           setInvoiceModalOpen(false);
         } catch (e: any) {
-          Alert.alert('Error', e?.message || 'Failed to update statuses');
+          Alert.alert('خطأ', e?.message || 'فشل تحديث الحالات');
         }
       };
       const skip = () => setInvoiceModalOpen(false);
@@ -280,16 +280,16 @@ export default function CustomerDetailScreen() {
           skip();
         }
       } else {
-        Alert.alert('Invoice printed', promptText, [
-          { text: 'Not yet', style: 'cancel', onPress: skip },
-          { text: 'Mark as paid', onPress: doMark },
+        Alert.alert('تمت طباعة الفاتورة', promptText, [
+          { text: 'ليس بعد', style: 'cancel', onPress: skip },
+          { text: 'تحديد كمدفوعة', onPress: doMark },
         ]);
       }
     } catch (e: any) {
       Alert.alert(
-        'Print failed',
+        'فشل الطباعة',
         e?.message ||
-          'Unable to open printer. Make sure your Bluetooth thermal printer is paired and a print service is installed (e.g. PrinterShare / RawBT).'
+          'تعذر فتح الطابعة. تأكد من إقران طابعة Bluetooth الحرارية وتثبيت خدمة طباعة (مثل PrinterShare / RawBT).'
       );
     } finally {
       setInvoicePrinting(false);
@@ -318,7 +318,7 @@ export default function CustomerDetailScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#1e293b" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Customer Details</Text>
+        <Text style={styles.headerTitle}>تفاصيل العميل</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity
             onPress={() =>
@@ -358,9 +358,9 @@ export default function CustomerDetailScreen() {
         {details.vehicles.length > 0 && (
           <View style={styles.summaryBar}>
             <Text style={styles.summaryText}>
-              {details.vehicles.length} vehicle{details.vehicles.length !== 1 ? 's' : ''} • {details.services.length} service{details.services.length !== 1 ? 's' : ''}
+              {details.vehicles.length} سيارة • {details.services.length} خدمة
             </Text>
-            <Text style={styles.summaryTotalCost}>Total: ${totalCost.toFixed(2)}</Text>
+            <Text style={styles.summaryTotalCost}>الإجمالي: ${totalCost.toFixed(2)}</Text>
           </View>
         )}
 
@@ -373,9 +373,9 @@ export default function CustomerDetailScreen() {
           >
             <MaterialCommunityIcons name="receipt-text" size={20} color="#fff" />
             <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={styles.invoiceBtnTitle}>Print Combined Invoice</Text>
+              <Text style={styles.invoiceBtnTitle}>طباعة فاتورة مجمعة</Text>
               <Text style={styles.invoiceBtnSubtitle}>
-                Bill several jobs in one 55mm invoice with discount
+                اطبع عدة خدمات في فاتورة واحدة 55mm مع خصم
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#fff" />
@@ -385,7 +385,7 @@ export default function CustomerDetailScreen() {
         {/* Vehicles with their Services */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Vehicles ({details.vehicles.length})</Text>
+            <Text style={styles.sectionTitle}>السيارات ({details.vehicles.length})</Text>
             <TouchableOpacity
               onPress={() =>
                 router.push({
@@ -414,7 +414,7 @@ export default function CustomerDetailScreen() {
                     <Text style={styles.vehicleGroupName}>
                       {vehicle.year ? `${vehicle.year} ` : ''}{vehicle.make} {vehicle.model}
                     </Text>
-                    <Text style={styles.vehicleGroupMeta}>Plate: {vehicle.plate_number}</Text>
+                    <Text style={styles.vehicleGroupMeta}>اللوحة: {vehicle.plate_number}</Text>
                     <Text style={styles.vehicleGroupMeta}>VIN: {vehicle.vin}</Text>
                   </View>
                   <View style={styles.vehicleGroupActions}>
@@ -458,7 +458,7 @@ export default function CustomerDetailScreen() {
                     <View style={styles.servicesSubHeaderLeft}>
                       <Ionicons name="construct" size={16} color="#10b981" />
                       <Text style={styles.servicesSubTitle}>
-                        Services ({vehicleServices.length})
+                        الخدمات ({vehicleServices.length})
                       </Text>
                       {vehicleServices.length > 0 && (
                         <Text style={styles.vehicleSubtotal}>
@@ -484,15 +484,15 @@ export default function CustomerDetailScreen() {
                   </View>
 
                   {vehicleServices.length === 0 ? (
-                    <Text style={styles.noServicesText}>No services yet for this vehicle</Text>
+                    <Text style={styles.noServicesText}>لا توجد خدمات لهذه السيارة بعد</Text>
                   ) : (
                     vehicleServices.map((service) => {
                       const dashOn: string[] = [];
                       if (service.dash_abs) dashOn.push('ABS');
-                      if (service.dash_check_engine) dashOn.push('Engine');
-                      if (service.dash_brake) dashOn.push('Brake');
-                      if (service.dash_airbag) dashOn.push('Airbag');
-                      if (service.dash_immobilizer) dashOn.push('Key');
+                      if (service.dash_check_engine) dashOn.push('محرك');
+                      if (service.dash_brake) dashOn.push('فرامل');
+                      if (service.dash_airbag) dashOn.push('وسادة هوائية');
+                      if (service.dash_immobilizer) dashOn.push('مفتاح');
                       return (
                       <View key={service.id} style={[styles.serviceItemCard, !service.is_paid && styles.serviceItemUnpaid]}>
                         <View style={styles.serviceItemContent}>
@@ -503,7 +503,7 @@ export default function CustomerDetailScreen() {
                               </Text>
                               {!service.is_paid && (
                                 <View style={styles.unpaidBadge}>
-                                  <Text style={styles.unpaidBadgeText}>UNPAID</Text>
+                                  <Text style={styles.unpaidBadgeText}>غير مدفوعة</Text>
                                 </View>
                               )}
                             </View>
@@ -515,19 +515,19 @@ export default function CustomerDetailScreen() {
                             {dashOn.length > 0 && (
                               <View style={styles.dashBadgeRow}>
                                 <Ionicons name="warning" size={11} color="#ea580c" />
-                                <Text style={styles.dashBadgeText}>{dashOn.join(' \u2022 ')}</Text>
+                                <Text style={styles.dashBadgeText}>{dashOn.join(' • ')}</Text>
                               </View>
                             )}
                             {(service.next_service_date || service.next_service_mileage) && (
                               <View style={styles.oilBadgeRow}>
                                 <MaterialCommunityIcons name="oil" size={11} color="#b45309" />
                                 <Text style={styles.oilBadgeText}>
-                                  Next oil:
+                                  الزيت القادم:
                                   {service.next_service_date
                                     ? ` ${new Date(service.next_service_date).toLocaleDateString()}`
                                     : ''}
                                   {service.next_service_mileage
-                                    ? `${service.next_service_date ? ' \u2022 ' : ' '}${service.next_service_mileage.toLocaleString()} km`
+                                    ? `${service.next_service_date ? ' • ' : ' '}${service.next_service_mileage.toLocaleString()} كم`
                                     : ''}
                                 </Text>
                               </View>
@@ -536,7 +536,7 @@ export default function CustomerDetailScreen() {
                               <View style={styles.oilBadgeRow}>
                                 <MaterialCommunityIcons name="air-filter" size={11} color="#0f766e" />
                                 <Text style={[styles.oilBadgeText, { color: '#0f766e' }]}>
-                                  Oil filter changed
+                                  تم تغيير فلتر الزيت
                                 </Text>
                               </View>
                             )}
@@ -549,12 +549,12 @@ export default function CustomerDetailScreen() {
                                     color="#475569"
                                   />
                                   <Text style={styles.productsHeaderText}>
-                                    Products used ({service.items.length})
+                                    المنتجات المستخدمة ({service.items.length})
                                   </Text>
                                 </View>
                                 {service.items.map((it) => (
                                   <Text key={it.id} style={styles.productsLine}>
-                                    {`\u2022 ${it.item_type} \u00d7 ${it.quantity} \u2014 $${(it.unit_price * it.quantity).toFixed(2)}`}
+                                    {`• ${it.item_type} × ${it.quantity} — $${(it.unit_price * it.quantity).toFixed(2)}`}
                                   </Text>
                                 ))}
                               </View>
@@ -577,7 +577,7 @@ export default function CustomerDetailScreen() {
                                   </Text>
                                   {isPending && (
                                     <Text style={styles.serviceItemPartialHint}>
-                                      remaining · paid ${partial.toFixed(0)}/${service.cost.toFixed(0)}
+                                      المتبقي • مدفوع ${partial.toFixed(0)}/${service.cost.toFixed(0)}
                                     </Text>
                                   )}
                                 </>
@@ -699,7 +699,7 @@ export default function CustomerDetailScreen() {
           })}
 
           {details.vehicles.length === 0 && (
-            <Text style={styles.emptyText}>No vehicles registered. Add a vehicle to start tracking services.</Text>
+            <Text style={styles.emptyText}>لا توجد سيارات مسجلة. أضف سيارة لبدء تتبع الخدمات.</Text>
           )}
         </View>
       </ScrollView>
@@ -708,8 +708,8 @@ export default function CustomerDetailScreen() {
         visible={deleteTarget !== null}
         title={getDeleteDialogProps().title}
         message={getDeleteDialogProps().message}
-        confirmText={deleting ? 'Deleting...' : 'Delete'}
-        cancelText="Cancel"
+        confirmText={deleting ? 'جارٍ الحذف...' : 'حذف'}
+        cancelText="إلغاء"
         destructive={true}
         onConfirm={performDelete}
         onCancel={() => !deleting && setDeleteTarget(null)}
