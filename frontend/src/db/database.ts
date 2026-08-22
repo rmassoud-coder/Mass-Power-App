@@ -2295,45 +2295,20 @@ export async function saveWeeklyWages(amount: number): Promise<void> {
   );
 }
 
-export async function getWeeklyCashSummary(): Promise<{
-  revenue: number;
-  totalOutstandingDebt: number;
-  paidTowardsDebtToday: number;
-  wages: number;
-  netDrawer: number;
-}> {
-  const db = await getDb();
-  
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - diffToMonday);
-  const mondayStr = monday.toISOString().slice(0, 10);
-  const todayStr = today.toISOString().slice(0, 10);
+const debtResult = await db.getFirstAsync<{ total: number }>(
+  `SELECT COALESCE(SUM(balance), 0) as total FROM supplier_balances WHERE balance > 0`
+);
+const totalDebt = debtResult?.total || 0;
 
-  const revenueResult = await db.getFirstAsync<{ total: number }>(
-    `SELECT COALESCE(SUM(cost), 0) as total FROM services 
-     WHERE DATE(service_date) >= ? AND DATE(service_date) <= ? AND (is_paid = 1 OR partial_paid > 0)`,
-    [mondayStr, todayStr]
-  );
-  const revenue = revenueResult?.total || 0;
-
-  const debtResult = await db.getFirstAsync<{ total: number }>(
-    `SELECT COALESCE(SUM(balance), 0) as total FROM supplier_balances WHERE balance > 0`
-  );
-  const totalDebt = debtResult?.total || 0;
-
-// 🔥 FIX: Simple, cross-version SQLite math (No LAG, no window functions)
-// 🔥 FIX: Read from the supplier_payments table
+// 🔥 FIXED: Get today's paid amount directly from supplier_payments
 let paidToday = 0;
 try {
   const paidResult = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(amount_paid), 0) as total FROM supplier_payments 
-     WHERE DATE(paid_at) >= ? AND DATE(paid_at) <= ?`,
-    [mondayStr, todayStr]
+     WHERE DATE(paid_at) = ?`,
+    [todayStr]
   );
-  paidToday = paidResult?.total || 0;
+  paidToday = Math.abs(paidResult?.total || 0);
 } catch (e) {
   paidToday = 0;
 }
