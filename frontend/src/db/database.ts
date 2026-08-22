@@ -1889,6 +1889,7 @@ export async function getWeeklyCashSummary(): Promise<{
   revenue: number;
   totalOutstandingDebt: number;
   paidTowardsDebtToday: number;
+  paidTowardsDebtWeek: number;
   wages: number;
   netDrawer: number;
 }> {
@@ -1914,7 +1915,7 @@ export async function getWeeklyCashSummary(): Promise<{
   );
   const totalDebt = debtResult?.total || 0;
 
-  // 🔥 FIXED: Get today's paid amount directly from supplier_payments
+  // 🔥 TODAY'S paid amount
   let paidToday = 0;
   try {
     const paidResult = await db.getFirstAsync<{ total: number }>(
@@ -1925,6 +1926,19 @@ export async function getWeeklyCashSummary(): Promise<{
     paidToday = Math.abs(paidResult?.total || 0);
   } catch (e) {
     paidToday = 0;
+  }
+
+  // 🔥 WEEK's paid amount (Monday → Today)
+  let paidWeek = 0;
+  try {
+    const paidWeekResult = await db.getFirstAsync<{ total: number }>(
+      `SELECT COALESCE(SUM(amount_paid), 0) as total FROM supplier_payments 
+       WHERE DATE(paid_at) >= ? AND DATE(paid_at) <= ?`,
+      [mondayStr, todayStr]
+    );
+    paidWeek = Math.abs(paidWeekResult?.total || 0);
+  } catch (e) {
+    paidWeek = 0;
   }
 
   const wagesResult = await db.getFirstAsync<{ total: number }>(
@@ -1940,6 +1954,7 @@ export async function getWeeklyCashSummary(): Promise<{
     revenue,
     totalOutstandingDebt: totalDebt,
     paidTowardsDebtToday: paidToday,
+    paidTowardsDebtWeek: paidWeek,
     wages,
     netDrawer,
   };
