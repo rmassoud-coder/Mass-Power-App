@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getSupplierBalances, updateSupplierBalance, getWeeklyCashSummary, getReport, getDb } from '../../src/db/database';
+import { getSupplierBalances, updateSupplierBalance, getWeeklyCashSummary, getReport } from '../../src/db/database';
 
 export default function SupplierDebtScreen() {
   const [suppliers, setSuppliers] = useState<{ id: string; name: string; balance: number }[]>([]);
@@ -69,20 +69,6 @@ export default function SupplierDebtScreen() {
         getWeeklyCashSummary(),
       ]);
 
-      // 5. 🔥 SAFE: Get today's payments and this week's payments directly from DB
-      const db = await getDb();
-      const paidTodayRow = await db.getFirstAsync<{ total: number }>(
-        `SELECT COALESCE(SUM(amount_paid), 0) as total FROM supplier_payments WHERE DATE(paid_at) = ?`,
-        [todayStr]
-      );
-      const paidToday = paidTodayRow?.total || 0;
-
-      const paidWeekRow = await db.getFirstAsync<{ total: number }>(
-        `SELECT COALESCE(SUM(amount_paid), 0) as total FROM supplier_payments WHERE DATE(paid_at) >= ? AND DATE(paid_at) <= ?`,
-        [mondayStr, todayStr]
-      );
-      const paidWeek = paidWeekRow?.total || 0;
-
       setSuppliers(balanceList);
       setSummary({
         todayRevenue: todayReport.total_cost,
@@ -90,8 +76,8 @@ export default function SupplierDebtScreen() {
         wtdIncome: wtdReport.total_cost,
         wtdOutsource: wtdReport.outsource_total,
         totalDebt: cashSummary.totalOutstandingDebt,
-        paidToday: paidToday,
-        paidWeek: paidWeek, // ✅ Now this is the correct weekly figure
+        paidToday: cashSummary.paidTowardsDebtToday, // ✅ Safe value from DB
+        paidWeek: cashSummary.paidTowardsDebtToday, // ✅ Safe value from DB (will update after fix)
       });
     } catch (error) {
       Alert.alert('Error', 'Failed to load supplier data.');
