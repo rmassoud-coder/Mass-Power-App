@@ -43,10 +43,10 @@ export default function QuickWalkinScreen() {
         const item = pickedItems[0];
         await createWalkinProductSale(item.inventory_id, item.quantity);
         triggerAutoPush();
-        Alert.alert('Success', 'Product sold and deducted from inventory!');
+        Alert.alert('نجاح', 'تم بيع المنتج وخصمه من المخزون!');
         router.back();
       } catch (error: any) {
-        Alert.alert('Error', error.message || 'Failed to sell product.');
+        Alert.alert('خطأ', error.message || 'فشل بيع المنتج.');
       } finally {
         setLoading(false);
       }
@@ -56,7 +56,7 @@ export default function QuickWalkinScreen() {
     // Otherwise, fallback to regular Walk-in Service
     const totalCost = parseFloat(cost) || 0;
     if (totalCost <= 0) {
-      Alert.alert('Error', 'Please enter a valid price or pick a product.');
+      Alert.alert('خطأ', 'الرجاء إدخال سعر صحيح أو اختيار منتج.');
       return;
     }
 
@@ -64,11 +64,11 @@ export default function QuickWalkinScreen() {
     if (isPartial) {
       partialPaidNumber = parseFloat(partialAmount) || 0;
       if (partialPaidNumber <= 0) {
-        Alert.alert('Error', 'Please enter a valid partial payment amount.');
+        Alert.alert('خطأ', 'الرجاء إدخال مبلغ دفعة جزئية صحيح.');
         return;
       }
       if (partialPaidNumber >= totalCost) {
-        Alert.alert('Error', 'Partial payment must be less than total cost. Use "Paid" instead.');
+        Alert.alert('خطأ', 'يجب أن تكون الدفعة الجزئية أقل من التكلفة الإجمالية. استخدم "مدفوع" بدلاً من ذلك.');
         return;
       }
     }
@@ -86,10 +86,10 @@ export default function QuickWalkinScreen() {
       );
       
       triggerAutoPush();
-      Alert.alert('Success', 'Walk-in service added to Cash Drawer!');
+      Alert.alert('نجاح', 'تمت إضافة خدمة العميل بدون موعد إلى الصندوق!');
       router.back();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to add walk-in service.');
+      Alert.alert('خطأ', error.message || 'فشل إضافة خدمة العميل بدون موعد.');
     } finally {
       setLoading(false);
     }
@@ -102,19 +102,19 @@ export default function QuickWalkinScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#1e293b" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Quick Walk-in</Text>
+          <Text style={styles.headerTitle}>عميل بدون موعد</Text>
           <View style={{ width: 40 }} />
         </View>
 
         <ScrollView style={styles.content}>
           {/* 🔥 NEW: Customer Name (Optional) */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Customer Name (Optional)</Text>
+            <Text style={styles.label}>اسم العميل (اختياري)</Text>
             <View style={styles.inputContainer}>
               <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Leave blank for generic walk-in"
+                placeholder="اتركه فارغاً لعميل عام"
                 value={customerName}
                 onChangeText={setCustomerName}
               />
@@ -123,11 +123,11 @@ export default function QuickWalkinScreen() {
 
           {/* Service Description */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Service Description (Optional)</Text>
+            <Text style={styles.label}>وصف الخدمة (اختياري)</Text>
             <View style={styles.inputContainer}>
               <TextInput
                 style={styles.input}
-                placeholder="e.g. Oil Change, Product Sale..."
+                placeholder="مثال: تغيير زيت، بيع منتج..."
                 value={serviceDesc}
                 onChangeText={setServiceDesc}
               />
@@ -141,7 +141,7 @@ export default function QuickWalkinScreen() {
 
           {/* Total Price */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Total Price (Labor + Parts)</Text>
+            <Text style={styles.label}>السعر الإجمالي (عمل + قطع)</Text>
             <View style={styles.inputContainer}>
               <Text style={styles.currencySymbol}>$</Text>
               <TextInput
@@ -154,7 +154,7 @@ export default function QuickWalkinScreen() {
             </View>
             {productsSubtotal > 0 && (
               <Text style={styles.autoCalcText}>
-                + ${productsSubtotal.toFixed(2)} in parts (auto-calculated)
+                + ${productsSubtotal.toFixed(2)} في القطع (محسوب تلقائياً)
               </Text>
             )}
           </View>
@@ -163,19 +163,19 @@ export default function QuickWalkinScreen() {
           <View style={styles.paymentRow}>
             <TouchableOpacity style={[styles.payBtn, isPaid && styles.payBtnActive]} onPress={() => { setIsPaid(true); setIsPartial(false); setPartialAmount(''); }}>
               <Ionicons name="checkmark-circle" size={20} color={isPaid ? '#fff' : '#64748b'} />
-              <Text style={[styles.payBtnText, isPaid && styles.payBtnTextActive]}>Paid</Text>
+              <Text style={[styles.payBtnText, isPaid && styles.payBtnTextActive]}>مدفوع</Text>
             </TouchableOpacity>
             
             <TouchableOpacity style={[styles.payBtn, isPartial && styles.payBtnActivePartial]} onPress={() => { setIsPartial(!isPartial); setIsPaid(false); }}>
               <Ionicons name="time" size={20} color={isPartial ? '#fff' : '#64748b'} />
-              <Text style={[styles.payBtnText, isPartial && styles.payBtnTextActive]}>Partial</Text>
+              <Text style={[styles.payBtnText, isPartial && styles.payBtnTextActive]}>دفعة جزئية</Text>
             </TouchableOpacity>
           </View>
 
           {/* Partial Amount Input */}
           {isPartial && (
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Amount Received</Text>
+              <Text style={styles.label}>المبلغ المستلم</Text>
               <View style={[styles.inputContainer, { borderColor: '#eab308' }]}>
                 <Text style={styles.currencySymbol}>$</Text>
                 <TextInput
@@ -191,7 +191,7 @@ export default function QuickWalkinScreen() {
 
           {/* Outsource Cost */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Outsource Cost (Private)</Text>
+            <Text style={styles.label}>تكلفة الاستعانة بمصدر خارجي (خاصة)</Text>
             <View style={styles.inputContainer}>
               <Text style={styles.currencySymbol}>$</Text>
               <TextInput
@@ -209,7 +209,7 @@ export default function QuickWalkinScreen() {
               <>
                 <Ionicons name="cash-outline" size={24} color="#fff" />
                 <Text style={styles.submitText}>
-                  {pickedItems.length > 0 ? 'Sell Product' : 'Add to Cash Drawer'}
+                  {pickedItems.length > 0 ? 'بيع منتج' : 'إضافة إلى الصندوق'}
                 </Text>
               </>
             )}
