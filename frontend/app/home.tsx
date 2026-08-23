@@ -298,7 +298,7 @@ export default function HomeScreen() {
             testID="management-button"
           >
             <Ionicons name="construct-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
-            <Text style={styles.reportButtonText}>الإدارة الخلفية</Text>
+            <Text style={styles.reportButtonText}>الإدارة و الاعدادات</Text>
           </TouchableOpacity>
 
           {/* Build timestamp */}
