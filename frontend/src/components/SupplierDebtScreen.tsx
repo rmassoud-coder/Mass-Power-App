@@ -217,7 +217,7 @@ export default function SupplierDebtScreen() {
 
           {/* Wages Line - ADDED */}
           <View style={styles.cashRow}>
-            <Text style={[styles.cashLabel, { color: '#eab308' }]}>− Wages</Text>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]}>− Wages This Week</Text>
             <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${summary.wages.toFixed(2)}</Text>
           </View>
 
