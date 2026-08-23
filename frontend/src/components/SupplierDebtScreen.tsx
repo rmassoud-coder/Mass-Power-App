@@ -77,7 +77,7 @@ export default function SupplierDebtScreen() {
         wtdOutsource: wtdReport.outsource_total,
         totalDebt: cashSummary.totalOutstandingDebt,
         paidToday: cashSummary.paidTowardsDebtToday,
-        paidWeek: cashSummary.paidTowardsDebtToday,
+        paidWeek: cashSummary.paidTowardsDebtWeek, // ✅ Now uses the new field from database
       });
     } catch (error) {
       Alert.alert('Error', 'Failed to load supplier data.');
