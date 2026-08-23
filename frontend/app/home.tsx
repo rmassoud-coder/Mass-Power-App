@@ -288,7 +288,7 @@ export default function HomeScreen() {
             onPress={() => router.push('/order-list')}
           >
             <Ionicons name="list-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
-            <Text style={styles.orderButtonText}>قائمة الطلبات</Text>
+            <Text style={styles.orderButtonText}>قائمة مشتريات</Text>
           </TouchableOpacity>
 
           {/* 🔥 BACKEND MANAGEMENT WITH PIN */}
