@@ -203,7 +203,7 @@ export default function SupplierDebtScreen() {
               Net Cash Drawer (Today)
             </Text>
             <Text style={[styles.cashValue, { fontWeight: '900', color: (summary.todayRevenue - summary.todayOutsource - summary.paidToday) >= 0 ? '#059669' : '#dc2626' }]}>
-              ${(summary.todayRevenue - summary.todayOutsource - summary.paidToday).toFixed(2)}
+              ${(summary.wtdIncome - summary.wtdOutsource - summary.paidWeek).toFixed(2)}
             </Text>
           </View>
         </View>
