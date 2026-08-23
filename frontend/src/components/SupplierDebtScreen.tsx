@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getSupplierBalances, updateSupplierBalance, getWeeklyCashSummary, getReport } from '../../src/db/database';
+import { getSupplierBalances, updateSupplierBalance, getWeeklyCashSummary, getReport, saveWeeklyWages } from '../../src/db/database';
 
 export default function SupplierDebtScreen() {
   const [suppliers, setSuppliers] = useState<{ id: string; name: string; balance: number }[]>([]);
@@ -20,6 +20,7 @@ export default function SupplierDebtScreen() {
   const [payTodayValue, setPayTodayValue] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [wagesInput, setWagesInput] = useState('');
   const [summary, setSummary] = useState<{ 
     todayRevenue: number;
     todayOutsource: number;
@@ -28,6 +29,7 @@ export default function SupplierDebtScreen() {
     totalDebt: number; 
     paidToday: number;
     paidWeek: number;
+    wages: number; // <-- ADDED
   }>({
     todayRevenue: 0,
     todayOutsource: 0,
@@ -36,6 +38,7 @@ export default function SupplierDebtScreen() {
     totalDebt: 0,
     paidToday: 0,
     paidWeek: 0,
+    wages: 0, // <-- ADDED
   });
   const router = useRouter();
 
@@ -78,6 +81,7 @@ export default function SupplierDebtScreen() {
         totalDebt: cashSummary.totalOutstandingDebt,
         paidToday: cashSummary.paidTowardsDebtToday,
         paidWeek: cashSummary.paidTowardsDebtWeek,
+        wages: cashSummary.wages, // <-- ADDED
       });
     } catch (error) {
       Alert.alert('Error', 'Failed to load supplier data.');
@@ -89,6 +93,22 @@ export default function SupplierDebtScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const handleSaveWages = async () => {
+    const amount = parseFloat(wagesInput);
+    if (isNaN(amount) || amount < 0) {
+      Alert.alert('Error', 'Please enter a valid wage amount.');
+      return;
+    }
+    try {
+      await saveWeeklyWages(amount);
+      setWagesInput('');
+      Alert.alert('Success', 'Wages saved!');
+      loadData(); // Reload to update the summary
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to save wages.');
+    }
+  };
 
   const handleEditPress = (id: string) => {
     setEditingId(id);
@@ -195,16 +215,40 @@ export default function SupplierDebtScreen() {
             <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${summary.paidWeek.toFixed(2)}</Text>
           </View>
 
+          {/* Wages Line - ADDED */}
+          <View style={styles.cashRow}>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]}>− Wages</Text>
+            <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${summary.wages.toFixed(2)}</Text>
+          </View>
+
           <View style={styles.cashDivider} />
 
-          {/* Net Cash Drawer - Subtracts Outsource AND Paid Debts */}
+          {/* Net Cash Drawer */}
           <View style={styles.cashRow}>
             <Text style={[styles.cashLabel, { fontWeight: '800', color: '#0f172a' }]}>
               Net Cash Drawer (Today)
             </Text>
-            <Text style={[styles.cashValue, { fontWeight: '900', color: (summary.todayRevenue - summary.todayOutsource - summary.paidToday) >= 0 ? '#059669' : '#dc2626' }]}>
-              ${(summary.wtdIncome - summary.wtdOutsource - summary.paidWeek).toFixed(2)}
+            <Text style={[styles.cashValue, { fontWeight: '900', color: (summary.wtdIncome - summary.wtdOutsource - summary.paidWeek - summary.wages) >= 0 ? '#059669' : '#dc2626' }]}>
+              ${(summary.wtdIncome - summary.wtdOutsource - summary.paidWeek - summary.wages).toFixed(2)}
             </Text>
+          </View>
+        </View>
+
+        {/* Wages Input Box - ADDED BELOW CASH CARD */}
+        <View style={styles.wagesBox}>
+          <Text style={styles.wagesTitle}>Save Weekly Wages</Text>
+          <View style={styles.wagesInputRow}>
+            <Text style={styles.currencySymbol}>$</Text>
+            <TextInput
+              style={styles.wagesInput}
+              placeholder="0.00"
+              value={wagesInput}
+              onChangeText={setWagesInput}
+              keyboardType="decimal-pad"
+            />
+            <TouchableOpacity style={styles.saveWagesBtn} onPress={handleSaveWages}>
+              <Text style={styles.saveWagesBtnText}>Save</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -324,6 +368,50 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#c4b5fd',
     marginVertical: 8,
+  },
+  // New Wages Box Styles
+  wagesBox: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  wagesTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 8,
+  },
+  wagesInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  wagesInput: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: '#1e293b',
+  },
+  saveWagesBtn: {
+    backgroundColor: '#10b981',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  saveWagesBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
   },
   listTitle: { fontSize: 16, fontWeight: '600', color: '#1e293b', marginBottom: 12 },
   emptyText: { textAlign: 'center', color: '#94a3b8', marginTop: 20, fontStyle: 'italic' },
