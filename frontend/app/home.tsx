@@ -279,7 +279,7 @@ export default function HomeScreen() {
             testID="quick-walkin-button"
           >
             <Ionicons name="walk-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
-            <Text style={styles.walkinButtonText}>بيع مباشر</Text>
+            <Text style={styles.walkinButtonText}>عميل بدون موعد</Text>
           </TouchableOpacity>
 
           {/* Order List Button */}
