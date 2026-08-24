@@ -1884,7 +1884,191 @@ export async function saveWeeklyWages(amount: number): Promise<void> {
     [mondayStr, amount, now]
   );
 }
+export async function createQuickWalkinService(
+  customerName: string | undefined,
+  description: string,
+  totalCost: number,
+  isPaid: boolean,
+  partialPaid: number = 0,
+  outsourceCost: number = 0
+): Promise<Service> {
+  const db = await getDb();
+  const now = new Date().toISOString();
+  
+  const finalName = (customerName && customerName.trim()) 
+    ? customerName.trim() 
+    : 'Walk-in';
 
+  let walkinCustomer = await db.getFirstAsync<Customer>(
+    `SELECT * FROM customers WHERE name = ? AND mobile_number = 'N/A' LIMIT 1`,
+    [finalName]
+  );
+
+  if (!walkinCustomer) {
+    const walkinId = generateId();
+    await db.runAsync(
+      `INSERT INTO customers (id, name, mobile_number, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      [walkinId, finalName, 'N/A', now, now]
+    );
+    walkinCustomer = await db.getFirstAsync<Customer>(
+      `SELECT * FROM customers WHERE id = ?`, [walkinId]
+    );
+  }
+
+  let walkinVehicle = await db.getFirstAsync<Vehicle>(
+    `SELECT * FROM vehicles WHERE customer_id = ? AND plate_number = 'WALK-IN' LIMIT 1`,
+    [walkinCustomer!.id]
+  );
+
+  if (!walkinVehicle) {
+    const vehicleId = generateId();
+    await db.runAsync(
+      `INSERT INTO vehicles (id, customer_id, vin, plate_number, make, model, year, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [vehicleId, walkinCustomer!.id, 'N/A', 'WALK-IN', 'Walk-in', 'Vehicle', null, now]
+    );
+    walkinVehicle = await db.getFirstAsync<Vehicle>(
+      `SELECT * FROM vehicles WHERE id = ?`, [vehicleId]
+    );
+  }
+
+  const serviceId = generateId();
+  const pp = Math.max(0, Number(partialPaid) || 0);
+  const oc = Math.max(0, Number(outsourceCost) || 0);
+  const finalCost = Math.max(0, Number(totalCost) || 0);
+
+  await db.runAsync(
+    `INSERT INTO services (
+      id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, partial_paid, 
+      service_date, created_at, outsource_cost
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      serviceId,
+      walkinVehicle!.id,
+      walkinCustomer!.id,
+      description.trim() || 'Quick Walk-in Service',
+      null,
+      finalCost,
+      isPaid ? 1 : 0,
+      pp,
+      now,
+      now,
+      oc
+    ]
+  );
+
+  return {
+    id: serviceId,
+    vehicle_id: walkinVehicle!.id,
+    customer_id: walkinCustomer!.id,
+    service_description: description.trim() || 'Quick Walk-in Service',
+    additional_info: undefined,
+    cost: finalCost,
+    is_paid: isPaid,
+    service_date: now,
+    created_at: now,
+    partial_paid: pp,
+    outsource_cost: oc,
+  };
+}
+
+export async function createWalkinProductSale(
+  inventoryId: string,
+  quantity: number,
+): Promise<Service> {
+  const db = await getDb();
+  const now = new Date().toISOString();
+
+  const inv = await db.getFirstAsync<InventoryItem>(
+    `SELECT * FROM inventory WHERE id = ?`,
+    [inventoryId]
+  );
+  if (!inv) {
+    throw new Error('Product not found in inventory.');
+  }
+  if (inv.item_quantity < quantity) {
+    throw new Error(`Insufficient stock. Only ${inv.item_quantity} available.`);
+  }
+
+  let walkinCustomer = await db.getFirstAsync<Customer>(
+    `SELECT * FROM customers WHERE name = 'Walk-in' AND mobile_number = 'N/A' LIMIT 1`
+  );
+  if (!walkinCustomer) {
+    const walkinId = generateId();
+    await db.runAsync(
+      `INSERT INTO customers (id, name, mobile_number, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      [walkinId, 'Walk-in', 'N/A', now, now]
+    );
+    walkinCustomer = await db.getFirstAsync<Customer>(`SELECT * FROM customers WHERE id = ?`, [walkinId]);
+  }
+
+  let walkinVehicle = await db.getFirstAsync<Vehicle>(
+    `SELECT * FROM vehicles WHERE customer_id = ? AND plate_number = 'WALK-IN' LIMIT 1`,
+    [walkinCustomer!.id]
+  );
+  if (!walkinVehicle) {
+    const vehicleId = generateId();
+    await db.runAsync(
+      `INSERT INTO vehicles (id, customer_id, vin, plate_number, make, model, year, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [vehicleId, walkinCustomer!.id, 'N/A', 'WALK-IN', 'Walk-in', 'Vehicle', null, now]
+    );
+    walkinVehicle = await db.getFirstAsync<Vehicle>(
+      `SELECT * FROM vehicles WHERE id = ?`, [vehicleId]
+    );
+  }
+
+  const unitPrice = (inv.item_retail_price && inv.item_retail_price > 0) 
+    ? inv.item_retail_price 
+    : inv.item_price;
+  const totalCost = unitPrice * quantity;
+
+  const serviceId = generateId();
+  await db.runAsync(
+    `INSERT INTO services (
+      id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, partial_paid,
+      service_date, created_at, outsource_cost
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      serviceId,
+      walkinVehicle!.id,
+      walkinCustomer!.id,
+      `Product Sale: ${inv.item_type} (x${quantity})`,
+      null,
+      totalCost,
+      1,
+      0,
+      now,
+      now,
+      0
+    ]
+  );
+
+  const newQty = Math.max(0, inv.item_quantity - quantity);
+  await db.runAsync(
+    `UPDATE inventory SET item_quantity = ?, updated_at = ? WHERE id = ?`,
+    [newQty, now, inv.id]
+  );
+
+  const rowId = generateId();
+  await db.runAsync(
+    `INSERT INTO service_items (id, service_id, inventory_id, item_type, quantity, unit_price, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [rowId, serviceId, inv.id, inv.item_type, quantity, unitPrice, now]
+  );
+
+  return {
+    id: serviceId,
+    vehicle_id: walkinVehicle!.id,
+    customer_id: walkinCustomer!.id,
+    service_description: `Product Sale: ${inv.item_type}`,
+    additional_info: undefined,
+    cost: totalCost,
+    is_paid: true,
+    service_date: now,
+    created_at: now,
+    partial_paid: 0,
+    outsource_cost: 0,
+  };
+}
 export async function getWeeklyCashSummary(): Promise<{
   revenue: number;
   totalOutstandingDebt: number;
