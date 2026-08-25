@@ -2181,3 +2181,10 @@ export async function emergencyNukeDatabase() {
     return false;
   }
 }
+export async function getAllCustomersMobile(): Promise<{ name: string; mobile_number: string }[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ name: string; mobile_number: string }>(
+    `SELECT name, mobile_number FROM customers`
+  );
+  return rows;
+}
