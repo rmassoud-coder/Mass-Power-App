@@ -1,5 +1,6 @@
 import { Linking, Platform } from 'react-native';
 import type { OilReminderDue } from '../db/database';
+import { getAllCustomersMobile } from '../db/database';
 
 /**
  * Sanitises a phone number for use with the wa.me / WhatsApp deep link.
@@ -140,5 +141,37 @@ export async function openWhatsAppReminder(
         e?.message ||
         'WhatsApp could not be opened. Is it installed on this device?',
     };
+  }
+}
+
+/**
+ * Gets all customers with mobile numbers for bulk messaging.
+ * Returns a list of name + sanitized phone number.
+ */
+export async function getBroadcastContacts(): Promise<{ name: string; phone: string }[]> {
+  const customers = await getAllCustomersMobile();
+  return customers
+    .filter((c) => c.mobile_number && c.mobile_number.trim() !== '')
+    .map((c) => ({
+      name: c.name,
+      phone: sanitizePhoneForWhatsApp(c.mobile_number, ''),
+    }));
+}
+
+/**
+ * Opens WhatsApp with a pre-filled message for a specific phone number.
+ */
+export async function openWhatsAppBroadcast(
+  phone: string,
+  message: string
+): Promise<{ ok: boolean; message?: string }> {
+  if (!phone) return { ok: false, message: 'No phone number.' };
+  const encoded = encodeURIComponent(message);
+  const url = `https://wa.me/${phone}?text=${encoded}`;
+  try {
+    await Linking.openURL(url);
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, message: e?.message || 'Could not open WhatsApp.' };
   }
 }
