@@ -223,13 +223,14 @@ export function getRasterizerHostHtml(): string {
           y += op.__h; break;
         case 'image':
           if (op.__img) {
+            // 🔥 PUSH THE LOGO DOWN 3 LINES WITH INVISIBLE WHITE SPACE
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, y, width, 24); // 24px = 3 blank lines
+            y += 24;
+
             var imgWidth = op.__imgW || op.width || 60;
             ctx.drawImage(op.__img, (width - imgWidth) / 2, y, imgWidth, op.__imgH);
             y += op.__imgH; // Move down by image height
-            // 🔥 REAL BLANK LINES: Draw white pixels right after the logo
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, y, width, 24); // 24px = 3 blank rows
-            y += 24; // Move down by 24px
           } else {
             y += op.__h;
           }
