@@ -292,7 +292,7 @@ export function getRasterizerHostHtml(): string {
     }
   }
 
-  // 🔥 FIX: Supersampling instead of dilation
+  // 🔥 FIX: Supersampling with output width preserved (384px)
   function ditherAndPack(cv, darkness) {
     var w = cv.width, h = cv.height;
     var ctx = cv.getContext('2d');
@@ -300,24 +300,25 @@ export function getRasterizerHostHtml(): string {
     var d = img.data;
 
     // Correct darkness mapping: higher darkness = lower threshold = more black
-    var shift = ({1:-20, 2:-10, 3:0, 4:10, 5:20})[darkness] || 0;
-    var threshold = 128 + shift; // FIX: higher darkness => more black pixels
+    var shift = ({1:-10, 2:0, 3:10, 4:20, 5:30})[darkness] || 10;
+    var threshold = 128 + shift;
 
-    // 🔥 FIX: Supersampling instead of dilation
-    var scale = 3; // 3x supersampling
-    var outW = Math.floor(w / scale);
-    var outH = Math.floor(h / scale);
+    // 🔥 FIX: Supersample 3x for quality, but keep width = 384
+    var scale = 3;
+    var outW = w; // Keep original width
+    var outH = h; // Keep original height
     var bw = new Uint8Array(outW * outH);
 
     for (var y = 0; y < outH; y++) {
       for (var x = 0; x < outW; x++) {
         var sum = 0;
         var count = 0;
-        // Average the 3x3 block
-        for (var oy = 0; oy < scale; oy++) {
-          for (var ox = 0; ox < scale; ox++) {
-            var srcX = x * scale + ox;
-            var srcY = y * scale + oy;
+        // Average 3x3 block for this pixel (with clamping for edges)
+        for (var oy = -1; oy <= 1; oy++) {
+          for (var ox = -1; ox <= 1; ox++) {
+            var srcX = x + ox;
+            var srcY = y + oy;
+            if (srcX < 0 || srcX >= w || srcY < 0 || srcY >= h) continue;
             var idx = (srcY * w + srcX) * 4;
             var a = d[idx + 3] / 255;
             var yVal = 0.299 * (d[idx] * a + 255 * (1 - a)) + 0.587 * (d[idx+1] * a + 255 * (1 - a)) + 0.114 * (d[idx+2] * a + 255 * (1 - a));
