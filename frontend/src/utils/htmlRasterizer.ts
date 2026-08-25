@@ -292,17 +292,19 @@ export function getRasterizerHostHtml(): string {
     }
   }
 
+  // FIXED: threshold direction corrected (higher darkness => more black pixels),
+  // and dilation strengthened (8-connected, 2 passes) so thin anti-aliased text
+  // strokes print solid instead of faint/broken. The old ctx.filter='contrast(200)'
+  // line was a no-op (set after getImageData already read the pixels) and has
+  // been removed.
   function ditherAndPack(cv, darkness) {
     var w = cv.width, h = cv.height;
     var ctx = cv.getContext('2d');
     var img = ctx.getImageData(0, 0, w, h);
     var d = img.data;
-    
-    var shift = ({1:-60, 2:-40, 3:-20, 4:0, 5:20})[darkness] || -20;
-    var threshold = 128 - shift;
 
-    // 🔥 FIX: Force the canvas to absolute high contrast to kill greys
-    ctx.filter = 'contrast(200)'; 
+    var shift = ({1:-60, 2:-40, 3:-20, 4:0, 5:20})[darkness] || -20;
+    var threshold = 128 + shift; // FIX: was 128 - shift, which inverted the darkness slider
 
     var bw = new Uint8Array(w * h);
     for (var i = 0, p = 0; i < d.length; i += 4, p++) {
@@ -311,16 +313,28 @@ export function getRasterizerHostHtml(): string {
       bw[p] = (y < threshold) ? 1 : 0;
     }
 
-    var bold = new Uint8Array(w * h);
-    for (var yy = 0; yy < h; yy++) {
-      for (var xx = 0; xx < w; xx++) {
-        var idx = yy * w + xx;
-        if (bw[idx]) { bold[idx] = 1; continue; }
-        var hit =
-          (xx > 0 && bw[idx - 1]) || (xx < w - 1 && bw[idx + 1]) ||
-          (yy > 0 && bw[idx - w]) || (yy < h - 1 && bw[idx + w]);
-        bold[idx] = hit ? 1 : 0;
+    // FIX: stronger dilation — 8-connected neighborhood, 2 passes — to rescue
+    // thin/broken anti-aliased text strokes without over-thickening solid
+    // shapes like the logo (which are already mostly solid black).
+    var bold = bw;
+    for (var pass = 0; pass < 2; pass++) {
+      var next = new Uint8Array(w * h);
+      for (var yy = 0; yy < h; yy++) {
+        for (var xx = 0; xx < w; xx++) {
+          var idx = yy * w + xx;
+          if (bold[idx]) { next[idx] = 1; continue; }
+          var hit = false;
+          for (var oy = -1; oy <= 1 && !hit; oy++) {
+            for (var ox = -1; ox <= 1 && !hit; ox++) {
+              if (ox === 0 && oy === 0) continue;
+              var nx = xx + ox, ny = yy + oy;
+              if (nx >= 0 && nx < w && ny >= 0 && ny < h && bold[ny * w + nx]) hit = true;
+            }
+          }
+          next[idx] = hit ? 1 : 0;
+        }
       }
+      bold = next;
     }
 
     var bytesPerRow = Math.ceil(w / 8);
