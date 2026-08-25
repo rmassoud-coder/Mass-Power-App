@@ -292,57 +292,50 @@ export function getRasterizerHostHtml(): string {
     }
   }
 
-  // FIXED: threshold direction corrected (higher darkness => more black pixels),
-  // and dilation strengthened (8-connected, 2 passes) so thin anti-aliased text
-  // strokes print solid instead of faint/broken. The old ctx.filter='contrast(200)'
-  // line was a no-op (set after getImageData already read the pixels) and has
-  // been removed.
+  // 🔥 FIX: Supersampling instead of dilation
   function ditherAndPack(cv, darkness) {
     var w = cv.width, h = cv.height;
     var ctx = cv.getContext('2d');
     var img = ctx.getImageData(0, 0, w, h);
     var d = img.data;
 
-    var shift = ({1:-60, 2:-40, 3:-20, 4:0, 5:20})[darkness] || -20;
-    var threshold = 128 + shift; // FIX: was 128 - shift, which inverted the darkness slider
+    // Correct darkness mapping: higher darkness = lower threshold = more black
+    var shift = ({1:-20, 2:-10, 3:0, 4:10, 5:20})[darkness] || 0;
+    var threshold = 128 + shift; // FIX: higher darkness => more black pixels
 
-    var bw = new Uint8Array(w * h);
-    for (var i = 0, p = 0; i < d.length; i += 4, p++) {
-      var a = d[i + 3] / 255;
-      var y = 0.299 * (d[i] * a + 255 * (1 - a)) + 0.587 * (d[i+1] * a + 255 * (1 - a)) + 0.114 * (d[i+2] * a + 255 * (1 - a));
-      bw[p] = (y < threshold) ? 1 : 0;
-    }
+    // 🔥 FIX: Supersampling instead of dilation
+    var scale = 3; // 3x supersampling
+    var outW = Math.floor(w / scale);
+    var outH = Math.floor(h / scale);
+    var bw = new Uint8Array(outW * outH);
 
-    // FIX: stronger dilation — 8-connected neighborhood, 2 passes — to rescue
-    // thin/broken anti-aliased text strokes without over-thickening solid
-    // shapes like the logo (which are already mostly solid black).
-    var bold = bw;
-    for (var pass = 0; pass < 2; pass++) {
-      var next = new Uint8Array(w * h);
-      for (var yy = 0; yy < h; yy++) {
-        for (var xx = 0; xx < w; xx++) {
-          var idx = yy * w + xx;
-          if (bold[idx]) { next[idx] = 1; continue; }
-          var hit = false;
-          for (var oy = -1; oy <= 1 && !hit; oy++) {
-            for (var ox = -1; ox <= 1 && !hit; ox++) {
-              if (ox === 0 && oy === 0) continue;
-              var nx = xx + ox, ny = yy + oy;
-              if (nx >= 0 && nx < w && ny >= 0 && ny < h && bold[ny * w + nx]) hit = true;
-            }
+    for (var y = 0; y < outH; y++) {
+      for (var x = 0; x < outW; x++) {
+        var sum = 0;
+        var count = 0;
+        // Average the 3x3 block
+        for (var oy = 0; oy < scale; oy++) {
+          for (var ox = 0; ox < scale; ox++) {
+            var srcX = x * scale + ox;
+            var srcY = y * scale + oy;
+            var idx = (srcY * w + srcX) * 4;
+            var a = d[idx + 3] / 255;
+            var yVal = 0.299 * (d[idx] * a + 255 * (1 - a)) + 0.587 * (d[idx+1] * a + 255 * (1 - a)) + 0.114 * (d[idx+2] * a + 255 * (1 - a));
+            sum += yVal;
+            count++;
           }
-          next[idx] = hit ? 1 : 0;
         }
+        var avg = sum / count;
+        bw[y * outW + x] = (avg < threshold) ? 1 : 0;
       }
-      bold = next;
     }
 
-    var bytesPerRow = Math.ceil(w / 8);
-    var rowsB64 = new Array(h);
-    for (var Y = 0; Y < h; Y++) {
+    var bytesPerRow = Math.ceil(outW / 8);
+    var rowsB64 = new Array(outH);
+    for (var Y = 0; Y < outH; Y++) {
       var row = new Uint8Array(bytesPerRow);
-      for (var X = 0; X < w; X++) {
-        if (bold[Y * w + X]) {
+      for (var X = 0; X < outW; X++) {
+        if (bw[Y * outW + X]) {
           var bitPos = MSB_FIRST ? (7 - (X & 7)) : (X & 7);
           row[X >> 3] |= (1 << bitPos);
         }
@@ -351,7 +344,7 @@ export function getRasterizerHostHtml(): string {
       for (var k = 0; k < row.length; k++) s += String.fromCharCode(row[k]);
       rowsB64[Y] = btoa(s);
     }
-    return { width: w, height: h, rowsBase64: rowsB64 };
+    return { width: outW, height: outH, rowsBase64: rowsB64 };
   }
 
   window.__rasterizeDoc__ = function (payloadJson) {
