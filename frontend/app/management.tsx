@@ -173,7 +173,7 @@ export default function ManagementScreen() {
           <Text style={styles.whatsappButtonText}>Send Bulk WhatsApp</Text>
         </TouchableOpacity>
 
-        {/* 7-Button Grid */}
+        {/* 8-Button Grid */}
         <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.reportCard]} onPress={() => router.push('/report')}>
             <Ionicons name="document-text-outline" size={32} color="#fff" />
@@ -184,27 +184,34 @@ export default function ManagementScreen() {
             <Text style={styles.dashTitle}>Settings</Text>
           </TouchableOpacity>
         </View>
+
         <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.supplierDebtCard]} onPress={() => router.push('/supplier-debt')}>
             <Ionicons name="cash-outline" size={32} color="#fff" />
             <Text style={styles.dashTitle}>Supplier Debts</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={[styles.dashCard, styles.reminderCard]} onPress={() => router.push('/reminders')}>
+            <Ionicons name="notifications-outline" size={32} color="#fff" />
+            <Text style={styles.dashTitle}>Reminders</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.warrantyCard]} onPress={() => router.push('/warranty-stickers')}>
             <Ionicons name="shield-checkmark-outline" size={32} color="#fff" />
             <Text style={styles.dashTitle}>Warranty Stickers</Text>
           </TouchableOpacity>
-        </View>
-        <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.catPrinterCard]} onPress={() => router.push('/cat-printer')}>
             <Ionicons name="print-outline" size={32} color="#fff" />
             <Text style={styles.dashTitle}>Cat Printer</Text>
           </TouchableOpacity>
+        </View>
+
+        <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.inventoryCard]} onPress={() => router.push('/inventory')}>
             <Ionicons name="cube-outline" size={32} color="#fff" />
             <Text style={styles.dashTitle}>Inventory</Text>
           </TouchableOpacity>
-        </View>
-        <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.stickerCard]} onPress={() => router.push('/price-stickers')}>
             <Ionicons name="pricetag-outline" size={32} color="#fff" />
             <Text style={styles.dashTitle}>Price Stickers</Text>
@@ -318,13 +325,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center', height: 100,
   },
   dashTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginTop: 8, textAlign: 'center' },
+
+  // New varied colors (all different)
   reportCard: { backgroundColor: '#10b981' },
   settingsCard: { backgroundColor: '#2563eb' },
   supplierDebtCard: { backgroundColor: '#8b5cf6' },
-  warrantyCard: { backgroundColor: '#d97706' },
-  catPrinterCard: { backgroundColor: '#0ea5e9' },
-  inventoryCard: { backgroundColor: '#0f766e' },
-  stickerCard: { backgroundColor: '#9333ea' },
+  reminderCard: { backgroundColor: '#f97316' },  // Orange
+  warrantyCard: { backgroundColor: '#06b6d4' },  // Cyan
+  catPrinterCard: { backgroundColor: '#8b5cf6' },
+  inventoryCard: { backgroundColor: '#059669' },
+  stickerCard: { backgroundColor: '#db2777' },   // Pink
 
   modalOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end',
