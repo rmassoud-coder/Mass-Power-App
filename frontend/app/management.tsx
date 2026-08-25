@@ -8,12 +8,15 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getReport, getWeeklyCashSummary } from '../src/db/database';
 import { pushToCloud, pullFromCloud } from '../src/utils/dbSync';
+import { getBroadcastContacts, openWhatsAppBroadcast } from '../src/utils/whatsappHelper';
 
 export default function ManagementScreen() {
   const router = useRouter();
@@ -21,11 +24,16 @@ export default function ManagementScreen() {
   const [loading, setLoading] = useState(true);
   const [wagesInput, setWagesInput] = useState('');
 
+  // WhatsApp Broadcast State
+  const [broadcastVisible, setBroadcastVisible] = useState(false);
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [contacts, setContacts] = useState<{ name: string; phone: string }[]>([]);
+  const [contactsLoading, setContactsLoading] = useState(false);
+
   useEffect(() => {
     const loadFinances = async () => {
       try {
         setLoading(true);
-        // Just load data silently (we don't display it here anymore)
         await getWeeklyCashSummary();
       } catch (e) {
         console.warn("Failed to load finances:", e);
@@ -56,6 +64,42 @@ export default function ManagementScreen() {
     }
   };
 
+  const openBroadcast = async () => {
+    setBroadcastVisible(true);
+    setContactsLoading(true);
+    try {
+      const list = await getBroadcastContacts();
+      setContacts(list);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to load customer contacts.');
+    } finally {
+      setContactsLoading(false);
+    }
+  };
+
+  const confirmSend = (contact: { name: string; phone: string }) => {
+    if (!broadcastMessage.trim()) {
+      Alert.alert('Error', 'Please type a message first.');
+      return;
+    }
+    Alert.alert(
+      'Send WhatsApp?',
+      `Send message to ${contact.name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send',
+          onPress: async () => {
+            const res = await openWhatsAppBroadcast(contact.phone, broadcastMessage);
+            if (!res.ok) {
+              Alert.alert('Error', res.message || 'Failed to open WhatsApp.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -67,7 +111,6 @@ export default function ManagementScreen() {
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        
         {/* Cloud Sync */}
         <View style={styles.syncCard}>
           <Text style={styles.syncTitle}>Cloud Sync</Text>
@@ -91,6 +134,12 @@ export default function ManagementScreen() {
           </View>
         )}
 
+        {/* WhatsApp Broadcast Button */}
+        <TouchableOpacity style={styles.whatsappButton} onPress={openBroadcast}>
+          <Ionicons name="logo-whatsapp" size={24} color="#fff" />
+          <Text style={styles.whatsappButtonText}>Send Bulk WhatsApp</Text>
+        </TouchableOpacity>
+
         {/* 7-Button Grid */}
         <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.reportCard]} onPress={() => router.push('/report')}>
@@ -102,7 +151,6 @@ export default function ManagementScreen() {
             <Text style={styles.dashTitle}>Settings</Text>
           </TouchableOpacity>
         </View>
-
         <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.supplierDebtCard]} onPress={() => router.push('/supplier-debt')}>
             <Ionicons name="cash-outline" size={32} color="#fff" />
@@ -113,7 +161,6 @@ export default function ManagementScreen() {
             <Text style={styles.dashTitle}>Warranty Stickers</Text>
           </TouchableOpacity>
         </View>
-
         <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.catPrinterCard]} onPress={() => router.push('/cat-printer')}>
             <Ionicons name="print-outline" size={32} color="#fff" />
@@ -124,15 +171,57 @@ export default function ManagementScreen() {
             <Text style={styles.dashTitle}>Inventory</Text>
           </TouchableOpacity>
         </View>
-
         <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.stickerCard]} onPress={() => router.push('/price-stickers')}>
             <Ionicons name="pricetag-outline" size={32} color="#fff" />
             <Text style={styles.dashTitle}>Price Stickers</Text>
           </TouchableOpacity>
         </View>
-
       </ScrollView>
+
+      {/* WhatsApp Broadcast Modal */}
+      <Modal visible={broadcastVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="logo-whatsapp" size={24} color="#25D366" />
+              <Text style={styles.modalTitle}>Send Bulk WhatsApp</Text>
+              <TouchableOpacity onPress={() => setBroadcastVisible(false)}>
+                <Ionicons name="close" size={24} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={styles.messageInput}
+              placeholder="Type your offer/message here..."
+              multiline
+              value={broadcastMessage}
+              onChangeText={setBroadcastMessage}
+            />
+
+            <Text style={styles.contactsLabel}>Customers ({contacts.length})</Text>
+            {contactsLoading ? (
+              <ActivityIndicator color="#25D366" style={{ marginVertical: 20 }} />
+            ) : (
+              <FlatList
+                data={contacts}
+                keyExtractor={(item) => item.phone}
+                style={{ maxHeight: 300 }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity style={styles.contactRow} onPress={() => confirmSend(item)}>
+                    <Ionicons name="person-circle-outline" size={24} color="#25D366" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.contactName}>{item.name}</Text>
+                      <Text style={styles.contactPhone}>{item.phone}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="#64748b" />
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -165,6 +254,18 @@ const styles = StyleSheet.create({
   syncHint: { color: '#94a3b8', fontSize: 12, marginTop: 6 },
   loadingContainer: { alignItems: 'center', padding: 20, marginBottom: 16 },
   loadingText: { color: '#64748b', marginTop: 8 },
+
+  whatsappButton: {
+    backgroundColor: '#25D366',
+    borderRadius: 12,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  whatsappButtonText: { color: '#fff', fontSize: 16, fontWeight: '700', marginLeft: 8 },
+
   dashboardGrid: { flexDirection: 'row', gap: 12, marginBottom: 12 },
   dashCard: {
     flex: 1, borderRadius: 16, padding: 20, alignItems: 'center',
@@ -178,4 +279,27 @@ const styles = StyleSheet.create({
   catPrinterCard: { backgroundColor: '#0ea5e9' },
   inventoryCard: { backgroundColor: '#0f766e' },
   stickerCard: { backgroundColor: '#9333ea' },
+
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 24, maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16,
+  },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1e293b', flex: 1, marginLeft: 8 },
+  messageInput: {
+    backgroundColor: '#f8fafc', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0',
+    padding: 16, fontSize: 16, minHeight: 100, textAlignVertical: 'top', marginBottom: 16,
+  },
+  contactsLabel: { fontSize: 14, fontWeight: '700', color: '#1e293b', marginBottom: 8 },
+  contactRow: {
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: '#f1f5f9',
+  },
+  contactName: { fontSize: 16, fontWeight: '600', color: '#1e293b' },
+  contactPhone: { fontSize: 13, color: '#64748b', marginTop: 2 },
 });
