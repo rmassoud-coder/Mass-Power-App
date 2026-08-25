@@ -139,7 +139,7 @@ export function getRasterizerHostHtml(): string {
         case 'space': h = Math.max(0, op.h || 8); break;
         case 'checkbox': op.__size = op.size ? Math.round(op.size * 1.1) + 2 : DESIGN.checkboxSize; op.__font = fontFor(op.__size, true, 'sans'); h = Math.max(26, op.__size) + 8; break;
         case 'footer': op.__size = op.size ? Math.round(op.size * 1.1) + 2 : DESIGN.smallSize; op.__font = fontFor(op.__size, false, 'sans'); h = op.__size + 8; break;
-        case 'image': op.__h = op.__imgH || 80; h = op.__h; break;
+        case 'image': op.__h = (op.__imgH || 80) + 24; h = op.__h; break; // 🔥 ADDED +24 FOR 3 BLANK LINES
         default: h = 0;
       }
       op.__h = h;
