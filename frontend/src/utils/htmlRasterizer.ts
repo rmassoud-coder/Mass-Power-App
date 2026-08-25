@@ -139,7 +139,7 @@ export function getRasterizerHostHtml(): string {
         case 'space': h = Math.max(0, op.h || 8); break;
         case 'checkbox': op.__size = op.size ? Math.round(op.size * 1.1) + 2 : DESIGN.checkboxSize; op.__font = fontFor(op.__size, true, 'sans'); h = Math.max(26, op.__size) + 8; break;
         case 'footer': op.__size = op.size ? Math.round(op.size * 1.1) + 2 : DESIGN.smallSize; op.__font = fontFor(op.__size, false, 'sans'); h = op.__size + 8; break;
-        case 'image': op.__h = (op.__imgH || 80) + 24; h = op.__h; break; // 🔥 ADDED +24 FOR 3 BLANK LINES
+        case 'image': op.__h = op.__imgH || 80; h = op.__h; break;
         default: h = 0;
       }
       op.__h = h;
@@ -226,7 +226,11 @@ export function getRasterizerHostHtml(): string {
             var imgWidth = op.__imgW || op.width || 60;
             ctx.drawImage(op.__img, (width - imgWidth) / 2, y, imgWidth, op.__imgH);
           }
-          y += op.__h; break;
+          y += op.__h;
+          // 🔥 ADD 3 REAL BLANK LINES (24px total, 8px each)
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, y, width, 24);
+          y += 24; break;
         case 'footer':
           ctx.fillStyle = '#000'; ctx.font = op.__font; ctx.textBaseline = 'top'; ctx.textAlign = 'center';
           boldText(ctx, String(op.text || ''), width / 2, y, 1.2); y += op.__h; break;
