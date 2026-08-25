@@ -21,6 +21,7 @@ export default function SupplierDebtScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [wagesInput, setWagesInput] = useState('');
+  const [goodsInput, setGoodsInput] = useState('');
   const [summary, setSummary] = useState<{ 
     todayRevenue: number;
     todayOutsource: number;
@@ -29,7 +30,9 @@ export default function SupplierDebtScreen() {
     totalDebt: number; 
     paidToday: number;
     paidWeek: number;
-    wages: number; // <-- ADDED
+    wages: number;
+    todayGoods: number;
+    weekGoods: number;
   }>({
     todayRevenue: 0,
     todayOutsource: 0,
@@ -38,7 +41,9 @@ export default function SupplierDebtScreen() {
     totalDebt: 0,
     paidToday: 0,
     paidWeek: 0,
-    wages: 0, // <-- ADDED
+    wages: 0,
+    todayGoods: 0,
+    weekGoods: 0,
   });
   const router = useRouter();
 
@@ -81,7 +86,9 @@ export default function SupplierDebtScreen() {
         totalDebt: cashSummary.totalOutstandingDebt,
         paidToday: cashSummary.paidTowardsDebtToday,
         paidWeek: cashSummary.paidTowardsDebtWeek,
-        wages: cashSummary.wages, // <-- ADDED
+        wages: cashSummary.wages,
+        todayGoods: 0,
+        weekGoods: 0,
       });
     } catch (error) {
       Alert.alert('Error', 'Failed to load supplier data.');
@@ -108,6 +115,23 @@ export default function SupplierDebtScreen() {
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to save wages.');
     }
+  };
+
+  const handleSaveGoods = async () => {
+    const amount = parseFloat(goodsInput);
+    if (isNaN(amount) || amount < 0) {
+      Alert.alert('Error', 'Please enter a valid goods amount.');
+      return;
+    }
+    // 🔥 Update summary immediately (for now, we store locally)
+    setSummary(prev => ({
+      ...prev,
+      todayGoods: amount,
+      weekGoods: prev.weekGoods + amount,
+    }));
+    setGoodsInput('');
+    Alert.alert('Success', 'Goods Bought saved!');
+    loadData(); // Reload
   };
 
   const handleEditPress = (id: string) => {
@@ -221,6 +245,18 @@ export default function SupplierDebtScreen() {
             <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${summary.wages.toFixed(2)}</Text>
           </View>
 
+          {/* Goods Bought Today */}
+          <View style={styles.cashRow}>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]}>− Goods Bought Today</Text>
+            <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${summary.todayGoods.toFixed(2)}</Text>
+          </View>
+
+          {/* Goods Bought This Week */}
+          <View style={styles.cashRow}>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]}>− Goods Bought (WTD)</Text>
+            <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${summary.weekGoods.toFixed(2)}</Text>
+          </View>
+
           <View style={styles.cashDivider} />
 
           {/* Net Cash Drawer */}
@@ -228,13 +264,13 @@ export default function SupplierDebtScreen() {
             <Text style={[styles.cashLabel, { fontWeight: '800', color: '#0f172a' }]}>
               Net Cash Drawer (Today)
             </Text>
-            <Text style={[styles.cashValue, { fontWeight: '900', color: (summary.wtdIncome - summary.wtdOutsource - summary.paidWeek - summary.wages) >= 0 ? '#059669' : '#dc2626' }]}>
-              ${(summary.wtdIncome - summary.wtdOutsource - summary.paidWeek - summary.wages).toFixed(2)}
+            <Text style={[styles.cashValue, { fontWeight: '900', color: (summary.wtdIncome - summary.wtdOutsource - summary.paidWeek - summary.wages - summary.weekGoods) >= 0 ? '#059669' : '#dc2626' }]}>
+              ${(summary.wtdIncome - summary.wtdOutsource - summary.paidWeek - summary.wages - summary.weekGoods).toFixed(2)}
             </Text>
           </View>
         </View>
 
-        {/* Wages Input Box - ADDED BELOW CASH CARD */}
+        {/* Wages Input Box */}
         <View style={styles.wagesBox}>
           <Text style={styles.wagesTitle}>Save Weekly Wages</Text>
           <View style={styles.wagesInputRow}>
@@ -248,6 +284,24 @@ export default function SupplierDebtScreen() {
             />
             <TouchableOpacity style={styles.saveWagesBtn} onPress={handleSaveWages}>
               <Text style={styles.saveWagesBtnText}>Save</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Goods Bought Input Box */}
+        <View style={styles.wagesBox}>
+          <Text style={styles.wagesTitle}>Goods Bought (Items)</Text>
+          <View style={styles.wagesInputRow}>
+            <Text style={styles.currencySymbol}>$</Text>
+            <TextInput
+              style={styles.wagesInput}
+              placeholder="0.00"
+              value={goodsInput}
+              onChangeText={setGoodsInput}
+              keyboardType="decimal-pad"
+            />
+            <TouchableOpacity style={styles.saveGoodsBtn} onPress={handleSaveGoods}>
+              <Text style={styles.saveGoodsBtnText}>Save</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -369,7 +423,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#c4b5fd',
     marginVertical: 8,
   },
-  // New Wages Box Styles
   wagesBox: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -409,6 +462,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveWagesBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  saveGoodsBtn: {
+    backgroundColor: '#f97316',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  saveGoodsBtnText: {
     color: '#fff',
     fontSize: 15,
     fontWeight: '700',
