@@ -226,7 +226,9 @@ export function getRasterizerHostHtml(): string {
             var imgWidth = op.__imgW || op.width || 60;
             ctx.drawImage(op.__img, (width - imgWidth) / 2, y, imgWidth, op.__imgH);
           }
-          y += op.__h; break;
+          y += op.__h;
+          y += 24; // Add 3 empty lines (8px each) after logo
+          break;
         case 'footer':
           ctx.fillStyle = '#000'; ctx.font = op.__font; ctx.textBaseline = 'top'; ctx.textAlign = 'center';
           boldText(ctx, String(op.text || ''), width / 2, y, 1.2); y += op.__h; break;
@@ -303,8 +305,7 @@ export function getRasterizerHostHtml(): string {
     var shift = ({1:-10, 2:0, 3:10, 4:20, 5:30})[darkness] || 10;
     var threshold = 128 + shift;
 
-    // 🔥 FIX: Supersample 3x for quality, but keep width = 384
-    var scale = 3;
+    // 🔥 FIX: Use 5x5 neighborhood averaging for better thin stroke preservation
     var outW = w; // Keep original width
     var outH = h; // Keep original height
     var bw = new Uint8Array(outW * outH);
@@ -313,9 +314,9 @@ export function getRasterizerHostHtml(): string {
       for (var x = 0; x < outW; x++) {
         var sum = 0;
         var count = 0;
-        // Average 3x3 block for this pixel (with clamping for edges)
-        for (var oy = -1; oy <= 1; oy++) {
-          for (var ox = -1; ox <= 1; ox++) {
+        // Average 5x5 block for this pixel (radius = 2)
+        for (var oy = -2; oy <= 2; oy++) {
+          for (var ox = -2; ox <= 2; ox++) {
             var srcX = x + ox;
             var srcY = y + oy;
             if (srcX < 0 || srcX >= w || srcY < 0 || srcY >= h) continue;
