@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getReport, getWeeklyCashSummary, saveWeeklyWages } from '../src/db/database';
+import { getReport, getWeeklyCashSummary } from '../src/db/database';
 import { pushToCloud, pullFromCloud } from '../src/utils/dbSync';
 import { getBroadcastContacts, openWhatsAppBroadcast } from '../src/utils/whatsappHelper';
 
@@ -22,28 +22,12 @@ export default function ManagementScreen() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
-  const [wagesInput, setWagesInput] = useState('');
 
   // WhatsApp Broadcast State
   const [broadcastVisible, setBroadcastVisible] = useState(false);
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [contacts, setContacts] = useState<{ name: string; phone: string }[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
-
-  const handleSaveWages = async () => {
-    const amount = parseFloat(wagesInput);
-    if (isNaN(amount) || amount < 0) {
-      Alert.alert('Error', 'Please enter a valid wage amount.');
-      return;
-    }
-    try {
-      await saveWeeklyWages(amount);
-      setWagesInput('');
-      Alert.alert('Success', 'Wages saved!');
-    } catch (e) {
-      Alert.alert('Error', 'Failed to save wages.');
-    }
-  };
 
   useEffect(() => {
     const loadFinances = async () => {
@@ -148,24 +132,6 @@ export default function ManagementScreen() {
             <Text style={styles.loadingText}>Loading...</Text>
           </View>
         )}
-
-        {/* Wages Input */}
-        <View style={styles.wagesBox}>
-          <Text style={styles.wagesTitle}>Weekly Wages Paid</Text>
-          <View style={styles.wagesInputRow}>
-            <Text style={styles.currencySymbol}>$</Text>
-            <TextInput
-              style={styles.wagesInput}
-              placeholder="0.00"
-              value={wagesInput}
-              onChangeText={setWagesInput}
-              keyboardType="decimal-pad"
-            />
-            <TouchableOpacity style={styles.saveWagesBtn} onPress={handleSaveWages}>
-              <Text style={styles.saveWagesBtnText}>Save</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
 
         {/* WhatsApp Broadcast Button */}
         <TouchableOpacity style={styles.whatsappButton} onPress={openBroadcast}>
@@ -294,24 +260,6 @@ const styles = StyleSheet.create({
   syncHint: { color: '#94a3b8', fontSize: 12, marginTop: 6 },
   loadingContainer: { alignItems: 'center', padding: 20, marginBottom: 16 },
   loadingText: { color: '#64748b', marginTop: 8 },
-
-  wagesBox: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16,
-    borderWidth: 1, borderColor: '#e2e8f0',
-  },
-  wagesTitle: { fontSize: 16, fontWeight: '700', color: '#1e293b', marginBottom: 8 },
-  wagesInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  wagesInput: {
-    flex: 1, backgroundColor: '#f8fafc', borderRadius: 10, borderWidth: 1,
-    borderColor: '#e2e8f0', paddingHorizontal: 12, paddingVertical: 10, fontSize: 16,
-    color: '#1e293b',
-  },
-  currencySymbol: { fontSize: 16, fontWeight: '600', color: '#1e293b' },
-  saveWagesBtn: {
-    backgroundColor: '#10b981', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  saveWagesBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 
   whatsappButton: {
     backgroundColor: '#25D366', borderRadius: 12, paddingVertical: 14,
