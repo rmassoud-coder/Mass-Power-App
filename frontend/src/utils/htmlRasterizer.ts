@@ -225,12 +225,15 @@ export function getRasterizerHostHtml(): string {
           if (op.__img) {
             var imgWidth = op.__imgW || op.width || 60;
             ctx.drawImage(op.__img, (width - imgWidth) / 2, y, imgWidth, op.__imgH);
+            y += op.__imgH; // Move down by image height
+            // 🔥 REAL BLANK LINES: Draw white pixels right after the logo
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, y, width, 24); // 24px = 3 blank rows
+            y += 24; // Move down by 24px
+          } else {
+            y += op.__h;
           }
-          y += op.__h;
-          // 🔥 ADD 3 REAL BLANK LINES (24px total, 8px each)
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, y, width, 24);
-          y += 24; break;
+          break;
         case 'footer':
           ctx.fillStyle = '#000'; ctx.font = op.__font; ctx.textBaseline = 'top'; ctx.textAlign = 'center';
           boldText(ctx, String(op.text || ''), width / 2, y, 1.2); y += op.__h; break;
