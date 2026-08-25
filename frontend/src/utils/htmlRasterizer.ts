@@ -223,10 +223,10 @@ export function getRasterizerHostHtml(): string {
           y += op.__h; break;
         case 'image':
           if (op.__img) {
-            // 🔥 PUSH THE LOGO DOWN 3 LINES WITH INVISIBLE WHITE SPACE
+            // 🔥 DOUBLE THE SPACE: 48px = 6 blank rows before the logo
             ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, y, width, 24); // 24px = 3 blank lines
-            y += 24;
+            ctx.fillRect(0, y, width, 48);
+            y += 48;
 
             var imgWidth = op.__imgW || op.width || 60;
             ctx.drawImage(op.__img, (width - imgWidth) / 2, y, imgWidth, op.__imgH);
