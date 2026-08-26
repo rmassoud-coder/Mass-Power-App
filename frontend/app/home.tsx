@@ -214,7 +214,7 @@ export default function HomeScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        {/* 🔥 LOGO BESIDE AUTO SERVICES TEXT */}
+        {/* 🔥 LOGO BESIDE AUTO SERVICES TEXT + SYNC PILL */}
         <View style={styles.header}>
           <View style={styles.logoRow}>
             <Image
@@ -223,6 +223,10 @@ export default function HomeScreen() {
               resizeMode="contain"
             />
             <Text style={styles.headerSubtitle}>Auto Services</Text>
+          </View>
+          {/* 🔥 ADDED SYNC STATUS PILL HERE */}
+          <View style={{ marginTop: 6 }}>
+            <SyncStatusPill />
           </View>
         </View>
 
