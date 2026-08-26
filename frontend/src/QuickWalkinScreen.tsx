@@ -53,8 +53,12 @@ export default function QuickWalkinScreen() {
       return;
     }
 
-    // ✅ ALLOW $0 (Free service) - Removed the validation that blocked it!
+    // Otherwise, fallback to regular Walk-in Service
     const totalCost = parseFloat(cost) || 0;
+    if (totalCost <= 0) {
+      Alert.alert('خطأ', 'الرجاء إدخال سعر صحيح أو اختيار منتج.');
+      return;
+    }
 
     let partialPaidNumber = 0;
     if (isPartial) {
@@ -76,7 +80,7 @@ export default function QuickWalkinScreen() {
         customerName.trim() || undefined, // 🔥 NEW: Passing the name
         serviceDesc.trim() || 'Quick Walk-in Service',
         totalCost + productsSubtotal,
-        isPaid || isPartial,
+        isPaid || isPartial,          // <-- ✅ KEPT ORIGINAL LOGIC
         partialPaidNumber,
         parseFloat(outsourceCost) || 0
       );
