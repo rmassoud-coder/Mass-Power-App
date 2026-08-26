@@ -53,25 +53,16 @@ export default function QuickWalkinScreen() {
       return;
     }
 
-    // Otherwise, fallback to regular Walk-in Service
+    // ✅ ALLOW $0 (Free service) - Removed the validation that blocked it!
     const totalCost = parseFloat(cost) || 0;
-    if (totalCost <= 0) {
-      Alert.alert('خطأ', 'الرجاء إدخال سعر صحيح أو اختيار منتج.');
-      return;
-    }
 
     let partialPaidNumber = 0;
     if (isPartial) {
-      // 🔥 FIX: Accept $0 partial payment
       partialPaidNumber = parseFloat(partialAmount) || 0;
-      
-      // Only error if negative amount
       if (partialPaidNumber < 0) {
         Alert.alert('خطأ', 'المبلغ الجزئي لا يمكن أن يكون سالباً.');
         return;
       }
-      
-      // Only error if partial amount is greater than or equal to total
       if (partialPaidNumber >= totalCost) {
         Alert.alert('خطأ', 'يجب أن يكون المبلغ الجزئي أقل من التكلفة الإجمالية. استخدم "مدفوع" بدلاً من ذلك.');
         return;
