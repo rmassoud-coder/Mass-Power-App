@@ -61,17 +61,22 @@ export default function QuickWalkinScreen() {
     }
 
     let partialPaidNumber = 0;
-if (isPartial) {
-  partialPaidNumber = parseFloat(partialAmount) || 0;
-  if (partialPaidNumber < 0) {
-    Alert.alert('Error', 'Partial payment cannot be negative.');
-    return;
-  }
-  if (partialPaidNumber >= totalCost) {
-    Alert.alert('Error', 'Partial payment must be less than total cost. Use "Paid" instead.');
-    return;
-  }
-}
+    if (isPartial) {
+      // 🔥 FIX: Accept $0 partial payment
+      partialPaidNumber = parseFloat(partialAmount) || 0;
+      
+      // Only error if negative amount
+      if (partialPaidNumber < 0) {
+        Alert.alert('خطأ', 'المبلغ الجزئي لا يمكن أن يكون سالباً.');
+        return;
+      }
+      
+      // Only error if partial amount is greater than or equal to total
+      if (partialPaidNumber >= totalCost) {
+        Alert.alert('خطأ', 'يجب أن يكون المبلغ الجزئي أقل من التكلفة الإجمالية. استخدم "مدفوع" بدلاً من ذلك.');
+        return;
+      }
+    }
 
     setLoading(true);
     try {
