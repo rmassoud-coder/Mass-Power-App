@@ -57,17 +57,18 @@ export default function QuickWalkinScreen() {
     const totalCost = parseFloat(cost) || 0;
 
     let partialPaidNumber = 0;
-    if (isPartial) {
-      partialPaidNumber = parseFloat(partialAmount) || 0;
-      if (partialPaidNumber < 0) {
-        Alert.alert('خطأ', 'المبلغ الجزئي لا يمكن أن يكون سالباً.');
-        return;
-      }
-      if (partialPaidNumber >= totalCost) {
-        Alert.alert('خطأ', 'يجب أن يكون المبلغ الجزئي أقل من التكلفة الإجمالية. استخدم "مدفوع" بدلاً من ذلك.');
-        return;
-      }
-    }
+if (isPartial) {
+  partialPaidNumber = parseFloat(partialAmount) || 0;
+  if (partialPaidNumber < 0) {
+    Alert.alert('خطأ', 'المبلغ الجزئي لا يمكن أن يكون سالباً.');
+    return;
+  }
+  // ✅ CHANGE: Now allows $0 partial payment for $0 service
+  if (partialPaidNumber > totalCost) {
+    Alert.alert('خطأ', 'يجب أن يكون المبلغ الجزئي أقل من التكلفة الإجمالية. استخدم "مدفوع" بدلاً من ذلك.');
+    return;
+  }
+}
 
     setLoading(true);
     try {
