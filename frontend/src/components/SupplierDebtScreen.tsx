@@ -87,9 +87,9 @@ export default function SupplierDebtScreen() {
         totalDebt: cashSummary.totalOutstandingDebt,
         paidToday: cashSummary.paidTowardsDebtToday,
         paidWeek: cashSummary.paidTowardsDebtWeek,
-        wages: cashSummary.wages,
-        todayCashOut: cashSummary.wages, // Cash Out saved today (will split later)
-        weekCashOut: cashSummary.wages,  // Cash Out for the week
+        wages: cashSummary.weekWages,
+        todayCashOut: cashSummary.todayWages,  // ✅ NOW USES TODAY WAGES
+        weekCashOut: cashSummary.weekWages,    // ✅ NOW USES WEEK WAGES
       });
     } catch (error) {
       Alert.alert('Error', 'Failed to load supplier data.');
