@@ -2073,6 +2073,8 @@ export async function getWeeklyCashSummary(): Promise<{
   paidTowardsDebtToday: number;
   paidTowardsDebtWeek: number;
   wages: number;
+  todayWages: number;  // ✅ ADD THIS
+  weekWages: number;   // ✅ ADD THIS
   netDrawer: number;
 }> {
   const db = await getDb();
