@@ -36,6 +36,8 @@ export default function SupplierDebtScreen() {
     paidToday: number;
     paidWeek: number;
     wages: number;
+    todayCashOut: number;
+    weekCashOut: number;
   }>({
     todayRevenue: 0,
     todayOutsource: 0,
@@ -45,6 +47,8 @@ export default function SupplierDebtScreen() {
     paidToday: 0,
     paidWeek: 0,
     wages: 0,
+    todayCashOut: 0,
+    weekCashOut: 0,
   });
   const router = useRouter();
 
@@ -83,7 +87,9 @@ export default function SupplierDebtScreen() {
         totalDebt: cashSummary.totalOutstandingDebt,
         paidToday: cashSummary.paidTowardsDebtToday,
         paidWeek: cashSummary.paidTowardsDebtWeek,
-        wages: cashSummary.wages,
+        wages: cashSummary.weekWages,
+        todayCashOut: cashSummary.todayWages,  // ✅ FOR TODAY
+        weekCashOut: cashSummary.weekWages,    // ✅ FOR WEEK
       });
     } catch (error) {
       Alert.alert('Error', 'Failed to load supplier data.');
@@ -200,7 +206,7 @@ export default function SupplierDebtScreen() {
 
           <View style={styles.cashRow}>
             <Text style={[styles.cashLabel, { color: '#eab308' }]}>− Cash Out Today</Text>
-            <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${summary.wages.toFixed(2)}</Text>
+            <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${summary.todayCashOut.toFixed(2)}</Text>
           </View>
 
           <View style={styles.cashDivider} />
@@ -219,7 +225,7 @@ export default function SupplierDebtScreen() {
                     summary.todayRevenue -
                       summary.todayOutsource -
                       summary.paidToday -
-                      summary.wages >=
+                      summary.todayCashOut >=
                     0
                       ? '#059669'
                       : '#dc2626',
@@ -231,7 +237,7 @@ export default function SupplierDebtScreen() {
                 summary.todayRevenue -
                 summary.todayOutsource -
                 summary.paidToday -
-                summary.wages
+                summary.todayCashOut
               ).toFixed(2)}
             </Text>
           </View>
@@ -256,7 +262,7 @@ export default function SupplierDebtScreen() {
 
           <View style={styles.cashRow}>
             <Text style={[styles.cashLabel, { color: '#eab308' }]}>− Cash Out (Week)</Text>
-            <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${summary.wages.toFixed(2)}</Text>
+            <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${summary.weekCashOut.toFixed(2)}</Text>
           </View>
 
           <View style={styles.cashDivider} />
@@ -275,7 +281,7 @@ export default function SupplierDebtScreen() {
                     summary.wtdIncome -
                       summary.wtdOutsource -
                       summary.paidWeek -
-                      summary.wages >=
+                      summary.weekCashOut >=
                     0
                       ? '#059669'
                       : '#dc2626',
@@ -287,7 +293,7 @@ export default function SupplierDebtScreen() {
                 summary.wtdIncome -
                 summary.wtdOutsource -
                 summary.paidWeek -
-                summary.wages
+                summary.weekCashOut
               ).toFixed(2)}
             </Text>
           </View>
