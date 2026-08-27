@@ -197,6 +197,16 @@ export default function SupplierDebtScreen() {
             <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${summary.paidToday.toFixed(2)}</Text>
           </View>
 
+          {/* ✅ NEW: Net Cash Drawer (Today) */}
+          <View style={styles.cashRow}>
+            <Text style={[styles.cashLabel, { fontWeight: '800', color: '#0f172a' }]}>
+              Net Cash Drawer (Today)
+            </Text>
+            <Text style={[styles.cashValue, { fontWeight: '900', color: (summary.todayRevenue - summary.todayOutsource - summary.paidToday) >= 0 ? '#059669' : '#dc2626' }]}>
+              ${(summary.todayRevenue - summary.todayOutsource - summary.paidToday).toFixed(2)}
+            </Text>
+          </View>
+
           <View style={styles.cashDivider} />
 
           {/* Week-to-Date Section */}
@@ -223,10 +233,10 @@ export default function SupplierDebtScreen() {
 
           <View style={styles.cashDivider} />
 
-          {/* Net Cash Drawer */}
+          {/* ✅ CHANGED: Net Cash Drawer (Week) */}
           <View style={styles.cashRow}>
             <Text style={[styles.cashLabel, { fontWeight: '800', color: '#0f172a' }]}>
-              Net Cash Drawer (Today)
+              Net Cash Drawer (Week)
             </Text>
             <Text style={[styles.cashValue, { fontWeight: '900', color: (summary.wtdIncome - summary.wtdOutsource - summary.paidWeek - summary.wages) >= 0 ? '#059669' : '#dc2626' }]}>
               ${(summary.wtdIncome - summary.wtdOutsource - summary.paidWeek - summary.wages).toFixed(2)}
@@ -236,7 +246,7 @@ export default function SupplierDebtScreen() {
 
         {/* Cash Out Input Box */}
         <View style={styles.wagesBox}>
-          <Text style={styles.wagesTitle}>CashOut (Wages+Goods+Exp)</Text>
+          <Text style={styles.wagesTitle}>Cash Out (Wages+Goods+Exp)</Text>
           <View style={styles.wagesInputRow}>
             <Text style={styles.currencySymbol}>$</Text>
             <TextInput
