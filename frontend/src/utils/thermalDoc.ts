@@ -179,10 +179,62 @@ export function buildWarrantyStickerDoc(
 }
 
 // ===============================================================
-// 🔥 Placeholders
+// 🔥 FIXED HVAC STICKER LAYOUT (With Solid Black Top Bar)
+// ===============================================================
+export function buildHvacStickerDoc(
+  customer: Customer,
+  vehicle: Vehicle,
+  service: Service,
+  settings: AppSettings
+): ThermalDoc {
+  const ops: ThermalOp[] = [];
+  const brand = [vehicle.make, vehicle.model].filter(Boolean).join(' ').trim().toUpperCase();
+
+  // 🔥 DUMMY BLACK BAR: Pushes the sticker down and warms the print head.
+  const blackBarBase64 = "iVBORw0KGgoAAAANSUhEUgAAAYAAAAAKCAYAAACL8uCjAAAAF0lEQVR42mNkYGBoYmBg+M8ABYx0NTU1AEgNBEzwyFwzAAAAAElFTkSuQmCC";
+  ops.push({ t: 'image', url: `data:image/png;base64,${blackBarBase64}`, width: 384 });
+  ops.push({ t: 'space', h: 4 });
+
+  const logoUrl = "https://rmassoud-coder.github.io/Mass-Power-App/vehicle%20profiles/mass-power-logo.png";
+  ops.push({ t: 'image', url: logoUrl, width: 143 });
+  ops.push({ t: 'space', h: 12 });
+
+  // Shop Name
+  ops.push({ t: 'shop_title', text: (settings.garageName || 'Mass Power Auto').toUpperCase() });
+  ops.push({ t: 'divider', style: 'solid', thick: 3 });
+  ops.push({ t: 'space', h: 6 });
+
+  // Vehicle Info
+  ops.push({ t: 'header', text: brand, size: 32, letterSpacing: 4 });
+  ops.push({ t: 'divider', style: 'solid', thick: 3 });
+  ops.push({ t: 'space', h: 8 });
+
+  // Main Title
+  ops.push({ t: 'header', text: 'HVAC SERVICE STICKER', size: 16, letterSpacing: 2 });
+  ops.push({ t: 'divider', style: 'dashed' });
+  ops.push({ t: 'space', h: 10 });
+
+  // HVAC Details
+  if (service.hvac_freon_date) ops.push({ t: 'label_value', label: 'FREON DATE:', value: fmtDate(service.hvac_freon_date) });
+  if (service.hvac_leak_tested) ops.push({ t: 'label_value', label: 'LEAK TESTED:', value: 'YES' });
+  
+  ops.push({ t: 'space', h: 6 });
+  ops.push({ t: 'divider', style: 'dashed' });
+  ops.push({ t: 'space', h: 6 });
+  ops.push({ t: 'checkbox', checked: !!service.hvac_leak_tested, label: 'LEAK TESTED', size: 16 });
+  
+  // Footer
+  ops.push({ t: 'space', h: 10 });
+  ops.push({ t: 'divider', style: 'solid', thick: 2 });
+  ops.push({ t: 'footer', text: `${service.created_at.split('T')[0]}`, size: 12 });
+
+  return { ops, frame: true, feedRows: 0 };
+}
+
+// ===============================================================
+// 🔥 Placeholders (Kept as-is for other features)
 // ===============================================================
 
-export function buildHvacStickerDoc(...args: any[]): ThermalDoc { return { ops: [], feedRows: 0 }; }
 export function buildThermalReceiptDoc(...args: any[]): ThermalDoc { return { ops: [], feedRows: 0 }; }
 export function buildCombinedInvoiceDoc(...args: any[]): ThermalDoc { return { ops: [], feedRows: 0 }; }
 export function buildPriceStickersDoc(...args: any[]): ThermalDoc { return { ops: [], feedRows: 0 }; }
