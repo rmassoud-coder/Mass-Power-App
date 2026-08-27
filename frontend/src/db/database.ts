@@ -2150,7 +2150,7 @@ try {
 } catch (e) {
   weekWages = 0;
 }
-  const netDrawer = revenue - paidToday - wages;
+const netDrawer = revenue - paidToday - weekWages;
 
   return {
   revenue,
