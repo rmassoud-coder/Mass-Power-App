@@ -1867,21 +1867,19 @@ export async function saveWeeklyWages(amount: number): Promise<void> {
   const db = await getDb();
   const now = new Date().toISOString();
   
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - diffToMonday);
-  const mondayStr = monday.toISOString().slice(0, 10);
+  // ✅ Use TODAY's date, not Monday
+  const todayStr = new Date().toISOString().slice(0, 10);
 
+  // ✅ Delete ONLY today's entry (so it replaces, not adds)
   await db.runAsync(
-    `DELETE FROM wages_paid WHERE DATE(date) >= ? AND DATE(date) <= ?`,
-    [mondayStr, mondayStr]
+    `DELETE FROM wages_paid WHERE DATE(date) = ?`,
+    [todayStr]
   );
 
+  // ✅ Insert with TODAY's date
   await db.runAsync(
     `INSERT INTO wages_paid (date, amount, created_at) VALUES (?, ?, ?)`,
-    [mondayStr, amount, now]
+    [todayStr, amount, now]
   );
 }
 export async function createQuickWalkinService(
@@ -2125,23 +2123,42 @@ export async function getWeeklyCashSummary(): Promise<{
     paidWeek = 0;
   }
 
-  const wagesResult = await db.getFirstAsync<{ total: number }>(
+  // ✅ Today's Cash Out (wages + goods)
+let todayWages = 0;
+try {
+  const todayWagesResult = await db.getFirstAsync<{ total: number }>(
+    `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid 
+     WHERE DATE(date) = ?`,
+    [todayStr]
+  );
+  todayWages = todayWagesResult?.total || 0;
+} catch (e) {
+  todayWages = 0;
+}
+
+// ✅ Week's Cash Out (wages + goods) (Mon - Today)
+let weekWages = 0;
+try {
+  const weekWagesResult = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid 
      WHERE DATE(date) >= ? AND DATE(date) <= ?`,
     [mondayStr, todayStr]
   );
-  const wages = wagesResult?.total || 0;
-
+  weekWages = weekWagesResult?.total || 0;
+} catch (e) {
+  weekWages = 0;
+}
   const netDrawer = revenue - paidToday - wages;
 
   return {
-    revenue,
-    totalOutstandingDebt: totalDebt,
-    paidTowardsDebtToday: paidToday,
-    paidTowardsDebtWeek: paidWeek,
-    wages,
-    netDrawer,
-  };
+  revenue,
+  totalOutstandingDebt: totalDebt,
+  paidTowardsDebtToday: paidToday,
+  paidTowardsDebtWeek: paidWeek,
+  wages: weekWages,       // ✅ Week value
+  todayWages: todayWages, // ✅ NEW: Today value
+  weekWages: weekWages,   // ✅ NEW: Week value
+};
 }
 
 export async function emergencyNukeDatabase() {
