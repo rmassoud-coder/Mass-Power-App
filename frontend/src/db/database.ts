@@ -1867,16 +1867,15 @@ export async function saveWeeklyWages(amount: number): Promise<void> {
   const db = await getDb();
   const now = new Date().toISOString();
   
-  // ✅ Use TODAY's date, not Monday
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  // ✅ Delete ONLY today's entry (so it replaces, not adds)
+  // Delete ONLY today's entry
   await db.runAsync(
     `DELETE FROM wages_paid WHERE DATE(date) = ?`,
     [todayStr]
   );
 
-  // ✅ Insert with TODAY's date
+  // Insert with TODAY's date
   await db.runAsync(
     `INSERT INTO wages_paid (date, amount, created_at) VALUES (?, ?, ?)`,
     [todayStr, amount, now]
