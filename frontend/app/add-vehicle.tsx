@@ -31,6 +31,65 @@ export default function AddVehicleScreen() {
   const [scanning, setScanning] = useState(false);
   const router = useRouter();
 
+  // Generate a unique dummy VIN based on input
+  const generateDummyVin = (input: string): string => {
+    // Remove any spaces and convert to uppercase
+    const cleanInput = input.trim().toUpperCase();
+    
+    // If it's already a valid 17-character VIN, return it
+    if (cleanInput.length === 17 && isValidVin(cleanInput)) {
+      return cleanInput;
+    }
+    
+    // If it's "1234" or similar short code, generate a proper VIN
+    if (cleanInput.length <= 10) {
+      // Format: [Year][Make Code][Model Code][Unique Identifier][Check Digit]
+      // Example: 1HGCM82633A123456
+      
+      // Generate timestamp-based unique identifier
+      const timestamp = Date.now().toString(36).toUpperCase();
+      const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+      
+      // Create a unique VIN with the user's input as a suffix
+      // Pad the input to ensure it's part of the VIN
+      const suffix = cleanInput.padStart(4, 'X').substring(0, 4);
+      
+      // Construct a valid-looking VIN (17 characters)
+      // Position 1-3: World Manufacturer Identifier (WMI)
+      // Position 4-8: Vehicle Descriptor Section (VDS)
+      // Position 9: Check Digit (we'll use a placeholder)
+      // Position 10: Model Year
+      // Position 11: Plant Code
+      // Position 12-17: Serial Number
+      
+      const wmi = '1HG'; // Honda-like WMI
+      const vds = 'CM826'; // Generic VDS
+      const checkDigit = '3'; // Placeholder
+      const modelYear = 'A'; // 2010
+      const plantCode = '3';
+      const serial = suffix + random.substring(0, 4);
+      
+      // Ensure total length is exactly 17 characters
+      const dummyVin = `${wmi}${vds}${checkDigit}${modelYear}${plantCode}${serial}`.substring(0, 17);
+      
+      return dummyVin;
+    }
+    
+    // If it's between 11-16 characters, pad to 17
+    if (cleanInput.length < 17) {
+      return cleanInput.padEnd(17, 'X');
+    }
+    
+    // If it's 17 characters but not valid, still use it
+    return cleanInput.substring(0, 17);
+  };
+
+  // Check if the input is a dummy VIN request (short code)
+  const isDummyRequest = (input: string): boolean => {
+    const clean = input.trim();
+    return clean.length <= 10 && /^[0-9]+$/.test(clean);
+  };
+
   const handleScanVIN = async () => {
     if (scanning) return;
     setScanning(true);
@@ -39,7 +98,6 @@ export default function AddVehicleScreen() {
       if (res.ok) {
         setVin(res.vin);
         if (res.candidates.length > 1) {
-          // Let user pick if multiple candidates found
           Alert.alert(
             'VIN Detected',
             `Best match: ${res.vin}\n\nOther possibilities:\n${res.candidates
@@ -55,10 +113,8 @@ export default function AddVehicleScreen() {
         }
         return;
       }
-      // Non-OK paths
-      if (res.reason === 'cancelled') return; // silent
+      if (res.reason === 'cancelled') return;
       if (res.reason === 'no_vin' && res.candidates && res.candidates.length > 0) {
-        // Offer the longest readable lines as fallbacks
         const choices = res.candidates
           .map((c) => c.toUpperCase().replace(/\s+/g, ''))
           .filter((c) => c.length >= 11 && c.length <= 19)
@@ -88,24 +144,44 @@ export default function AddVehicleScreen() {
   };
 
   const handleDecodeVIN = async () => {
-    if (!vin.trim()) {
+    const vinInput = vin.trim();
+    
+    if (!vinInput) {
       Alert.alert('Error', 'Please enter a VIN number');
       return;
     }
 
-    if (vin.length < 11 || vin.length > 17) {
+    // Check if it's a dummy VIN request
+    if (isDummyRequest(vinInput)) {
+      const dummyVin = generateDummyVin(vinInput);
+      setVin(dummyVin);
+      
+      // Auto-fill with generic values for dummy VIN
+      setMake('GENERIC');
+      setModel('VEHICLE');
+      setYear('2020');
+      
+      Alert.alert(
+        'Dummy VIN Generated',
+        `A unique VIN has been generated: ${dummyVin}\n\nMake and Model have been auto-filled as "GENERIC VEHICLE". You can edit them if needed.`,
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    // Normal VIN decoding
+    if (vinInput.length < 11 || vinInput.length > 17) {
       Alert.alert('Error', 'VIN must be between 11 and 17 characters');
       return;
     }
 
-    if (vin.length === 17 && !isValidVin(vin)) {
-      // Soft warning — still attempt decode (NHTSA may handle it)
+    if (vinInput.length === 17 && !isValidVin(vinInput)) {
       console.warn('VIN charset looks off — decoder may not return data.');
     }
 
     setDecoding(true);
     try {
-      const data = await decodeVin(vin);
+      const data = await decodeVin(vinInput);
       
       if (data.offline) {
         Alert.alert('No Internet', 'VIN decoder requires internet. Please enter vehicle details manually.');
@@ -125,8 +201,35 @@ export default function AddVehicleScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!vin.trim() || !make.trim() || !model.trim()) {
+    const vinInput = vin.trim();
+    
+    // Check if it's a dummy request before validation
+    if (isDummyRequest(vinInput)) {
+      // Auto-generate dummy VIN if user forgot to click decode
+      const dummyVin = generateDummyVin(vinInput);
+      setVin(dummyVin);
+      
+      // Auto-fill with generic values
+      if (!make.trim()) setMake('GENERIC');
+      if (!model.trim()) setModel('VEHICLE');
+      if (!year.trim()) setYear('2020');
+      
+      // Continue with submission
+      setTimeout(() => {
+        handleSubmit();
+      }, 100);
+      return;
+    }
+
+    // Validate required fields
+    if (!vinInput || !make.trim() || !model.trim()) {
       Alert.alert('Error', 'Please fill in all required fields');
+      return;
+    }
+
+    // Validate VIN length if it's not a dummy
+    if (!isDummyRequest(vinInput) && vinInput.length < 11) {
+      Alert.alert('Error', 'VIN must be at least 11 characters');
       return;
     }
 
@@ -134,7 +237,7 @@ export default function AddVehicleScreen() {
     try {
       await createVehicle(
         params.customerId as string,
-        vin.trim(),
+        vinInput,
         plateNumber.trim(),
         make.trim(),
         model.trim(),
@@ -142,7 +245,6 @@ export default function AddVehicleScreen() {
       );
       triggerAutoPush();
 
-      // Navigate back to customer detail
       router.replace({
         pathname: '/customer-detail',
         params: { customerId: params.customerId as string },
@@ -182,7 +284,7 @@ export default function AddVehicleScreen() {
                   <Ionicons name="barcode-outline" size={20} color="#666" style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="Enter VIN"
+                    placeholder="Enter VIN or short code (e.g., 1234)"
                     value={vin}
                     onChangeText={setVin}
                     autoCapitalize="characters"
@@ -205,7 +307,7 @@ export default function AddVehicleScreen() {
                   style={[styles.decodeButton, decoding && styles.decodeButtonDisabled]}
                   onPress={handleDecodeVIN}
                   disabled={decoding}
-                  accessibilityLabel="Decode VIN via NHTSA"
+                  accessibilityLabel="Decode VIN or generate dummy VIN"
                 >
                   {decoding ? (
                     <ActivityIndicator size="small" color="#2563eb" />
@@ -216,6 +318,7 @@ export default function AddVehicleScreen() {
               </View>
               <Text style={styles.hint}>
                 Tap the camera to scan the VIN, or the lightning icon to auto-fill from a typed VIN.
+                {'\n'}Type "1234" and tap the lightning icon to generate a dummy VIN.
               </Text>
             </View>
 
