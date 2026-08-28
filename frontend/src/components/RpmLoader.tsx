@@ -32,7 +32,6 @@ interface Props {
 const BG_DARK = '#0A0B0E';
 const TEXT_WHITE = '#FFFFFF';
 const TEXT_GRAY = '#8A95A8';
-const TEXT_DIM = '#4A5568';
 const BMW_ORANGE = '#FF5A00';
 const BMW_RED = '#CE1316';
 const BMW_LT_BLUE = '#50B4E6';
@@ -103,15 +102,15 @@ function SpeedGauge({
     );
   }
 
-  // Ticks with white labels
-  for (let i = 0; i <= 10; i++) {
-    const ratio = i / 10;
+  // Ticks with white labels - proper values 0, 40, 80, 120, 160, 200, 240
+  const tickValues = [0, 40, 80, 120, 160, 200, 240];
+  for (let i = 0; i < tickValues.length; i++) {
+    const ratio = i / (tickValues.length - 1);
     const angle = startAngle + ratio * (endAngle - startAngle);
     const inner = pt(cx, cy, r - 18, angle);
     const outer = pt(cx, cy, r - 10, angle);
     const label = pt(cx, cy, r - 30, angle);
-    const isMain = i % 2 === 0;
-    const val = Math.round((i / 10) * 240);
+    
     nodes.push(
       <Line
         key={`t${i}`}
@@ -119,26 +118,24 @@ function SpeedGauge({
         y1={inner.y}
         x2={outer.x}
         y2={outer.y}
-        stroke={isMain ? TEXT_WHITE : TEXT_GRAY}
-        strokeWidth={isMain ? 2.5 : 1}
+        stroke={TEXT_WHITE}
+        strokeWidth={2.5}
         strokeLinecap="round"
       />
     );
-    if (isMain) {
-      nodes.push(
-        <SvgText
-          key={`l${i}`}
-          x={label.x}
-          y={label.y + 4}
-          fill={TEXT_WHITE}
-          fontSize={10}
-          fontWeight="600"
-          textAnchor="middle"
-        >
-          {val}
-        </SvgText>
-      );
-    }
+    nodes.push(
+      <SvgText
+        key={`l${i}`}
+        x={label.x}
+        y={label.y + 4}
+        fill={TEXT_WHITE}
+        fontSize={10}
+        fontWeight="600"
+        textAnchor="middle"
+      >
+        {tickValues[i]}
+      </SvgText>
+    );
   }
 
   // Speed value - large white
@@ -229,15 +226,15 @@ function RpmGauge({
     );
   }
 
-  // Ticks with white labels
-  for (let i = 0; i <= 8; i++) {
-    const ratio = i / 8;
+  // Ticks with white labels - proper values 0, 1, 2, 3, 4, 5, 6, 7, 8
+  const tickValues = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+  for (let i = 0; i < tickValues.length; i++) {
+    const ratio = i / (tickValues.length - 1);
     const angle = startAngle - ratio * (startAngle - endAngle);
     const inner = pt(cx, cy, r - 18, angle);
     const outer = pt(cx, cy, r - 10, angle);
     const label = pt(cx, cy, r - 30, angle);
-    const isMain = i % 2 === 0;
-    const val = Math.round((i / 8) * 8);
+    
     nodes.push(
       <Line
         key={`t${i}`}
@@ -245,26 +242,24 @@ function RpmGauge({
         y1={inner.y}
         x2={outer.x}
         y2={outer.y}
-        stroke={isMain ? TEXT_WHITE : TEXT_GRAY}
-        strokeWidth={isMain ? 2.5 : 1}
+        stroke={TEXT_WHITE}
+        strokeWidth={2.5}
         strokeLinecap="round"
       />
     );
-    if (isMain) {
-      nodes.push(
-        <SvgText
-          key={`l${i}`}
-          x={label.x}
-          y={label.y + 4}
-          fill={TEXT_WHITE}
-          fontSize={10}
-          fontWeight="600"
-          textAnchor="middle"
-        >
-          {val}
-        </SvgText>
-      );
-    }
+    nodes.push(
+      <SvgText
+        key={`l${i}`}
+        x={label.x}
+        y={label.y + 4}
+        fill={TEXT_WHITE}
+        fontSize={10}
+        fontWeight="600"
+        textAnchor="middle"
+      >
+        {tickValues[i]}
+      </SvgText>
+    );
   }
 
   // RPM value - orange
@@ -299,7 +294,7 @@ function RpmGauge({
   return <>{nodes}</>;
 }
 
-// BMW G-Series Style Fuel Gauge
+// BMW G-Series Style Fuel Gauge - Fixed E/F labels
 function FuelGauge({
   cx,
   cy,
@@ -326,6 +321,7 @@ function FuelGauge({
       <Path d={bgPath} stroke="#1A2029" strokeWidth={4} fill="none" />
       <Path d={activePath} stroke={fuelColor} strokeWidth={4} fill="none" strokeLinecap="round" />
       
+      {/* E on left, F on right */}
       <SvgText x={pt(cx, cy, r + 16, startAngle).x} y={pt(cx, cy, r + 16, startAngle).y + 4} fill={TEXT_WHITE} fontSize={9} fontWeight="700" textAnchor="middle">
         E
       </SvgText>
@@ -395,7 +391,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
   const [displaySpeed, setDisplaySpeed] = useState(0);
   const [displayProgress, setDisplayProgress] = useState(0);
   const [engineOn, setEngineOn] = useState(false);
-  const [gear, setGear] = useState('N');
+  const [gear, setGear] = useState('DS');
   const [animationPhase, setAnimationPhase] = useState(0);
   const [fuelLevel, setFuelLevel] = useState(65);
   const [tempLevel, setTempLevel] = useState(90);
@@ -474,19 +470,19 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
     rpm.value = withSequence(rpmSequence);
   }, [rpm]);
 
-  // Gear sequence - NO DOWNSHIFT
+  // Gear sequence - show DS for sport mode
   useEffect(() => {
     const gearSequence = [
-      { time: 0, gear: 'N' },
-      { time: 600, gear: '1' },
-      { time: 2100, gear: '2' },
-      { time: 2500, gear: '2' },
-      { time: 4000, gear: '3' },
-      { time: 4400, gear: '3' },
-      { time: 5900, gear: '4' },
-      { time: 6300, gear: '4' },
-      { time: 7900, gear: '5' },
-      { time: 8300, gear: '5' },
+      { time: 0, gear: 'DS' },
+      { time: 600, gear: 'DS' },
+      { time: 2100, gear: 'DS' },
+      { time: 2500, gear: 'DS' },
+      { time: 4000, gear: 'DS' },
+      { time: 4400, gear: 'DS' },
+      { time: 5900, gear: 'DS' },
+      { time: 6300, gear: 'DS' },
+      { time: 7900, gear: 'DS' },
+      { time: 8300, gear: 'DS' },
     ];
 
     let currentIndex = 0;
@@ -496,7 +492,6 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
         currentIndex++;
       } else {
         clearInterval(interval);
-        // Hold at 5th gear then complete
         setTimeout(() => {
           if (onComplete) onComplete();
         }, 2000);
@@ -573,7 +568,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
         style={[styles.dashboard, { maxWidth: 480 }]}
         onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
       >
-        {/* Header - Fixed with full text */}
+        {/* Header - Full text */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={styles.headerTitle}>BMW LIVE COCKPIT PROFESSIONAL</Text>
@@ -635,7 +630,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
               value={displayRpm}
             />
 
-            {/* Center - Gear Indicator with D */}
+            {/* Center - Gear Indicator with DS */}
             <G>
               <Path
                 d={`M ${centerX - 40} ${centerY - 40} L ${centerX} ${centerY - 58} L ${centerX + 40} ${centerY - 40} L ${centerX} ${centerY - 22} Z`}
@@ -687,16 +682,16 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
               <SvgText
                 x={centerX}
                 y={centerY + 6}
-                fill={TEXT_WHITE}
-                fontSize={20}
+                fill={BMW_RED}
+                fontSize={18}
                 fontWeight="900"
                 textAnchor="middle"
               >
-                {gear === 'N' ? 'D' : gear}
+                {gear}
               </SvgText>
             </G>
 
-            {/* Fuel Gauge */}
+            {/* Fuel Gauge - Fixed E/F positions */}
             <FuelGauge
               cx={fuelX}
               cy={fuelTempY}
@@ -720,7 +715,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
           <Text style={styles.phaseDesc}>{phases[animationPhase]?.desc || ''}</Text>
         </View>
 
-        {/* Bottom Bar */}
+        {/* Bottom Bar - Added OIL back */}
         <View style={styles.bottomBar}>
           <View style={styles.barSection}>
             <Text style={styles.barLabel}>OIL</Text>
@@ -742,7 +737,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
           </View>
         </View>
 
-        {/* Settings */}
+        {/* Settings - Fixed with proper labels and color dots */}
         <View style={styles.settingsContainer}>
           <View style={styles.settingsRow}>
             <Text style={styles.settingsLabel}>Cockpit Layout Experience Theme</Text>
@@ -769,7 +764,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
           </View>
         </View>
 
-        {/* Status */}
+        {/* Status - Shows speed in center without duplication */}
         <View style={styles.statusBar}>
           <View style={styles.statusLeft}>
             <View style={[styles.bulb, engineOn ? styles.bulbOn : styles.bulbOff]} />
