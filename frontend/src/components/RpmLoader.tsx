@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, SafeAreaView, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, SafeAreaView } from 'react-native';
 import Animated, {
   useSharedValue,
   useDerivedValue,
@@ -315,33 +315,33 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600 }: 
   ];
 
   useEffect(() => {
-    // Longer animation with phase tracking
+    // DOUBLED ANIMATION DURATIONS - ALL TIMING VALUES ARE DOUBLED
     const animationSequence = withSequence(
-      // Phase 0: Chiseled Outer Shroud
-      withTiming(0.2, { duration: 1200, easing: Easing.out(Easing.cubic) }),
-      withTiming(0.3, { duration: 1000, easing: Easing.out(Easing.cubic) }),
+      // Phase 0: Chiseled Outer Shroud - DOUBLED from 1200/1000 to 2400/2000
+      withTiming(0.2, { duration: 2400, easing: Easing.out(Easing.cubic) }),
+      withTiming(0.3, { duration: 2000, easing: Easing.out(Easing.cubic) }),
       
-      // Phase 1: Reverse-Sweeping Tachometer
-      withTiming(0.5, { duration: 1200, easing: Easing.out(Easing.cubic) }),
-      withTiming(0.6, { duration: 1000, easing: Easing.out(Easing.cubic) }),
+      // Phase 1: Reverse-Sweeping Tachometer - DOUBLED from 1200/1000 to 2400/2000
+      withTiming(0.5, { duration: 2400, easing: Easing.out(Easing.cubic) }),
+      withTiming(0.6, { duration: 2000, easing: Easing.out(Easing.cubic) }),
       
-      // Phase 2: Multi-Segmented Display
-      withTiming(0.75, { duration: 1200, easing: Easing.out(Easing.cubic) }),
-      withTiming(0.8, { duration: 1000, easing: Easing.out(Easing.cubic) }),
+      // Phase 2: Multi-Segmented Display - DOUBLED from 1200/1000 to 2400/2000
+      withTiming(0.75, { duration: 2400, easing: Easing.out(Easing.cubic) }),
+      withTiming(0.8, { duration: 2000, easing: Easing.out(Easing.cubic) }),
       
-      // Phase 3: Signature Telemetry
-      withTiming(0.9, { duration: 1200, easing: Easing.out(Easing.cubic) }),
-      withTiming(0.85, { duration: 1000, easing: Easing.in(Easing.cubic) }),
+      // Phase 3: Signature Telemetry - DOUBLED from 1200/1000 to 2400/2000
+      withTiming(0.9, { duration: 2400, easing: Easing.out(Easing.cubic) }),
+      withTiming(0.85, { duration: 2000, easing: Easing.in(Easing.cubic) }),
       
-      // Phase 4: M Sport Mode
-      withTiming(0.95, { duration: 1200, easing: Easing.out(Easing.cubic) }),
-      withTiming(0.5, { duration: 1500, easing: Easing.in(Easing.cubic) }),
+      // Phase 4: M Sport Mode - DOUBLED from 1200/1500 to 2400/3000
+      withTiming(0.95, { duration: 2400, easing: Easing.out(Easing.cubic) }),
+      withTiming(0.5, { duration: 3000, easing: Easing.in(Easing.cubic) }),
       
-      // Hold at idle
-      withDelay(2000, withTiming(0.4, { duration: 500 })),
+      // Hold at idle - DOUBLED from 2000 to 4000
+      withDelay(4000, withTiming(0.4, { duration: 1000 })),
       
-      // Repeat cycle
-      withTiming(0.3, { duration: 1000 })
+      // Repeat cycle - DOUBLED from 1000 to 2000
+      withTiming(0.3, { duration: 2000 })
     );
 
     sweep.value = withRepeat(animationSequence, -1);
@@ -358,7 +358,6 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600 }: 
     runOnJS(setDisplaySpeed)(Math.round(progress * 240));
     runOnJS(setDisplayRpm)(Math.round(progress * 8 * 1000));
     
-    // Update phase based on progress
     const phaseIndex = Math.min(
       Math.floor(progress * 5),
       phases.length - 1
@@ -377,218 +376,216 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600 }: 
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={styles.pageContainer}>
-          <View
-            style={[styles.container, { maxWidth: 600 }]}
-            onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
-          >
-            {/* Header */}
-            <View style={styles.header}>
-              <View style={styles.headerLeft}>
-                <Text style={styles.headerTitle}>BMW LIVE COCKPIT PROFESSIONAL</Text>
-              </View>
-              <View style={styles.headerRight}>
-                <Text style={styles.mModeText}>M SPORT MODE</Text>
-                <View style={styles.mStripes}>
-                  <View style={[styles.stripe, { backgroundColor: M_BLUE }]} />
-                  <View style={[styles.stripe, { backgroundColor: M_PURPLE }]} />
-                  <View style={[styles.stripe, { backgroundColor: M_RED }]} />
-                </View>
-              </View>
+      <View style={styles.pageContainer}>
+        <View
+          style={[styles.container, { maxWidth: 600 }]}
+          onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <Text style={styles.headerTitle}>BMW LIVE COCKPIT PROFESSIONAL</Text>
             </View>
-
-            {/* Main Gauge Cluster */}
-            <View style={[styles.gaugeCluster, { width: gaugeWidth, height: gaugeHeight }]}>
-              <Svg width={gaugeWidth} height={gaugeHeight}>
-                <Defs>
-                  <LinearGradient id="clusterBg" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <Stop offset="0%" stopColor="#141820" />
-                    <Stop offset="100%" stopColor="#0A0B0E" />
-                  </LinearGradient>
-                  <RadialGradient id="glowEffect" cx="50%" cy="50%" r="50%">
-                    <Stop offset="0%" stopColor="#2A3448" stopOpacity="0.2" />
-                    <Stop offset="100%" stopColor="#0A0B0E" stopOpacity="0" />
-                  </RadialGradient>
-                </Defs>
-
-                {/* Background */}
-                <Rect
-                  x={0}
-                  y={0}
-                  width={gaugeWidth}
-                  height={gaugeHeight}
-                  rx={12}
-                  fill="url(#clusterBg)"
-                />
-
-                {/* Border glow */}
-                <Rect
-                  x={1}
-                  y={1}
-                  width={gaugeWidth - 2}
-                  height={gaugeHeight - 2}
-                  rx={11}
-                  fill="none"
-                  stroke="#2A3448"
-                  strokeWidth={0.5}
-                />
-
-                {/* Left Gauge - Speed */}
-                <SpeedGauge
-                  cx={leftX}
-                  cy={centerY}
-                  r={gaugeR}
-                  progress={displayProgress}
-                  value={displaySpeed}
-                />
-
-                {/* Right Gauge - RPM */}
-                <RpmGauge
-                  cx={rightX}
-                  cy={centerY}
-                  r={gaugeR}
-                  progress={displayProgress}
-                  value={displayRpm}
-                />
-
-                {/* Center - Gear Indicator */}
-                <G>
-                  {/* Diamond border */}
-                  <Path
-                    d={`M ${centerX - 45} ${centerY - 45} L ${centerX} ${centerY - 65} L ${centerX + 45} ${centerY - 45} L ${centerX} ${centerY - 25} Z`}
-                    stroke="#2A3448"
-                    strokeWidth={0.5}
-                    fill="none"
-                    opacity={0.5}
-                  />
-                  <Path
-                    d={`M ${centerX - 45} ${centerY + 45} L ${centerX} ${centerY + 65} L ${centerX + 45} ${centerY + 45} L ${centerX} ${centerY + 25} Z`}
-                    stroke="#2A3448"
-                    strokeWidth={0.5}
-                    fill="none"
-                    opacity={0.5}
-                  />
-                  <Path
-                    d={`M ${centerX - 65} ${centerY} L ${centerX - 45} ${centerY - 45} L ${centerX - 25} ${centerY} L ${centerX - 45} ${centerY + 45} Z`}
-                    stroke="#2A3448"
-                    strokeWidth={0.5}
-                    fill="none"
-                    opacity={0.5}
-                  />
-                  <Path
-                    d={`M ${centerX + 65} ${centerY} L ${centerX + 45} ${centerY - 45} L ${centerX + 25} ${centerY} L ${centerX + 45} ${centerY + 45} Z`}
-                    stroke="#2A3448"
-                    strokeWidth={0.5}
-                    fill="none"
-                    opacity={0.5}
-                  />
-
-                  {/* Center circle */}
-                  <Circle
-                    cx={centerX}
-                    cy={centerY}
-                    r={34}
-                    fill="#0A0B0E"
-                    stroke="#2A3448"
-                    strokeWidth={1.5}
-                  />
-                  <Circle
-                    cx={centerX}
-                    cy={centerY}
-                    r={30}
-                    fill="none"
-                    stroke="#3A4A5A"
-                    strokeWidth={0.5}
-                    opacity={0.5}
-                  />
-
-                  {/* Gear display */}
-                  <SvgText
-                    x={centerX}
-                    y={centerY + 7}
-                    fill={TEXT_WHITE}
-                    fontSize={24}
-                    fontWeight="900"
-                    textAnchor="middle"
-                  >
-                    D
-                  </SvgText>
-                </G>
-              </Svg>
-            </View>
-
-            {/* Phase Description */}
-            <View style={styles.phaseContainer}>
-              <Text style={styles.phaseTitle}>{phases[currentPhase]?.label || ''}</Text>
-              <Text style={styles.phaseDesc}>{phases[currentPhase]?.desc || ''}</Text>
-            </View>
-
-            {/* Bottom Bar */}
-            <View style={styles.bottomBar}>
-              <View style={styles.barSection}>
-                <Text style={styles.barLabel}>FUEL</Text>
-                <View style={styles.barTrack}>
-                  <View style={[styles.barFill, { width: '65%', backgroundColor: BMW_ORANGE }]} />
-                </View>
+            <View style={styles.headerRight}>
+              <Text style={styles.mModeText}>M SPORT MODE</Text>
+              <View style={styles.mStripes}>
+                <View style={[styles.stripe, { backgroundColor: M_BLUE }]} />
+                <View style={[styles.stripe, { backgroundColor: M_PURPLE }]} />
+                <View style={[styles.stripe, { backgroundColor: M_RED }]} />
               </View>
-
-              <View style={styles.barSection}>
-                <Text style={styles.barLabel}>TEMP</Text>
-                <View style={styles.barTrack}>
-                  <View style={[styles.barFill, { width: '75%', backgroundColor: GREEN }]} />
-                </View>
-              </View>
-
-              <View style={styles.barSection}>
-                <Text style={styles.barLabel}>OIL</Text>
-                <View style={styles.barTrack}>
-                  <View style={[styles.barFill, { width: '85%', backgroundColor: BMW_LT_BLUE }]} />
-                </View>
-              </View>
-            </View>
-
-            {/* Settings / Status */}
-            <View style={styles.settingsContainer}>
-              <View style={styles.settingsRow}>
-                <Text style={styles.settingsLabel}>Cockpit Layout Experience Theme</Text>
-                <View style={styles.themeIndicators}>
-                  <View style={[styles.themeDot, { backgroundColor: BMW_RED }]} />
-                  <View style={[styles.themeDot, { backgroundColor: BMW_ORANGE }]} />
-                  <View style={[styles.themeDot, { backgroundColor: BMW_LT_BLUE }]} />
-                  <View style={[styles.themeDot, { backgroundColor: GREEN }]} />
-                </View>
-              </View>
-              <View style={styles.settingsRow}>
-                <Text style={styles.settingsLabel}>M Performance</Text>
-                <View style={styles.performanceIndicators}>
-                  <Text style={styles.performanceText}>Red</Text>
-                  <View style={styles.performanceDivider} />
-                  <Text style={styles.performanceText}>Comfort</Text>
-                  <View style={styles.performanceDivider} />
-                  <Text style={styles.performanceText}>Blue</Text>
-                  <View style={styles.performanceDivider} />
-                  <Text style={styles.performanceText}>Eco Pro</Text>
-                  <View style={styles.performanceDivider} />
-                  <Text style={styles.performanceText}>Green</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Status */}
-            <View style={styles.statusBar}>
-              <View style={styles.statusLeft}>
-                <View style={[styles.bulb, engineOn ? styles.bulbOn : styles.bulbOff]} />
-                <Text style={[styles.statusText, { color: engineOn ? GREEN : TEXT_GRAY }]}>
-                  {engineOn ? 'ENGINE ON' : 'IGNITION'}
-                </Text>
-              </View>
-              <Text style={styles.centerText}>{label}</Text>
-              <Text style={styles.rightText}>12,847 km</Text>
             </View>
           </View>
+
+          {/* Main Gauge Cluster */}
+          <View style={[styles.gaugeCluster, { width: gaugeWidth, height: gaugeHeight }]}>
+            <Svg width={gaugeWidth} height={gaugeHeight}>
+              <Defs>
+                <LinearGradient id="clusterBg" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <Stop offset="0%" stopColor="#141820" />
+                  <Stop offset="100%" stopColor="#0A0B0E" />
+                </LinearGradient>
+                <RadialGradient id="glowEffect" cx="50%" cy="50%" r="50%">
+                  <Stop offset="0%" stopColor="#2A3448" stopOpacity="0.2" />
+                  <Stop offset="100%" stopColor="#0A0B0E" stopOpacity="0" />
+                </RadialGradient>
+              </Defs>
+
+              {/* Background */}
+              <Rect
+                x={0}
+                y={0}
+                width={gaugeWidth}
+                height={gaugeHeight}
+                rx={12}
+                fill="url(#clusterBg)"
+              />
+
+              {/* Border glow */}
+              <Rect
+                x={1}
+                y={1}
+                width={gaugeWidth - 2}
+                height={gaugeHeight - 2}
+                rx={11}
+                fill="none"
+                stroke="#2A3448"
+                strokeWidth={0.5}
+              />
+
+              {/* Left Gauge - Speed */}
+              <SpeedGauge
+                cx={leftX}
+                cy={centerY}
+                r={gaugeR}
+                progress={displayProgress}
+                value={displaySpeed}
+              />
+
+              {/* Right Gauge - RPM */}
+              <RpmGauge
+                cx={rightX}
+                cy={centerY}
+                r={gaugeR}
+                progress={displayProgress}
+                value={displayRpm}
+              />
+
+              {/* Center - Gear Indicator */}
+              <G>
+                {/* Diamond border */}
+                <Path
+                  d={`M ${centerX - 45} ${centerY - 45} L ${centerX} ${centerY - 65} L ${centerX + 45} ${centerY - 45} L ${centerX} ${centerY - 25} Z`}
+                  stroke="#2A3448"
+                  strokeWidth={0.5}
+                  fill="none"
+                  opacity={0.5}
+                />
+                <Path
+                  d={`M ${centerX - 45} ${centerY + 45} L ${centerX} ${centerY + 65} L ${centerX + 45} ${centerY + 45} L ${centerX} ${centerY + 25} Z`}
+                  stroke="#2A3448"
+                  strokeWidth={0.5}
+                  fill="none"
+                  opacity={0.5}
+                />
+                <Path
+                  d={`M ${centerX - 65} ${centerY} L ${centerX - 45} ${centerY - 45} L ${centerX - 25} ${centerY} L ${centerX - 45} ${centerY + 45} Z`}
+                  stroke="#2A3448"
+                  strokeWidth={0.5}
+                  fill="none"
+                  opacity={0.5}
+                />
+                <Path
+                  d={`M ${centerX + 65} ${centerY} L ${centerX + 45} ${centerY - 45} L ${centerX + 25} ${centerY} L ${centerX + 45} ${centerY + 45} Z`}
+                  stroke="#2A3448"
+                  strokeWidth={0.5}
+                  fill="none"
+                  opacity={0.5}
+                />
+
+                {/* Center circle */}
+                <Circle
+                  cx={centerX}
+                  cy={centerY}
+                  r={34}
+                  fill="#0A0B0E"
+                  stroke="#2A3448"
+                  strokeWidth={1.5}
+                />
+                <Circle
+                  cx={centerX}
+                  cy={centerY}
+                  r={30}
+                  fill="none"
+                  stroke="#3A4A5A"
+                  strokeWidth={0.5}
+                  opacity={0.5}
+                />
+
+                {/* Gear display */}
+                <SvgText
+                  x={centerX}
+                  y={centerY + 7}
+                  fill={TEXT_WHITE}
+                  fontSize={24}
+                  fontWeight="900"
+                  textAnchor="middle"
+                >
+                  D
+                </SvgText>
+              </G>
+            </Svg>
+          </View>
+
+          {/* Phase Description */}
+          <View style={styles.phaseContainer}>
+            <Text style={styles.phaseTitle}>{phases[currentPhase]?.label || ''}</Text>
+            <Text style={styles.phaseDesc}>{phases[currentPhase]?.desc || ''}</Text>
+          </View>
+
+          {/* Bottom Bar */}
+          <View style={styles.bottomBar}>
+            <View style={styles.barSection}>
+              <Text style={styles.barLabel}>FUEL</Text>
+              <View style={styles.barTrack}>
+                <View style={[styles.barFill, { width: '65%', backgroundColor: BMW_ORANGE }]} />
+              </View>
+            </View>
+
+            <View style={styles.barSection}>
+              <Text style={styles.barLabel}>TEMP</Text>
+              <View style={styles.barTrack}>
+                <View style={[styles.barFill, { width: '75%', backgroundColor: GREEN }]} />
+              </View>
+            </View>
+
+            <View style={styles.barSection}>
+              <Text style={styles.barLabel}>OIL</Text>
+              <View style={styles.barTrack}>
+                <View style={[styles.barFill, { width: '85%', backgroundColor: BMW_LT_BLUE }]} />
+              </View>
+            </View>
+          </View>
+
+          {/* Settings */}
+          <View style={styles.settingsContainer}>
+            <View style={styles.settingsRow}>
+              <Text style={styles.settingsLabel}>Cockpit Layout Experience Theme</Text>
+              <View style={styles.themeIndicators}>
+                <View style={[styles.themeDot, { backgroundColor: BMW_RED }]} />
+                <View style={[styles.themeDot, { backgroundColor: BMW_ORANGE }]} />
+                <View style={[styles.themeDot, { backgroundColor: BMW_LT_BLUE }]} />
+                <View style={[styles.themeDot, { backgroundColor: GREEN }]} />
+              </View>
+            </View>
+            <View style={styles.settingsRow}>
+              <Text style={styles.settingsLabel}>M Performance</Text>
+              <View style={styles.performanceIndicators}>
+                <Text style={styles.performanceText}>Red</Text>
+                <View style={styles.performanceDivider} />
+                <Text style={styles.performanceText}>Comfort</Text>
+                <View style={styles.performanceDivider} />
+                <Text style={styles.performanceText}>Blue</Text>
+                <View style={styles.performanceDivider} />
+                <Text style={styles.performanceText}>Eco Pro</Text>
+                <View style={styles.performanceDivider} />
+                <Text style={styles.performanceText}>Green</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Status */}
+          <View style={styles.statusBar}>
+            <View style={styles.statusLeft}>
+              <View style={[styles.bulb, engineOn ? styles.bulbOn : styles.bulbOff]} />
+              <Text style={[styles.statusText, { color: engineOn ? GREEN : TEXT_GRAY }]}>
+                {engineOn ? 'ENGINE ON' : 'IGNITION'}
+              </Text>
+            </View>
+            <Text style={styles.centerText}>{label}</Text>
+            <Text style={styles.rightText}>12,847 km</Text>
+          </View>
         </View>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -597,10 +594,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#000000',
-  },
-  scrollContainer: {
-    flexGrow: 1,
-    justifyContent: 'center',
   },
   pageContainer: {
     flex: 1,
