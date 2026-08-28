@@ -1,3 +1,4 @@
+// src/components/RpmLoader.tsx
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import Animated, {
@@ -301,6 +302,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
   const [engineOn, setEngineOn] = useState(false);
   const [gear, setGear] = useState('N');
   const [animationPhase, setAnimationPhase] = useState(0);
+  const [animationComplete, setAnimationComplete] = useState(false);
 
   const phases = [
     { label: 'CHISELED OUTER SHROUD', desc: 'Premium aluminum frame with precision engineering' },
@@ -311,104 +313,109 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
   ];
 
   useEffect(() => {
-    // SINGLE ACCELERATION SEQUENCE - 0 to 160 km/h in 8 seconds with gear shifts
+    // SMOOTH ACCELERATION SEQUENCE - 0 to 160 km/h in 8 seconds with gear shifts
     const accelerationSequence = withSequence(
       // Engine start - 0.5s
-      withTiming(0.01, { duration: 500, easing: Easing.out(Easing.cubic) }),
+      withTiming(0.02, { duration: 500, easing: Easing.out(Easing.cubic) }),
       
-      // 1st gear (0-40 km/h) - 1.2s
-      withTiming(0.17, { duration: 1200, easing: Easing.out(Easing.cubic) }),
+      // 1st gear (0-40 km/h) - 1.5s (smooth pull)
+      withTiming(0.17, { duration: 1500, easing: Easing.out(Easing.quad) }),
       
-      // Shift to 2nd - 0.3s
-      withTiming(0.15, { duration: 300, easing: Easing.in(Easing.cubic) }),
+      // Shift to 2nd - quick but smooth drop
+      withTiming(0.15, { duration: 400, easing: Easing.inOut(Easing.quad) }),
       
-      // 2nd gear (40-80 km/h) - 1.2s
-      withTiming(0.34, { duration: 1200, easing: Easing.out(Easing.cubic) }),
+      // 2nd gear (40-80 km/h) - 1.5s
+      withTiming(0.34, { duration: 1500, easing: Easing.out(Easing.quad) }),
       
-      // Shift to 3rd - 0.3s
-      withTiming(0.30, { duration: 300, easing: Easing.in(Easing.cubic) }),
+      // Shift to 3rd
+      withTiming(0.30, { duration: 400, easing: Easing.inOut(Easing.quad) }),
       
-      // 3rd gear (80-120 km/h) - 1.2s
-      withTiming(0.50, { duration: 1200, easing: Easing.out(Easing.cubic) }),
+      // 3rd gear (80-120 km/h) - 1.5s
+      withTiming(0.50, { duration: 1500, easing: Easing.out(Easing.quad) }),
       
-      // Shift to 4th - 0.3s
-      withTiming(0.45, { duration: 300, easing: Easing.in(Easing.cubic) }),
+      // Shift to 4th
+      withTiming(0.45, { duration: 400, easing: Easing.inOut(Easing.quad) }),
       
       // 4th gear (120-160 km/h) - 1.5s
-      withTiming(0.67, { duration: 1500, easing: Easing.out(Easing.cubic) }),
+      withTiming(0.67, { duration: 1500, easing: Easing.out(Easing.quad) }),
       
       // Hold at max - 1s
       withDelay(1000, withTiming(0.67, { duration: 1 })),
       
-      // Decelerate - 2s
-      withTiming(0.1, { duration: 2000, easing: Easing.in(Easing.cubic) }),
+      // Decelerate smoothly - 2.5s
+      withTiming(0.05, { duration: 2500, easing: Easing.inOut(Easing.quad) }),
       
       // Stop - 0.5s
-      withTiming(0, { duration: 500, easing: Easing.in(Easing.cubic) })
+      withTiming(0, { duration: 500, easing: Easing.in(Easing.quad) })
     );
 
     speed.value = withSequence(accelerationSequence);
   }, [speed]);
 
-  // RPM follows speed with gear shifts
+  // RPM follows speed with smooth gear shifts
   useEffect(() => {
     const rpmSequence = withSequence(
       // Start - idle
       withTiming(800, { duration: 500, easing: Easing.out(Easing.cubic) }),
       
-      // 1st gear
-      withTiming(6500, { duration: 1200, easing: Easing.out(Easing.cubic) }),
-      withTiming(4500, { duration: 300, easing: Easing.in(Easing.cubic) }),
+      // 1st gear - smooth climb to 6500
+      withTiming(6500, { duration: 1500, easing: Easing.out(Easing.quad) }),
+      // Shift drop to 4500
+      withTiming(4500, { duration: 400, easing: Easing.inOut(Easing.quad) }),
       
-      // 2nd gear
-      withTiming(6500, { duration: 1200, easing: Easing.out(Easing.cubic) }),
-      withTiming(4800, { duration: 300, easing: Easing.in(Easing.cubic) }),
+      // 2nd gear - smooth climb to 6500
+      withTiming(6500, { duration: 1500, easing: Easing.out(Easing.quad) }),
+      // Shift drop to 4800
+      withTiming(4800, { duration: 400, easing: Easing.inOut(Easing.quad) }),
       
-      // 3rd gear
-      withTiming(6500, { duration: 1200, easing: Easing.out(Easing.cubic) }),
-      withTiming(5200, { duration: 300, easing: Easing.in(Easing.cubic) }),
+      // 3rd gear - smooth climb to 6500
+      withTiming(6500, { duration: 1500, easing: Easing.out(Easing.quad) }),
+      // Shift drop to 5200
+      withTiming(5200, { duration: 400, easing: Easing.inOut(Easing.quad) }),
       
-      // 4th gear
-      withTiming(6200, { duration: 1500, easing: Easing.out(Easing.cubic) }),
+      // 4th gear - smooth climb to 6200
+      withTiming(6200, { duration: 1500, easing: Easing.out(Easing.quad) }),
       
-      // Hold
+      // Hold at 6200
       withDelay(1000, withTiming(6200, { duration: 1 })),
       
-      // Decelerate
-      withTiming(1500, { duration: 2000, easing: Easing.in(Easing.cubic) }),
+      // Decelerate smoothly
+      withTiming(1200, { duration: 2500, easing: Easing.inOut(Easing.quad) }),
       
-      // Stop
-      withTiming(800, { duration: 500, easing: Easing.in(Easing.cubic) })
+      // Return to idle
+      withTiming(800, { duration: 500, easing: Easing.in(Easing.quad) })
     );
 
     rpm.value = withSequence(rpmSequence);
   }, [rpm]);
 
-  // Gear changes - 12 second total animation
+  // Gear changes - realistic with smooth transitions
   useEffect(() => {
-    const gearTimings = [
+    // Realistic gear sequence: N → 1 → 2 → 3 → 4 → 3 → 2 → 1 → N
+    const gearSequence = [
+      { time: 0, gear: 'N' },
       { time: 600, gear: '1' },
-      { time: 1800, gear: '2' },
       { time: 2100, gear: '2' },
-      { time: 3300, gear: '3' },
-      { time: 3600, gear: '3' },
-      { time: 4800, gear: '4' },
-      { time: 5100, gear: '4' },
-      { time: 6600, gear: '4' },
-      { time: 7600, gear: '4' },
-      { time: 8600, gear: '3' },
-      { time: 9600, gear: '2' },
-      { time: 10600, gear: '1' },
-      { time: 11100, gear: 'N' },
+      { time: 2500, gear: '2' }, // Hold 2nd
+      { time: 4000, gear: '3' },
+      { time: 4400, gear: '3' }, // Hold 3rd
+      { time: 5900, gear: '4' },
+      { time: 6300, gear: '4' }, // Hold 4th
+      { time: 7400, gear: '4' }, // Still 4th during decel
+      { time: 8400, gear: '3' }, // Downshift
+      { time: 9400, gear: '2' }, // Downshift
+      { time: 10400, gear: '1' }, // Downshift
+      { time: 11100, gear: 'N' }, // Neutral
     ];
 
     let currentIndex = 0;
     const interval = setInterval(() => {
-      if (currentIndex < gearTimings.length) {
-        setGear(gearTimings[currentIndex].gear);
+      if (currentIndex < gearSequence.length - 1) {
+        setGear(gearSequence[currentIndex].gear);
         currentIndex++;
       } else {
         clearInterval(interval);
+        setAnimationComplete(true);
         // Notify completion
         setTimeout(() => {
           if (onComplete) onComplete();
@@ -434,7 +441,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
     runOnJS(setDisplaySpeed)(speedKmh);
     runOnJS(setDisplayRpm)(rpmDisplay);
     
-    // Update phase based on speed
+    // Update phase based on speed - smooth transitions
     let phaseIndex = 0;
     if (speedKmh > 140) phaseIndex = 4;
     else if (speedKmh > 100) phaseIndex = 3;
