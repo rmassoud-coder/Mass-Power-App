@@ -1,8 +1,7 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Image, Dimensions } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
-  useAnimatedStyle,
   useDerivedValue,
   withRepeat,
   withSequence,
@@ -11,259 +10,192 @@ import Animated, {
   Easing,
   runOnJS,
 } from 'react-native-reanimated';
-import Svg, { Circle, Path, G, Line, Text as SvgText, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
-import { MASS_POWER_LOGO_PNG_BASE64 } from '../utils/logoBase64';
+import Svg, {
+  Line,
+  Circle,
+  Text as SvgText,
+  Polygon,
+  G,
+} from 'react-native-svg';
 
 interface Props {
   label?: string;
   size?: number;
 }
 
-// BMW Live Cockpit Professional Colors
-const BMW_ORANGE = '#FF5A00';
-const BMW_RED = '#CE1316';
-const BMW_LT_BLUE = '#50B4E6';
-const BMW_DK_BLUE = '#0038A8';
 const BG_DARK = '#0A0D14';
+const PANEL = '#151B24';
 const TEXT_WHITE = '#FFFFFF';
 const TEXT_GRAY = '#8A9AAD';
+const SPEED_LOW = '#3A4A7A';
+const SPEED_HIGH = '#50B4E6';
+const RPM_LOW = '#5A2A2A';
+const RPM_HIGH = '#FF3B30';
+const GREEN = '#22C55E';
 const M_BLUE = '#0066B1';
-const M_RED = '#FF0000';
 const M_PURPLE = '#333366';
+const M_RED = '#FF0000';
+
+// polar -> cartesian, 0deg = straight up, clockwise positive
+function pt(cx: number, cy: number, r: number, deg: number) {
+  const rad = ((deg - 90) * Math.PI) / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+
+function GaugeArc({
+  cx,
+  cy,
+  r,
+  startAngle,
+  endAngle,
+  progress,
+  colorLow,
+  colorHigh,
+  segments = 36,
+}: {
+  cx: number;
+  cy: number;
+  r: number;
+  startAngle: number;
+  endAngle: number;
+  progress: number;
+  colorLow: string;
+  colorHigh: string;
+  segments?: number;
+}) {
+  const nodes = [];
+  for (let i = 0; i < segments; i++) {
+    const ratio = i / segments;
+    const a1 = startAngle + ratio * (endAngle - startAngle);
+    const a2 = startAngle + ((i + 1) / segments) * (endAngle - startAngle);
+    const p1 = pt(cx, cy, r, a1);
+    const p2 = pt(cx, cy, r, a2);
+    const active = ratio <= progress;
+    const color = ratio > 0.62 ? colorHigh : colorLow;
+    nodes.push(
+      <Line
+        key={i}
+        x1={p1.x}
+        y1={p1.y}
+        x2={p2.x}
+        y2={p2.y}
+        stroke={active ? color : '#1A2029'}
+        strokeWidth={9}
+        strokeLinecap="round"
+        opacity={active ? 1 : 0.4}
+      />
+    );
+  }
+  return <>{nodes}</>;
+}
+
+function GaugeTicks({
+  cx,
+  cy,
+  r,
+  startAngle,
+  endAngle,
+  values,
+}: {
+  cx: number;
+  cy: number;
+  r: number;
+  startAngle: number;
+  endAngle: number;
+  values: number[];
+}) {
+  return (
+    <>
+      {values.map((v, i) => {
+        const ratio = i / (values.length - 1);
+        const angle = startAngle + ratio * (endAngle - startAngle);
+        const inner = pt(cx, cy, r - 22, angle);
+        const outer = pt(cx, cy, r - 14, angle);
+        const label = pt(cx, cy, r - 34, angle);
+        return (
+          <G key={i}>
+            <Line
+              x1={inner.x}
+              y1={inner.y}
+              x2={outer.x}
+              y2={outer.y}
+              stroke={TEXT_GRAY}
+              strokeWidth={1.5}
+            />
+            <SvgText
+              x={label.x}
+              y={label.y + 3}
+              fill={TEXT_GRAY}
+              fontSize={9}
+              fontWeight="600"
+              textAnchor="middle"
+            >
+              {v}
+            </SvgText>
+          </G>
+        );
+      })}
+    </>
+  );
+}
 
 export default function RpmLoader({ label = 'STARTING ENGINE...', size = 400 }: Props) {
   const sweep = useSharedValue(0);
-  const [displayRpm, setDisplayRpm] = React.useState(0);
-  const [displaySpeed, setDisplaySpeed] = React.useState(0);
-  const [engineOn, setEngineOn] = React.useState(false);
-  const [displayFuel, setDisplayFuel] = React.useState(65);
-  const [displayTemp, setDisplayTemp] = React.useState(90);
+  const [displayRpm, setDisplayRpm] = useState(0);
+  const [displaySpeed, setDisplaySpeed] = useState(0);
+  const [displayProgress, setDisplayProgress] = useState(0);
+  const [engineOn, setEngineOn] = useState(false);
+  const [fuel] = useState(65);
+  const [temp, setTemp] = useState(90);
 
   useEffect(() => {
-    // BMW-style startup animation
-    const startupSequence = withSequence(
-      withTiming(0.2, { duration: 400, easing: Easing.out(Easing.cubic) }),
-      withTiming(0.4, { duration: 300, easing: Easing.out(Easing.cubic) }),
-      withTiming(0.6, { duration: 250, easing: Easing.out(Easing.cubic) }),
-      withTiming(0.8, { duration: 200, easing: Easing.out(Easing.cubic) }),
-      withTiming(0.95, { duration: 150, easing: Easing.out(Easing.cubic) }),
-      withTiming(0.7, { duration: 400, easing: Easing.in(Easing.cubic) }),
-      withTiming(0.3, { duration: 500, easing: Easing.in(Easing.cubic) }),
-      withTiming(0.5, { duration: 300, easing: Easing.out(Easing.cubic) }),
-      withDelay(500, withTiming(0, { duration: 100 }))
-    );
-
     sweep.value = withRepeat(
       withSequence(
-        startupSequence,
-        withTiming(0.1, { duration: 800 }),
-        withTiming(0.3, { duration: 600 }),
-        withTiming(0.5, { duration: 400 }),
-        withTiming(0.7, { duration: 300 }),
-        withTiming(0.85, { duration: 200 }),
-        withTiming(0.95, { duration: 150 }),
-        withTiming(0.8, { duration: 400 }),
-        withTiming(0.5, { duration: 600 })
+        withTiming(0.35, { duration: 500, easing: Easing.out(Easing.cubic) }),
+        withTiming(0.65, { duration: 350, easing: Easing.out(Easing.cubic) }),
+        withTiming(0.9, { duration: 250, easing: Easing.out(Easing.cubic) }),
+        withTiming(0.55, { duration: 450, easing: Easing.in(Easing.cubic) }),
+        withDelay(300, withTiming(0.2, { duration: 400 })),
+        withTiming(0.75, { duration: 500 }),
+        withTiming(0.4, { duration: 400 })
       ),
       -1
     );
   }, [sweep]);
 
   useEffect(() => {
-    const timer = setTimeout(() => setEngineOn(true), 2500);
-    return () => clearTimeout(timer);
+    const timer = setTimeout(() => setEngineOn(true), 2000);
+    // Only nudge the "slow" gauges a few times a second, not every frame.
+    const jitter = setInterval(() => {
+      setTemp(88 + Math.round(Math.random() * 6));
+    }, 800);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(jitter);
+    };
   }, []);
 
+  // Runs on the UI thread; only bridges to JS a small, fixed number of times
+  // per second via throttling inside the setters below — not per frame.
   useDerivedValue(() => {
-    const rpm = Math.round(sweep.value * 8500);
-    const speed = Math.round(sweep.value * 220);
-    runOnJS(setDisplayRpm)(rpm);
-    runOnJS(setDisplaySpeed)(speed);
-    runOnJS(setDisplayFuel)(65 + Math.random() * 10);
-    runOnJS(setDisplayTemp)(85 + Math.random() * 15);
+    runOnJS(setDisplayProgress)(sweep.value);
+    runOnJS(setDisplaySpeed)(Math.round(sweep.value * 220));
+    runOnJS(setDisplayRpm)(Math.round(sweep.value * 8.5 * 1000));
   }, [sweep]);
 
-  const radius = size / 2;
-  const inset = 12;
-  const r = radius - inset;
-  const cx = radius;
-  const cy = radius;
+  const outerW = size * 1.9;
+  const outerH = size * 1.05;
+  const cy = outerH * 0.46;
+  const gaugeR = size * 0.4;
+  const leftCx = outerW * 0.27;
+  const rightCx = outerW * 0.73;
+  const centerCx = outerW * 0.5;
 
-  const logoSize = Math.round(r * 0.3);
-
-  // Reverse sweep tachometer
-  const startAngle = -150;
-  const endAngle = 150;
-  
-  // Create tick marks for tachometer
-  const ticks: React.ReactNode[] = [];
-  const segments = 12;
-  for (let i = 0; i <= segments; i++) {
-    const angle = startAngle + (i / segments) * (endAngle - startAngle);
-    const rad = (angle - 90) * (Math.PI / 180);
-    const inner = r - (i % 3 === 0 ? 18 : 10);
-    const outer = r - 3;
-    const x1 = cx + Math.cos(rad) * inner;
-    const y1 = cy + Math.sin(rad) * inner;
-    const x2 = cx + Math.cos(rad) * outer;
-    const y2 = cy + Math.sin(rad) * outer;
-    
-    let color = TEXT_WHITE;
-    const ratio = i / segments;
-    if (ratio < 0.35) color = BMW_LT_BLUE;
-    else if (ratio < 0.65) color = BMW_ORANGE;
-    else color = BMW_RED;
-    
-    ticks.push(
-      <Line
-        key={`t-${i}`}
-        x1={x1}
-        y1={y1}
-        x2={x2}
-        y2={y2}
-        stroke={color}
-        strokeWidth={i % 3 === 0 ? 3 : 1.5}
-        strokeLinecap="round"
-      />
-    );
-    
-    if (i % 2 === 0) {
-      const labelR = r - 32;
-      const lx = cx + Math.cos(rad) * labelR;
-      const ly = cy + Math.sin(rad) * labelR + 4;
-      const rpmValue = Math.round((i / segments) * 7);
-      ticks.push(
-        <SvgText
-          key={`n-${i}`}
-          x={lx}
-          y={ly}
-          fill={color}
-          fontSize={10}
-          fontWeight="700"
-          textAnchor="middle"
-        >
-          {rpmValue}
-        </SvgText>
-      );
-    }
-  }
-
-  // Multi-segmented arc for tachometer
-  const arcSegments = 30;
-  const arcNodes: React.ReactNode[] = [];
-  for (let i = 0; i < arcSegments; i++) {
-    const angle1 = startAngle + (i / arcSegments) * (endAngle - startAngle);
-    const angle2 = startAngle + ((i + 1) / arcSegments) * (endAngle - startAngle);
-    const rad1 = (angle1 - 90) * (Math.PI / 180);
-    const rad2 = (angle2 - 90) * (Math.PI / 180);
-    
-    const ratio = i / arcSegments;
-    let color = BMW_LT_BLUE;
-    if (ratio > 0.35 && ratio < 0.65) color = BMW_ORANGE;
-    else if (ratio >= 0.65) color = BMW_RED;
-    
-    const arcR = r - 8;
-    const x1 = cx + Math.cos(rad1) * arcR;
-    const y1 = cy + Math.sin(rad1) * arcR;
-    const x2 = cx + Math.cos(rad2) * arcR;
-    const y2 = cy + Math.sin(rad2) * arcR;
-    
-    const active = (i / arcSegments) <= sweep.value;
-    
-    arcNodes.push(
-      <Line
-        key={`arc-${i}`}
-        x1={x1}
-        y1={y1}
-        x2={x2}
-        y2={y2}
-        stroke={active ? color : '#1A1A2A'}
-        strokeWidth={4}
-        strokeLinecap="round"
-        opacity={active ? 1 : 0.2}
-      />
-    );
-  }
-
-  const needleStyle = useAnimatedStyle(() => {
-    const angle = -150 + sweep.value * 300;
-    return { transform: [{ rotate: `${angle}deg` }] };
-  });
-
-  // Speedometer ticks (left gauge)
-  const speedTicks: React.ReactNode[] = [];
-  for (let i = 0; i <= 8; i++) {
-    const angle = -140 + i * 35;
-    const rad = (angle - 90) * (Math.PI / 180);
-    const inner = r * 0.4 - 12;
-    const outer = r * 0.4;
-    const x1 = cx - r * 0.55 + Math.cos(rad) * inner;
-    const y1 = cy + Math.sin(rad) * inner;
-    const x2 = cx - r * 0.55 + Math.cos(rad) * outer;
-    const y2 = cy + Math.sin(rad) * outer;
-    
-    speedTicks.push(
-      <Line
-        key={`st-${i}`}
-        x1={x1}
-        y1={y1}
-        x2={x2}
-        y2={y2}
-        stroke={TEXT_GRAY}
-        strokeWidth={i % 2 === 0 ? 2 : 1}
-        strokeLinecap="round"
-      />
-    );
-    
-    if (i % 2 === 0) {
-      const labelR = r * 0.4 - 20;
-      const lx = cx - r * 0.55 + Math.cos(rad) * labelR;
-      const ly = cy + Math.sin(rad) * labelR + 4;
-      speedTicks.push(
-        <SvgText
-          key={`sn-${i}`}
-          x={lx}
-          y={ly}
-          fill={TEXT_GRAY}
-          fontSize={9}
-          fontWeight="600"
-          textAnchor="middle"
-        >
-          {i * 30}
-        </SvgText>
-      );
-    }
-  }
-
-  // Fuel gauge ticks (right)
-  const fuelTicks: React.ReactNode[] = [];
-  for (let i = 0; i <= 4; i++) {
-    const angle = -140 + i * 70;
-    const rad = (angle - 90) * (Math.PI / 180);
-    const inner = r * 0.4 - 10;
-    const outer = r * 0.4;
-    const x1 = cx + r * 0.55 + Math.cos(rad) * inner;
-    const y1 = cy + Math.sin(rad) * inner;
-    const x2 = cx + r * 0.55 + Math.cos(rad) * outer;
-    const y2 = cy + Math.sin(rad) * outer;
-    
-    fuelTicks.push(
-      <Line
-        key={`ft-${i}`}
-        x1={x1}
-        y1={y1}
-        x2={x2}
-        y2={y2}
-        stroke={TEXT_GRAY}
-        strokeWidth={2}
-        strokeLinecap="round"
-      />
-    );
-  }
+  const speedTickValues = [0, 40, 80, 120, 160, 200];
+  const rpmTickValues = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 
   return (
-    <View style={[styles.dashboard, { width: size + 40 }]}>
-      {/* BMW Live Cockpit Professional Header */}
+    <View style={[styles.dashboard, { width: outerW + 24 }]}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>BMW LIVE COCKPIT PROFESSIONAL</Text>
         <View style={styles.mMode}>
@@ -276,184 +208,111 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 400 }: 
         </View>
       </View>
 
-      {/* Main Gauge Cluster */}
-      <View style={[styles.gaugeCluster, { width: size, height: size }]}>
-        <Svg width={size} height={size}>
-          <Defs>
-            <LinearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <Stop offset="0%" stopColor="#0A0D14" />
-              <Stop offset="100%" stopColor="#151B24" />
-            </LinearGradient>
-            <LinearGradient id="shroudGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <Stop offset="0%" stopColor="#1A1F2A" />
-              <Stop offset="50%" stopColor="#252D3A" />
-              <Stop offset="100%" stopColor="#151A22" />
-            </LinearGradient>
-          </Defs>
-
-          <Rect width={size} height={size} fill="url(#bgGrad)" rx={12} />
-
-          {/* Chiseled Outer Shroud - Main RPM */}
-          <Path
-            d={`
-              M ${cx} ${cy - r - 15}
-              L ${cx + r * 0.65} ${cy - r * 0.85}
-              L ${cx + r * 0.92} ${cy - r * 0.5}
-              L ${cx + r * 0.97} ${cy}
-              L ${cx + r * 0.92} ${cy + r * 0.5}
-              L ${cx + r * 0.65} ${cy + r * 0.85}
-              L ${cx} ${cy + r + 15}
-              L ${cx - r * 0.65} ${cy + r * 0.85}
-              L ${cx - r * 0.92} ${cy + r * 0.5}
-              L ${cx - r * 0.97} ${cy}
-              L ${cx - r * 0.92} ${cy - r * 0.5}
-              L ${cx - r * 0.65} ${cy - r * 0.85}
-              Z
-            `}
-            fill="none"
-            stroke="#2A3440"
-            strokeWidth={2}
+      <View style={{ width: outerW, height: outerH }}>
+        <Svg width={outerW} height={outerH}>
+          {/* Left gauge: speed, sweeps bottom-left up to near-center-top */}
+          <Circle cx={leftCx} cy={cy} r={gaugeR} fill={PANEL} opacity={0.3} />
+          <GaugeArc
+            cx={leftCx}
+            cy={cy}
+            r={gaugeR}
+            startAngle={-140}
+            endAngle={100}
+            progress={displayProgress}
+            colorLow={SPEED_LOW}
+            colorHigh={SPEED_HIGH}
           />
-
-          {/* RPM Gauge Circle */}
-          <Circle cx={cx} cy={cy} r={r - 10} fill="none" stroke="#1A1F2A" strokeWidth={2} />
-
-          {/* Multi-segmented Arc */}
-          {arcNodes}
-
-          {/* Tick Marks */}
-          {ticks}
-
-          {/* Speedometer - Left Mini Gauge */}
-          <G transform={`translate(${cx - r * 0.55}, ${cy})`}>
-            <Circle cx={0} cy={0} r={r * 0.4} fill="none" stroke="#1A1F2A" strokeWidth={1.5} />
-            {speedTicks}
-            <SvgText x="0" y="15" fill={TEXT_WHITE} fontSize={16} fontWeight="900" textAnchor="middle">
-              {displaySpeed}
-            </SvgText>
-            <SvgText x="0" y="28" fill={TEXT_GRAY} fontSize={8} fontWeight="600" textAnchor="middle">
-              km/h
-            </SvgText>
-          </G>
-
-          {/* Fuel/Temperature - Right Mini Gauge */}
-          <G transform={`translate(${cx + r * 0.55}, ${cy})`}>
-            <Circle cx={0} cy={0} r={r * 0.4} fill="none" stroke="#1A1F2A" strokeWidth={1.5} />
-            {fuelTicks}
-            <SvgText x="0" y="-10" fill={TEXT_GRAY} fontSize={7} fontWeight="600" textAnchor="middle">
-              FUEL
-            </SvgText>
-            <SvgText x="0" y="15" fill="#50B4E6" fontSize={14} fontWeight="800" textAnchor="middle">
-              {Math.round(displayFuel)}%
-            </SvgText>
-            <SvgText x="0" y="28" fill={TEXT_GRAY} fontSize={7} fontWeight="600" textAnchor="middle">
-              TEMP {Math.round(displayTemp)}°C
-            </SvgText>
-          </G>
-
-          {/* Logo */}
-          <Image
-            source={{ uri: MASS_POWER_LOGO_PNG_BASE64 }}
-            style={{
-              position: 'absolute',
-              width: logoSize,
-              height: logoSize,
-              borderRadius: logoSize / 2,
-              left: (size - logoSize) / 2,
-              top: (size - logoSize) / 2 + 10,
-              backgroundColor: 'transparent',
-            }}
-            resizeMode="contain"
+          <GaugeTicks
+            cx={leftCx}
+            cy={cy}
+            r={gaugeR}
+            startAngle={-140}
+            endAngle={100}
+            values={speedTickValues}
           />
+          <SvgText x={leftCx} y={cy + 6} fill={TEXT_WHITE} fontSize={26} fontWeight="800" textAnchor="middle">
+            {displaySpeed}
+          </SvgText>
+          <SvgText x={leftCx} y={cy + 24} fill={TEXT_GRAY} fontSize={10} fontWeight="600" textAnchor="middle">
+            km/h
+          </SvgText>
 
-          {/* Digital RPM Display */}
-          <G transform={`translate(${cx}, ${cy + r * 0.3})`}>
-            <SvgText x="0" y="0" fill={BMW_ORANGE} fontSize={20} fontWeight="800" textAnchor="middle">
-              {displayRpm}
-            </SvgText>
-            <SvgText x="0" y="14" fill={TEXT_GRAY} fontSize={8} fontWeight="600" textAnchor="middle" letterSpacing="1">
-              RPM 1/min
+          {/* Right gauge: RPM, mirrored */}
+          <Circle cx={rightCx} cy={cy} r={gaugeR} fill={PANEL} opacity={0.3} />
+          <GaugeArc
+            cx={rightCx}
+            cy={cy}
+            r={gaugeR}
+            startAngle={140}
+            endAngle={-100}
+            progress={displayProgress}
+            colorLow={RPM_LOW}
+            colorHigh={RPM_HIGH}
+          />
+          <GaugeTicks
+            cx={rightCx}
+            cy={cy}
+            r={gaugeR}
+            startAngle={140}
+            endAngle={-100}
+            values={rpmTickValues}
+          />
+          <SvgText x={rightCx} y={cy + 6} fill={TEXT_WHITE} fontSize={26} fontWeight="800" textAnchor="middle">
+            {displayRpm}
+          </SvgText>
+          <SvgText x={rightCx} y={cy + 24} fill={TEXT_GRAY} fontSize={10} fontWeight="600" textAnchor="middle">
+            RPM
+          </SvgText>
+
+          {/* Center gear diamond */}
+          <G>
+            <Line x1={centerCx - 40} y1={cy - 40} x2={centerCx + 40} y2={cy + 40} stroke="#242C38" strokeWidth={1} />
+            <Line x1={centerCx + 40} y1={cy - 40} x2={centerCx - 40} y2={cy + 40} stroke="#242C38" strokeWidth={1} />
+            <Circle cx={centerCx} cy={cy} r={34} fill={BG_DARK} stroke="#2A3440" strokeWidth={1.5} />
+            <Polygon
+              points={`${centerCx},${cy - 16} ${centerCx + 16},${cy} ${centerCx},${cy + 16} ${centerCx - 16},${cy}`}
+              fill="#1A2029"
+              stroke={SPEED_HIGH}
+              strokeWidth={1.5}
+            />
+            <SvgText x={centerCx} y={cy + 5} fill={TEXT_WHITE} fontSize={16} fontWeight="900" textAnchor="middle">
+              D
             </SvgText>
           </G>
         </Svg>
-
-        {/* RPM Needle */}
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            {
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              width: size,
-              height: size,
-              alignItems: 'center',
-              justifyContent: 'center',
-            },
-            needleStyle,
-          ]}
-        >
-          <View
-            style={{
-              width: 2.5,
-              height: r - 30,
-              backgroundColor: BMW_RED,
-              borderTopLeftRadius: 1.5,
-              borderTopRightRadius: 1.5,
-              marginBottom: r - 40,
-              shadowColor: BMW_RED,
-              shadowOpacity: 0.3,
-              shadowRadius: 6,
-              elevation: 6,
-            }}
-          />
-        </Animated.View>
-
-        {/* Center Hub */}
-        <View
-          pointerEvents="none"
-          style={[
-            styles.hubOuter,
-            { left: cx - 10, top: cy - 10, width: 20, height: 20, borderRadius: 10 },
-          ]}
-        />
       </View>
 
-      {/* Bottom Telemetry */}
-      <View style={styles.telemetryBar}>
-        <View style={styles.telemetryItem}>
-          <Text style={styles.telemetryLabel}>GEAR</Text>
-          <Text style={[styles.telemetryValue, { color: BMW_LT_BLUE }]}>D</Text>
+      {/* Bottom telemetry bars: fuel (left) / temp (right) */}
+      <View style={styles.barsRow}>
+        <View style={styles.barBlock}>
+          <View style={styles.barTrack}>
+            <View style={[styles.barFill, { width: `${fuel}%`, backgroundColor: M_RED }]} />
+          </View>
+          <View style={styles.barLabels}>
+            <Text style={styles.barLabelText}>E</Text>
+            <Text style={styles.barLabelText}>F</Text>
+          </View>
         </View>
-        <View style={styles.telemetryDivider} />
-        <View style={styles.telemetryItem}>
-          <Text style={styles.telemetryLabel}>OIL TEMP</Text>
-          <Text style={styles.telemetryValue}>{Math.round(85 + Math.random() * 5)}°C</Text>
-        </View>
-        <View style={styles.telemetryDivider} />
-        <View style={styles.telemetryItem}>
-          <Text style={styles.telemetryLabel}>BATTERY</Text>
-          <Text style={styles.telemetryValue}>14.2V</Text>
-        </View>
-        <View style={styles.telemetryDivider} />
-        <View style={styles.telemetryItem}>
-          <Text style={styles.telemetryLabel}>CONSUMPTION</Text>
-          <Text style={styles.telemetryValue}>8.2L/100km</Text>
+        <View style={styles.barBlock}>
+          <View style={styles.barTrack}>
+            <View style={[styles.barFill, { width: `${((temp - 60) / 60) * 100}%`, backgroundColor: GREEN }]} />
+          </View>
+          <View style={styles.barLabels}>
+            <Text style={styles.barLabelText}>90°C</Text>
+            <Text style={styles.barLabelText}>120°C</Text>
+          </View>
         </View>
       </View>
 
-      {/* Engine Status */}
       <View style={styles.statusBar}>
         <View style={styles.statusLeft}>
           <View style={[styles.statusBulb, engineOn ? styles.bulbOn : styles.bulbOff]} />
-          <Text style={[styles.statusText, { color: engineOn ? '#22C55E' : TEXT_GRAY }]}>
+          <Text style={[styles.statusText, { color: engineOn ? GREEN : TEXT_GRAY }]}>
             {engineOn ? 'ENGINE ON' : 'IGNITION'}
           </Text>
         </View>
         <Text style={styles.statusLabel}>{label}</Text>
-        <View style={styles.statusRight}>
-          <Text style={styles.mileageText}>12,847 km</Text>
-        </View>
+        <Text style={styles.mileageText}>12,847 km</Text>
       </View>
     </View>
   );
@@ -461,7 +320,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 400 }: 
 
 const styles = StyleSheet.create({
   dashboard: {
-    backgroundColor: '#0A0D14',
+    backgroundColor: BG_DARK,
     borderRadius: 16,
     padding: 12,
     borderWidth: 1,
@@ -476,119 +335,32 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: '#1A1F2A',
   },
-  headerTitle: {
-    fontSize: 9,
-    color: TEXT_GRAY,
-    fontWeight: '700',
-    letterSpacing: 1.5,
-  },
-  mMode: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  mModeText: {
-    fontSize: 8,
-    color: BMW_RED,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  mStripes: {
-    flexDirection: 'row',
-    gap: 2,
-  },
-  stripe: {
-    width: 8,
-    height: 2,
-    borderRadius: 1,
-  },
-  gaugeCluster: {
-    position: 'relative',
-    marginVertical: 4,
-  },
-  hubOuter: {
-    position: 'absolute',
-    backgroundColor: BG_DARK,
-    borderWidth: 1.5,
-    borderColor: '#2A3440',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  telemetryBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 8,
-    backgroundColor: 'rgba(26, 31, 42, 0.5)',
-    borderRadius: 8,
-    borderWidth: 0.5,
-    borderColor: '#1A1F2A',
-    marginTop: 4,
-  },
-  telemetryItem: {
-    alignItems: 'center',
-  },
-  telemetryLabel: {
-    fontSize: 7,
-    color: TEXT_GRAY,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-  telemetryValue: {
-    fontSize: 11,
-    color: TEXT_WHITE,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  telemetryDivider: {
-    width: 0.5,
-    backgroundColor: '#1A1F2A',
-  },
+  headerTitle: { fontSize: 9, color: TEXT_GRAY, fontWeight: '700', letterSpacing: 1.5 },
+  mMode: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  mModeText: { fontSize: 8, color: M_RED, fontWeight: '800', letterSpacing: 1 },
+  mStripes: { flexDirection: 'row', gap: 2 },
+  stripe: { width: 8, height: 2, borderRadius: 1 },
+  barsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, paddingHorizontal: 12 },
+  barBlock: { width: '46%' },
+  barTrack: { height: 5, borderRadius: 3, backgroundColor: '#1A1F2A', overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: 3 },
+  barLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
+  barLabelText: { fontSize: 8, color: TEXT_GRAY, fontWeight: '600' },
   statusBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 8,
+    marginTop: 10,
     paddingHorizontal: 8,
     paddingVertical: 6,
     backgroundColor: 'rgba(26, 31, 42, 0.3)',
     borderRadius: 6,
   },
-  statusLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statusBulb: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    marginRight: 6,
-  },
-  bulbOn: {
-    backgroundColor: '#22C55E',
-    shadowColor: '#22C55E',
-    shadowOpacity: 1,
-    shadowRadius: 4,
-  },
-  bulbOff: {
-    backgroundColor: '#555',
-  },
-  statusText: {
-    fontSize: 8,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  statusLabel: {
-    fontSize: 8,
-    color: TEXT_GRAY,
-    fontWeight: '600',
-    letterSpacing: 1,
-  },
-  statusRight: {
-    alignItems: 'flex-end',
-  },
-  mileageText: {
-    fontSize: 8,
-    color: TEXT_GRAY,
-    fontWeight: '600',
-  },
+  statusLeft: { flexDirection: 'row', alignItems: 'center' },
+  statusBulb: { width: 5, height: 5, borderRadius: 2.5, marginRight: 6 },
+  bulbOn: { backgroundColor: '#22C55E', shadowColor: '#22C55E', shadowOpacity: 1, shadowRadius: 4 },
+  bulbOff: { backgroundColor: '#555' },
+  statusText: { fontSize: 8, fontWeight: '700', letterSpacing: 1 },
+  statusLabel: { fontSize: 8, color: TEXT_GRAY, fontWeight: '600', letterSpacing: 1 },
+  mileageText: { fontSize: 8, color: TEXT_GRAY, fontWeight: '600' },
 });
