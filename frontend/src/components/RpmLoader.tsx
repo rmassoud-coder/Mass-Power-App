@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, SafeAreaView, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, SafeAreaView } from 'react-native';
 import Animated, {
   useSharedValue,
   useDerivedValue,
@@ -315,33 +315,31 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600 }: 
   ];
 
   useEffect(() => {
-    // 5x SLOWER ANIMATION (multiplied by 5 from original)
+    // Each phase progresses slowly - total cycle ~60 seconds
     const animationSequence = withSequence(
-      // Phase 0: Chiseled Outer Shroud - 5x slower (6000/5000ms)
+      // Phase 0: Chiseled Outer Shroud (0-0.2) - 6 seconds
       withTiming(0.2, { duration: 6000, easing: Easing.out(Easing.cubic) }),
-      withTiming(0.3, { duration: 5000, easing: Easing.out(Easing.cubic) }),
+      withDelay(2000, withTiming(0.2, { duration: 1 })), // Hold 2 seconds
       
-      // Phase 1: Reverse-Sweeping Tachometer - 5x slower (6000/5000ms)
-      withTiming(0.5, { duration: 6000, easing: Easing.out(Easing.cubic) }),
-      withTiming(0.6, { duration: 5000, easing: Easing.out(Easing.cubic) }),
+      // Phase 1: Reverse-Sweeping Tachometer (0.2-0.4) - 6 seconds
+      withTiming(0.4, { duration: 6000, easing: Easing.out(Easing.cubic) }),
+      withDelay(2000, withTiming(0.4, { duration: 1 })), // Hold 2 seconds
       
-      // Phase 2: Multi-Segmented Display - 5x slower (6000/5000ms)
-      withTiming(0.75, { duration: 6000, easing: Easing.out(Easing.cubic) }),
-      withTiming(0.8, { duration: 5000, easing: Easing.out(Easing.cubic) }),
+      // Phase 2: Multi-Segmented Display (0.4-0.6) - 6 seconds
+      withTiming(0.6, { duration: 6000, easing: Easing.out(Easing.cubic) }),
+      withDelay(2000, withTiming(0.6, { duration: 1 })), // Hold 2 seconds
       
-      // Phase 3: Signature Telemetry - 5x slower (6000/5000ms)
-      withTiming(0.9, { duration: 6000, easing: Easing.out(Easing.cubic) }),
-      withTiming(0.85, { duration: 5000, easing: Easing.in(Easing.cubic) }),
+      // Phase 3: Signature Telemetry (0.6-0.8) - 6 seconds
+      withTiming(0.8, { duration: 6000, easing: Easing.out(Easing.cubic) }),
+      withDelay(2000, withTiming(0.8, { duration: 1 })), // Hold 2 seconds
       
-      // Phase 4: M Sport Mode - 5x slower (6000/7500ms)
-      withTiming(0.95, { duration: 6000, easing: Easing.out(Easing.cubic) }),
-      withTiming(0.5, { duration: 7500, easing: Easing.in(Easing.cubic) }),
+      // Phase 4: M Sport Mode (0.8-1.0) - 8 seconds
+      withTiming(1.0, { duration: 8000, easing: Easing.out(Easing.cubic) }),
+      withDelay(3000, withTiming(1.0, { duration: 1 })), // Hold 3 seconds
       
-      // Hold at idle - 5x slower (10000ms delay)
-      withDelay(10000, withTiming(0.4, { duration: 2500 })),
-      
-      // Repeat cycle - 5x slower (5000ms)
-      withTiming(0.3, { duration: 5000 })
+      // Reset to idle - 3 seconds
+      withTiming(0.3, { duration: 3000, easing: Easing.in(Easing.cubic) }),
+      withDelay(3000, withTiming(0.3, { duration: 1 })) // Hold 3 seconds
     );
 
     sweep.value = withRepeat(animationSequence, -1);
@@ -358,10 +356,14 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600 }: 
     runOnJS(setDisplaySpeed)(Math.round(progress * 240));
     runOnJS(setDisplayRpm)(Math.round(progress * 8 * 1000));
     
-    const phaseIndex = Math.min(
-      Math.floor(progress * 5),
-      phases.length - 1
-    );
+    // Phase tracking based on progress ranges
+    let phaseIndex = 0;
+    if (progress >= 0.8) phaseIndex = 4;
+    else if (progress >= 0.6) phaseIndex = 3;
+    else if (progress >= 0.4) phaseIndex = 2;
+    else if (progress >= 0.2) phaseIndex = 1;
+    else phaseIndex = 0;
+    
     runOnJS(setCurrentPhase)(phaseIndex);
   }, [sweep]);
 
@@ -593,11 +595,11 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600 }: 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#000000', // Pure black background
+    backgroundColor: '#000000',
   },
   pageContainer: {
     flex: 1,
-    backgroundColor: '#000000', // Pure black background
+    backgroundColor: '#000000',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
