@@ -19,25 +19,25 @@ const AnimatedG = Animated.createAnimatedComponent(G);
 const _ignore = AnimatedG;
 
 interface Props {
-  /** Optional label shown under the gauge — defaults to "STARTING ENGINE..." */
   label?: string;
-  /** Diameter in dp (default 260) */
   size?: number;
 }
 
-/**
- * Tachometer / RPM gauge loader with the Mass Power logo as the dominant centerpiece.
- * The needle revs through the gauge in a realistic blip pattern over the logo while the
- * app is loading.
- */
+// BMW Signature Colors
+const BMW_ORANGE = '#FF5A00';
+const BMW_RED = '#CE1316';
+const BMW_LT_BLUE = '#50B4E6';
+const BMW_DK_BLUE = '#0038A8';
+const BG_DARK = '#0B0C10';
+const TEXT_WHITE = '#FFFFFF';
+
 export default function RpmLoader({ label = 'STARTING ENGINE...', size = 260 }: Props) {
-  // Needle rotation in degrees. 0 = pointing to "0 RPM" position (-130°), 260 = "10 RPM" (+130°).
   const sweep = useSharedValue(0);
   const [displayRpm, setDisplayRpm] = React.useState(0);
+  const [displaySpeed, setDisplaySpeed] = React.useState(0);
+  const [engineOn, setEngineOn] = React.useState(false);
 
   useEffect(() => {
-    // Realistic revving pattern: 0 -> 7 -> 2 -> 8 -> 3 -> 9 -> 1 (kRPM)
-    // Durations slowed by ~10% compared to previous version (multiplier 1.1)
     const blip = (target: number, up: number, down: number) =>
       withSequence(
         withTiming(target, { duration: up, easing: Easing.out(Easing.cubic) }),
@@ -46,44 +46,59 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 260 }: 
 
     sweep.value = withRepeat(
       withSequence(
-        blip(0.7, 385, 550),   // was 350 / 500
-        blip(0.85, 308, 495),  // was 280 / 450
-        blip(0.95, 242, 660),  // was 220 / 600
-        withTiming(0, { duration: 440, easing: Easing.in(Easing.cubic) }), // was 400
-        withDelay(165, withTiming(0, { duration: 1 })) // pause beat (was 150)
+        blip(0.7, 385, 550),
+        blip(0.85, 308, 495),
+        blip(0.95, 242, 660),
+        withTiming(0, { duration: 440, easing: Easing.in(Easing.cubic) }),
+        withDelay(165, withTiming(0, { duration: 1 })),
+        withTiming(0.5, { duration: 900, easing: Easing.out(Easing.cubic) })
       ),
       -1
     );
   }, [sweep]);
 
-  // Convert sweep [0..1] to a rotation angle [-130..+130]
+  useEffect(() => {
+    const timer = setTimeout(() => setEngineOn(true), 2500);
+    return () => clearTimeout(timer);
+  }, []);
+
   const needleStyle = useAnimatedStyle(() => {
     const angle = -130 + sweep.value * 260;
     return { transform: [{ rotate: `${angle}deg` }] };
   });
 
-  // Update the RPM digit display ~30fps based on sweep value
+  const shakeStyle = useAnimatedStyle(() => {
+    const shake = withRepeat(
+      withSequence(
+        withTiming(0.5, { duration: 40 }),
+        withTiming(-0.5, { duration: 40 }),
+        withTiming(0, { duration: 40 })
+      ),
+      4
+    );
+    return { transform: [{ translateX: shake }] };
+  });
+
   useDerivedValue(() => {
-    const rpm = Math.round(sweep.value * 9.5 * 1000);
+    const rpm = Math.round(sweep.value * 8000);
+    const speed = Math.round(sweep.value * 180);
     runOnJS(setDisplayRpm)(rpm);
+    runOnJS(setDisplaySpeed)(speed);
   }, [sweep]);
 
   const radius = size / 2;
   const inset = 8;
-  const r = radius - inset;          // outer gauge radius
+  const r = radius - inset;
   const cx = radius;
   const cy = radius;
 
-  // Logo dominates the center — ~72% of gauge diameter
   const logoSize = Math.round(r * 1.42);
   const logoRadius = logoSize / 2;
 
-  // Build tick marks every 1000 RPM from -130° to +130° (260° span, 10 segments)
-  // Ticks live in the thin outer ring (outside the logo).
   const ticks: React.ReactNode[] = [];
   for (let i = 0; i <= 10; i++) {
-    const angle = -130 + i * 26; // degrees
-    const rad = (angle - 90) * (Math.PI / 180); // SVG: 0deg = right; we want 0 at top, so subtract 90
+    const angle = -130 + i * 26;
+    const rad = (angle - 90) * (Math.PI / 180);
     const inner = r - (i % 2 === 0 ? 14 : 8);
     const outer = r - 2;
     const x1 = cx + Math.cos(rad) * inner;
@@ -98,12 +113,11 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 260 }: 
         y1={y1}
         x2={x2}
         y2={y2}
-        stroke={isRedline ? '#dc2626' : '#0f172a'}
+        stroke={isRedline ? BMW_RED : TEXT_WHITE}
         strokeWidth={i % 2 === 0 ? 3 : 1.5}
         strokeLinecap="round"
       />
     );
-    // Numbers on major ticks — placed just inside the tick band
     const tr = r - 26;
     const tx = cx + Math.cos(rad) * tr;
     const ty = cy + Math.sin(rad) * tr + 4;
@@ -112,7 +126,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 260 }: 
         key={`n-${i}`}
         x={tx}
         y={ty}
-        fill={isRedline ? '#dc2626' : '#0f172a'}
+        fill={isRedline ? BMW_RED : TEXT_WHITE}
         fontSize={12}
         fontWeight="800"
         textAnchor="middle"
@@ -122,7 +136,6 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 260 }: 
     );
   }
 
-  // Redline arc (last 30% of the dial) - simple path arc
   const startAngle = (-130 + 7 * 26 - 90) * (Math.PI / 180);
   const endAngle = (-130 + 10 * 26 - 90) * (Math.PI / 180);
   const arcR = r - 1;
@@ -132,52 +145,63 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 260 }: 
   const endY = cy + Math.sin(endAngle) * arcR;
   const redlinePath = `M ${startX} ${startY} A ${arcR} ${arcR} 0 0 1 ${endX} ${endY}`;
 
-  // Needle reaches just inside the tick band, sweeping ACROSS the logo
   const needleLength = r - 6;
 
   return (
     <View style={[styles.container, { width: size + 40 }]}>
-      <View style={{ width: size, height: size }}>
-        {/* Outer gauge ring (white face, tick band) */}
+      {/* Engine Shake */}
+      <Animated.View style={[{ width: size, height: size }, shakeStyle]}>
         <Svg width={size} height={size}>
-          {/* Outer black ring */}
-          <Circle
-            cx={cx}
-            cy={cy}
-            r={r}
-            fill="#fff"
-            stroke="#0f172a"
-            strokeWidth={4}
+          {/* Hexagonal Outer Shroud */}
+          <Path
+            d={`M ${cx - 120} ${cy + 120} L ${cx - 160} ${cy} L ${cx - 80} ${cy - 120} L ${cx + 80} ${cy - 120} L ${cx + 160} ${cy} L ${cx + 120} ${cy + 120} Z`}
+            fill="none"
+            stroke="#1F2833"
+            strokeWidth={6}
           />
-          {/* Inner subtle ring */}
-          <Circle cx={cx} cy={cy} r={r - 5} fill="none" stroke="#e2e8f0" strokeWidth={1} />
-          {/* Redline arc */}
-          <Path d={redlinePath} stroke="#dc2626" strokeWidth={5} fill="none" strokeLinecap="round" />
+
+          {/* Outer Ring */}
+          <Circle cx={cx} cy={cy} r={r} fill={BG_DARK} stroke="#1F2833" strokeWidth={4} />
+          <Circle cx={cx} cy={cy} r={r - 5} fill="none" stroke="#232A34" strokeWidth={1} />
+
+          {/* Redline Arc */}
+          <Path d={redlinePath} stroke={BMW_RED} strokeWidth={5} fill="none" strokeLinecap="round" />
+
+          {/* RPM Active Track (Orange/Red) */}
+          <Path
+            d={`M ${cx - 100} ${cy + 50} A ${r - 10} ${r - 10} 0 0 1 ${cx + 100} ${cy + 50}`}
+            stroke={sweep.value > 0.7 ? BMW_RED : BMW_ORANGE}
+            strokeWidth={8}
+            fill="none"
+            strokeLinecap="round"
+            opacity={0.6 + sweep.value * 0.4}
+          />
+
           {ticks}
+
+          {/* Centered Logo */}
+          <View
+            pointerEvents="none"
+            style={[
+              styles.logoWrap,
+              {
+                width: logoSize,
+                height: logoSize,
+                borderRadius: logoRadius,
+                left: (size - logoSize) / 2,
+                top: (size - logoSize) / 2,
+              },
+            ]}
+          >
+            <Image
+              source={{ uri: MASS_POWER_LOGO_PNG_BASE64 }}
+              style={{ width: logoSize, height: logoSize }}
+              resizeMode="contain"
+            />
+          </View>
         </Svg>
 
-        {/* Dominant centered logo — circular mask via borderRadius */}
-        <View
-          pointerEvents="none"
-          style={[
-            styles.logoWrap,
-            {
-              width: logoSize,
-              height: logoSize,
-              borderRadius: logoRadius,
-              left: (size - logoSize) / 2,
-              top: (size - logoSize) / 2,
-            },
-          ]}
-        >
-          <Image
-            source={{ uri: MASS_POWER_LOGO_PNG_BASE64 }}
-            style={{ width: logoSize, height: logoSize }}
-            resizeMode="contain"
-          />
-        </View>
-
-        {/* Needle (absolutely positioned, rotates over the logo) */}
+        {/* Needle */}
         <Animated.View
           pointerEvents="none"
           style={[
@@ -197,59 +221,55 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 260 }: 
             style={{
               width: 4,
               height: needleLength,
-              backgroundColor: '#dc2626',
+              backgroundColor: BMW_RED,
               borderTopLeftRadius: 2,
               borderTopRightRadius: 2,
               marginBottom: needleLength - 12,
-              shadowColor: '#000',
-              shadowOpacity: 0.35,
-              shadowRadius: 2,
-              shadowOffset: { width: 0, height: 1 },
-              elevation: 4,
+              shadowColor: BMW_RED,
+              shadowOpacity: 0.8,
+              shadowRadius: 4,
+              elevation: 8,
             }}
           />
         </Animated.View>
 
-        {/* Center hub — drawn on top of the needle */}
-        <View
-          pointerEvents="none"
-          style={[
-            styles.hubOuter,
-            { left: cx - 11, top: cy - 11 },
-          ]}
-        />
-        <View
-          pointerEvents="none"
-          style={[
-            styles.hubInner,
-            { left: cx - 4, top: cy - 4 },
-          ]}
-        />
+        {/* Center Hub */}
+        <View pointerEvents="none" style={[styles.hubOuter, { left: cx - 11, top: cy - 11 }]} />
+        <View pointerEvents="none" style={[styles.hubInner, { left: cx - 4, top: cy - 4 }]} />
+      </Animated.View>
+
+      {/* BMW Style Digital Center Telemetry */}
+      <View style={styles.telemetryBox}>
+        <Text style={styles.speedText}>{displaySpeed}</Text>
+        <Text style={styles.unitText}>km/h</Text>
+        <Text style={styles.rpmText}>{displayRpm}</Text>
+        <Text style={styles.rpmLabel}>RPM 1/min</Text>
       </View>
 
-      <View style={styles.rpmDisplay}>
-        <Text style={styles.rpmValue}>{displayRpm.toLocaleString()}</Text>
-        <Text style={styles.rpmUnit}>RPM</Text>
+      {/* M Performance Stripes */}
+      <View style={styles.mStripe}>
+        <View style={[styles.stripeSegment, { backgroundColor: BMW_LT_BLUE }]} />
+        <View style={[styles.stripeSegment, { backgroundColor: BMW_DK_BLUE }]} />
+        <View style={[styles.stripeSegment, { backgroundColor: BMW_RED }]} />
       </View>
 
       <Text style={styles.label}>{label}</Text>
 
-      <View style={styles.versionBadge}>
-        <Text style={styles.versionText}>v7.0</Text>
+      {/* Engine Light */}
+      <View style={[styles.engineLight, engineOn ? styles.engineLightOn : styles.engineLightOff]}>
+        <View style={[styles.engineBulb, engineOn ? styles.engineBulbOn : styles.engineBulbOff]} />
+        <Text style={styles.engineText}>{engineOn ? 'ENGINE ON' : 'IGNITION'}</Text>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  container: { alignItems: 'center', justifyContent: 'center' },
   logoWrap: {
     position: 'absolute',
     overflow: 'hidden',
-    backgroundColor: '#fff',
+    backgroundColor: BG_DARK,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -258,54 +278,94 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#0B0C10',
   },
   hubInner: {
     position: 'absolute',
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#dc2626',
+    backgroundColor: BMW_RED,
   },
-  rpmDisplay: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginTop: 14,
-    gap: 6,
+  telemetryBox: {
+    alignItems: 'center',
+    marginTop: 8,
   },
-  rpmValue: {
-    fontSize: 26,
+  speedText: {
+    fontSize: 48,
     fontWeight: '900',
-    color: '#0f172a',
+    color: TEXT_WHITE,
     fontVariant: ['tabular-nums'],
+  },
+  unitText: {
+    fontSize: 16,
+    color: '#8A9AAD',
+    fontWeight: '700',
+    letterSpacing: 2,
+  },
+  rpmText: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: BMW_ORANGE,
+    marginTop: 4,
+  },
+  rpmLabel: {
+    fontSize: 12,
+    color: '#8A9AAD',
     letterSpacing: 1,
   },
-  rpmUnit: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#64748b',
-    letterSpacing: 2,
+  mStripe: {
+    flexDirection: 'row',
+    marginTop: 12,
+    gap: 4,
+  },
+  stripeSegment: {
+    width: 40,
+    height: 6,
+    borderRadius: 3,
   },
   label: {
     marginTop: 14,
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 2,
-    color: '#64748b',
+    color: '#8A9AAD',
   },
-  versionBadge: {
-    marginTop: 16,
-    paddingHorizontal: 14,
+  engineLight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: '#0f172a',
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#dc2626',
   },
-  versionText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 2,
+  engineLightOn: {
+    backgroundColor: 'rgba(0, 255, 0, 0.1)',
+    borderColor: '#22C55E',
+  },
+  engineLightOff: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: '#333',
+  },
+  engineBulb: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  engineBulbOn: {
+    backgroundColor: '#22C55E',
+    shadowColor: '#22C55E',
+    shadowOpacity: 1,
+    shadowRadius: 4,
+  },
+  engineBulbOff: {
+    backgroundColor: '#555',
+  },
+  engineText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
 });
