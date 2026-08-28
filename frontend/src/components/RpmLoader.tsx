@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import Animated, {
   useSharedValue,
   useDerivedValue,
@@ -19,31 +19,26 @@ import Svg, {
   LinearGradient,
   Stop,
   Rect,
-  RadialGradient,
 } from 'react-native-svg';
 
 interface Props {
   label?: string;
   size?: number;
+  onComplete?: () => void;
 }
 
 // BMW Live Cockpit Professional Authentic Colors
 const BG_DARK = '#0A0B0E';
-const PANEL_DARK = '#111318';
-const PANEL_MID = '#1A1D24';
 const TEXT_WHITE = '#F0F2F5';
 const TEXT_GRAY = '#8A95A8';
 const TEXT_DIM = '#4A5568';
 const BMW_ORANGE = '#FF5A00';
 const BMW_RED = '#CE1316';
 const BMW_LT_BLUE = '#50B4E6';
-const BMW_DK_BLUE = '#0038A8';
 const GREEN = '#22C55E';
 const M_BLUE = '#0066B1';
 const M_PURPLE = '#333366';
 const M_RED = '#FF0000';
-const GAUGE_BG = '#141820';
-const GAUGE_BORDER = '#2A3448';
 
 function pt(cx: number, cy: number, r: number, deg: number) {
   const rad = ((deg - 90) * Math.PI) / 180;
@@ -296,7 +291,7 @@ function RpmGauge({
   return <>{nodes}</>;
 }
 
-export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600 }: Props) {
+export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, onComplete }: Props) {
   const [containerWidth, setContainerWidth] = useState(Dimensions.get('window').width - 32);
   const speed = useSharedValue(0);
   const rpm = useSharedValue(0);
@@ -305,7 +300,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600 }: 
   const [displayProgress, setDisplayProgress] = useState(0);
   const [engineOn, setEngineOn] = useState(false);
   const [gear, setGear] = useState('N');
-  const [currentPhase, setCurrentPhase] = useState(0);
+  const [animationPhase, setAnimationPhase] = useState(0);
 
   const phases = [
     { label: 'CHISELED OUTER SHROUD', desc: 'Premium aluminum frame with precision engineering' },
@@ -316,128 +311,116 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600 }: 
   ];
 
   useEffect(() => {
-    // Realistic 0-160 km/h acceleration with gear shifts (5 seconds total)
+    // SINGLE ACCELERATION SEQUENCE - 0 to 160 km/h in 8 seconds with gear shifts
     const accelerationSequence = withSequence(
-      // Start engine - 0.5s
+      // Engine start - 0.5s
       withTiming(0.01, { duration: 500, easing: Easing.out(Easing.cubic) }),
       
-      // Launch - 1st gear (0-40 km/h) - 1.2s
+      // 1st gear (0-40 km/h) - 1.2s
       withTiming(0.17, { duration: 1200, easing: Easing.out(Easing.cubic) }),
       
-      // Shift to 2nd gear (RPM drops, speed continues) - 0.3s
+      // Shift to 2nd - 0.3s
       withTiming(0.15, { duration: 300, easing: Easing.in(Easing.cubic) }),
       
       // 2nd gear (40-80 km/h) - 1.2s
       withTiming(0.34, { duration: 1200, easing: Easing.out(Easing.cubic) }),
       
-      // Shift to 3rd gear (RPM drops) - 0.3s
+      // Shift to 3rd - 0.3s
       withTiming(0.30, { duration: 300, easing: Easing.in(Easing.cubic) }),
       
-      // 3rd gear (80-120 km/h) - 1.0s
-      withTiming(0.50, { duration: 1000, easing: Easing.out(Easing.cubic) }),
+      // 3rd gear (80-120 km/h) - 1.2s
+      withTiming(0.50, { duration: 1200, easing: Easing.out(Easing.cubic) }),
       
-      // Shift to 4th gear - 0.3s
+      // Shift to 4th - 0.3s
       withTiming(0.45, { duration: 300, easing: Easing.in(Easing.cubic) }),
       
-      // 4th gear (120-160 km/h) - 1.0s
-      withTiming(0.67, { duration: 1000, easing: Easing.out(Easing.cubic) }),
+      // 4th gear (120-160 km/h) - 1.5s
+      withTiming(0.67, { duration: 1500, easing: Easing.out(Easing.cubic) }),
       
-      // Shift to 5th gear - 0.3s
-      withTiming(0.60, { duration: 300, easing: Easing.in(Easing.cubic) }),
+      // Hold at max - 1s
+      withDelay(1000, withTiming(0.67, { duration: 1 })),
       
-      // 5th gear - hold at 160 km/h - 2s
-      withDelay(2000, withTiming(0.67, { duration: 1 })),
+      // Decelerate - 2s
+      withTiming(0.1, { duration: 2000, easing: Easing.in(Easing.cubic) }),
       
-      // Decelerate - 3s
-      withTiming(0.20, { duration: 3000, easing: Easing.in(Easing.cubic) }),
-      
-      // Stop - 1s
-      withTiming(0, { duration: 1000, easing: Easing.in(Easing.cubic) })
+      // Stop - 0.5s
+      withTiming(0, { duration: 500, easing: Easing.in(Easing.cubic) })
     );
 
     speed.value = withSequence(accelerationSequence);
   }, [speed]);
 
-  // RPM follows speed but with realistic gear shifts
+  // RPM follows speed with gear shifts
   useEffect(() => {
     const rpmSequence = withSequence(
       // Start - idle
       withTiming(800, { duration: 500, easing: Easing.out(Easing.cubic) }),
       
-      // 1st gear - RPM climbs to 6500
+      // 1st gear
       withTiming(6500, { duration: 1200, easing: Easing.out(Easing.cubic) }),
-      
-      // Shift drop
       withTiming(4500, { duration: 300, easing: Easing.in(Easing.cubic) }),
       
-      // 2nd gear - RPM climbs to 6500
+      // 2nd gear
       withTiming(6500, { duration: 1200, easing: Easing.out(Easing.cubic) }),
-      
-      // Shift drop
       withTiming(4800, { duration: 300, easing: Easing.in(Easing.cubic) }),
       
-      // 3rd gear - RPM climbs to 6500
-      withTiming(6500, { duration: 1000, easing: Easing.out(Easing.cubic) }),
-      
-      // Shift drop
+      // 3rd gear
+      withTiming(6500, { duration: 1200, easing: Easing.out(Easing.cubic) }),
       withTiming(5200, { duration: 300, easing: Easing.in(Easing.cubic) }),
       
-      // 4th gear - RPM climbs to 6200
-      withTiming(6200, { duration: 1000, easing: Easing.out(Easing.cubic) }),
+      // 4th gear
+      withTiming(6200, { duration: 1500, easing: Easing.out(Easing.cubic) }),
       
-      // Shift drop
-      withTiming(5000, { duration: 300, easing: Easing.in(Easing.cubic) }),
-      
-      // 5th gear - hold at 5000
-      withDelay(2000, withTiming(5000, { duration: 1 })),
+      // Hold
+      withDelay(1000, withTiming(6200, { duration: 1 })),
       
       // Decelerate
-      withTiming(2000, { duration: 3000, easing: Easing.in(Easing.cubic) }),
+      withTiming(1500, { duration: 2000, easing: Easing.in(Easing.cubic) }),
       
       // Stop
-      withTiming(800, { duration: 1000, easing: Easing.in(Easing.cubic) })
+      withTiming(800, { duration: 500, easing: Easing.in(Easing.cubic) })
     );
 
     rpm.value = withSequence(rpmSequence);
   }, [rpm]);
 
-  // Gear changes
+  // Gear changes - 12 second total animation
   useEffect(() => {
-    const gearSequence = withSequence(
-      withTiming(0, { duration: 1 }),
-      withDelay(500, withTiming(1, { duration: 1 })),
-      withDelay(1200, withTiming(2, { duration: 1 })),
-      withDelay(1500, withTiming(2, { duration: 1 })),
-      withDelay(2700, withTiming(3, { duration: 1 })),
-      withDelay(3000, withTiming(3, { duration: 1 })),
-      withDelay(4000, withTiming(4, { duration: 1 })),
-      withDelay(4300, withTiming(4, { duration: 1 })),
-      withDelay(5300, withTiming(5, { duration: 1 })),
-      withDelay(5600, withTiming(5, { duration: 1 })),
-      withDelay(7600, withTiming(4, { duration: 1 })),
-      withDelay(8600, withTiming(3, { duration: 1 })),
-      withDelay(9600, withTiming(2, { duration: 1 })),
-      withDelay(10600, withTiming(1, { duration: 1 })),
-      withDelay(11600, withTiming(0, { duration: 1 }))
-    );
-    // Just run it once
-    const gearTimer = setTimeout(() => {
-      let gearIndex = 0;
-      const gearInterval = setInterval(() => {
-        const gears = ['N', '1', '2', '3', '4', '5', '4', '3', '2', '1', 'N'];
-        if (gearIndex < gears.length) {
-          setGear(gears[gearIndex]);
-          gearIndex++;
-        } else {
-          clearInterval(gearInterval);
-        }
-      }, 1000);
+    const gearTimings = [
+      { time: 600, gear: '1' },
+      { time: 1800, gear: '2' },
+      { time: 2100, gear: '2' },
+      { time: 3300, gear: '3' },
+      { time: 3600, gear: '3' },
+      { time: 4800, gear: '4' },
+      { time: 5100, gear: '4' },
+      { time: 6600, gear: '4' },
+      { time: 7600, gear: '4' },
+      { time: 8600, gear: '3' },
+      { time: 9600, gear: '2' },
+      { time: 10600, gear: '1' },
+      { time: 11100, gear: 'N' },
+    ];
+
+    let currentIndex = 0;
+    const interval = setInterval(() => {
+      if (currentIndex < gearTimings.length) {
+        setGear(gearTimings[currentIndex].gear);
+        currentIndex++;
+      } else {
+        clearInterval(interval);
+        // Notify completion
+        setTimeout(() => {
+          if (onComplete) onComplete();
+        }, 500);
+      }
     }, 500);
-    return () => clearTimeout(gearTimer);
-  }, []);
+
+    return () => clearInterval(interval);
+  }, [onComplete]);
 
   useEffect(() => {
-    const timer = setTimeout(() => setEngineOn(true), 500);
+    const timer = setTimeout(() => setEngineOn(true), 400);
     return () => clearTimeout(timer);
   }, []);
 
@@ -459,7 +442,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600 }: 
     else if (speedKmh > 20) phaseIndex = 1;
     else phaseIndex = 0;
     
-    runOnJS(setCurrentPhase)(phaseIndex);
+    runOnJS(setAnimationPhase)(phaseIndex);
   }, [speed, rpm]);
 
   const maxWidth = Math.min(containerWidth, 600);
@@ -472,244 +455,218 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600 }: 
   const centerX = gaugeWidth * 0.5;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.pageContainer}>
-        <View
-          style={[styles.container, { maxWidth: 600 }]}
-          onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
-        >
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <Text style={styles.headerTitle}>BMW LIVE COCKPIT PROFESSIONAL</Text>
-            </View>
-            <View style={styles.headerRight}>
-              <Text style={styles.mModeText}>M SPORT MODE</Text>
-              <View style={styles.mStripes}>
-                <View style={[styles.stripe, { backgroundColor: M_BLUE }]} />
-                <View style={[styles.stripe, { backgroundColor: M_PURPLE }]} />
-                <View style={[styles.stripe, { backgroundColor: M_RED }]} />
-              </View>
-            </View>
+    <View style={styles.container}>
+      <View
+        style={[styles.dashboard, { maxWidth: 600 }]}
+        onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.headerTitle}>BMW LIVE COCKPIT PROFESSIONAL</Text>
           </View>
-
-          {/* Main Gauge Cluster */}
-          <View style={[styles.gaugeCluster, { width: gaugeWidth, height: gaugeHeight }]}>
-            <Svg width={gaugeWidth} height={gaugeHeight}>
-              <Defs>
-                <LinearGradient id="clusterBg" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <Stop offset="0%" stopColor="#141820" />
-                  <Stop offset="100%" stopColor="#0A0B0E" />
-                </LinearGradient>
-              </Defs>
-
-              {/* Background */}
-              <Rect
-                x={0}
-                y={0}
-                width={gaugeWidth}
-                height={gaugeHeight}
-                rx={12}
-                fill="url(#clusterBg)"
-              />
-
-              {/* Border glow */}
-              <Rect
-                x={1}
-                y={1}
-                width={gaugeWidth - 2}
-                height={gaugeHeight - 2}
-                rx={11}
-                fill="none"
-                stroke="#2A3448"
-                strokeWidth={0.5}
-              />
-
-              {/* Left Gauge - Speed */}
-              <SpeedGauge
-                cx={leftX}
-                cy={centerY}
-                r={gaugeR}
-                progress={displayProgress}
-                value={displaySpeed}
-              />
-
-              {/* Right Gauge - RPM */}
-              <RpmGauge
-                cx={rightX}
-                cy={centerY}
-                r={gaugeR}
-                progress={displayProgress}
-                value={displayRpm}
-              />
-
-              {/* Center - Gear Indicator */}
-              <G>
-                {/* Diamond border */}
-                <Path
-                  d={`M ${centerX - 45} ${centerY - 45} L ${centerX} ${centerY - 65} L ${centerX + 45} ${centerY - 45} L ${centerX} ${centerY - 25} Z`}
-                  stroke="#2A3448"
-                  strokeWidth={0.5}
-                  fill="none"
-                  opacity={0.5}
-                />
-                <Path
-                  d={`M ${centerX - 45} ${centerY + 45} L ${centerX} ${centerY + 65} L ${centerX + 45} ${centerY + 45} L ${centerX} ${centerY + 25} Z`}
-                  stroke="#2A3448"
-                  strokeWidth={0.5}
-                  fill="none"
-                  opacity={0.5}
-                />
-                <Path
-                  d={`M ${centerX - 65} ${centerY} L ${centerX - 45} ${centerY - 45} L ${centerX - 25} ${centerY} L ${centerX - 45} ${centerY + 45} Z`}
-                  stroke="#2A3448"
-                  strokeWidth={0.5}
-                  fill="none"
-                  opacity={0.5}
-                />
-                <Path
-                  d={`M ${centerX + 65} ${centerY} L ${centerX + 45} ${centerY - 45} L ${centerX + 25} ${centerY} L ${centerX + 45} ${centerY + 45} Z`}
-                  stroke="#2A3448"
-                  strokeWidth={0.5}
-                  fill="none"
-                  opacity={0.5}
-                />
-
-                {/* Center circle */}
-                <Circle
-                  cx={centerX}
-                  cy={centerY}
-                  r={34}
-                  fill="#0A0B0E"
-                  stroke="#2A3448"
-                  strokeWidth={1.5}
-                />
-                <Circle
-                  cx={centerX}
-                  cy={centerY}
-                  r={30}
-                  fill="none"
-                  stroke="#3A4A5A"
-                  strokeWidth={0.5}
-                  opacity={0.5}
-                />
-
-                {/* Gear display */}
-                <SvgText
-                  x={centerX}
-                  y={centerY + 7}
-                  fill={TEXT_WHITE}
-                  fontSize={24}
-                  fontWeight="900"
-                  textAnchor="middle"
-                >
-                  {gear}
-                </SvgText>
-              </G>
-            </Svg>
-          </View>
-
-          {/* Phase Description */}
-          <View style={styles.phaseContainer}>
-            <Text style={styles.phaseTitle}>
-              {displaySpeed > 140 ? 'M SPORT MODE' :
-               displaySpeed > 100 ? 'SIGNATURE TELEMETRY' :
-               displaySpeed > 60 ? 'MULTI-SEGMENTED DISPLAY' :
-               displaySpeed > 20 ? 'REVERSE-SWEEPING TACHOMETER' :
-               'CHISELED OUTER SHROUD'}
-            </Text>
-            <Text style={styles.phaseDesc}>
-              {displaySpeed > 140 ? 'Track-focused instrumentation with M performance' :
-               displaySpeed > 100 ? 'Real-time performance data at your fingertips' :
-               displaySpeed > 60 ? 'Dynamic color zones for optimal readability' :
-               displaySpeed > 20 ? 'Authentic BMW M sport instrument cluster' :
-               'Premium aluminum frame with precision engineering'}
-            </Text>
-          </View>
-
-          {/* Bottom Bar */}
-          <View style={styles.bottomBar}>
-            <View style={styles.barSection}>
-              <Text style={styles.barLabel}>FUEL</Text>
-              <View style={styles.barTrack}>
-                <View style={[styles.barFill, { width: '65%', backgroundColor: BMW_ORANGE }]} />
-              </View>
+          <View style={styles.headerRight}>
+            <Text style={styles.mModeText}>M SPORT MODE</Text>
+            <View style={styles.mStripes}>
+              <View style={[styles.stripe, { backgroundColor: M_BLUE }]} />
+              <View style={[styles.stripe, { backgroundColor: M_PURPLE }]} />
+              <View style={[styles.stripe, { backgroundColor: M_RED }]} />
             </View>
-
-            <View style={styles.barSection}>
-              <Text style={styles.barLabel}>TEMP</Text>
-              <View style={styles.barTrack}>
-                <View style={[styles.barFill, { width: '75%', backgroundColor: GREEN }]} />
-              </View>
-            </View>
-
-            <View style={styles.barSection}>
-              <Text style={styles.barLabel}>OIL</Text>
-              <View style={styles.barTrack}>
-                <View style={[styles.barFill, { width: '85%', backgroundColor: BMW_LT_BLUE }]} />
-              </View>
-            </View>
-          </View>
-
-          {/* Settings */}
-          <View style={styles.settingsContainer}>
-            <View style={styles.settingsRow}>
-              <Text style={styles.settingsLabel}>Cockpit Layout Experience Theme</Text>
-              <View style={styles.themeIndicators}>
-                <View style={[styles.themeDot, { backgroundColor: BMW_RED }]} />
-                <View style={[styles.themeDot, { backgroundColor: BMW_ORANGE }]} />
-                <View style={[styles.themeDot, { backgroundColor: BMW_LT_BLUE }]} />
-                <View style={[styles.themeDot, { backgroundColor: GREEN }]} />
-              </View>
-            </View>
-            <View style={styles.settingsRow}>
-              <Text style={styles.settingsLabel}>M Performance</Text>
-              <View style={styles.performanceIndicators}>
-                <Text style={styles.performanceText}>Red</Text>
-                <View style={styles.performanceDivider} />
-                <Text style={styles.performanceText}>Comfort</Text>
-                <View style={styles.performanceDivider} />
-                <Text style={styles.performanceText}>Blue</Text>
-                <View style={styles.performanceDivider} />
-                <Text style={styles.performanceText}>Eco Pro</Text>
-                <View style={styles.performanceDivider} />
-                <Text style={styles.performanceText}>Green</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Status */}
-          <View style={styles.statusBar}>
-            <View style={styles.statusLeft}>
-              <View style={[styles.bulb, engineOn ? styles.bulbOn : styles.bulbOff]} />
-              <Text style={[styles.statusText, { color: engineOn ? GREEN : TEXT_GRAY }]}>
-                {engineOn ? 'ENGINE ON' : 'IGNITION'}
-              </Text>
-            </View>
-            <Text style={styles.centerText}>
-              {displaySpeed > 0 ? `${displaySpeed} km/h` : label}
-            </Text>
-            <Text style={styles.rightText}>12,847 km</Text>
           </View>
         </View>
+
+        {/* Main Gauge Cluster */}
+        <View style={[styles.gaugeCluster, { width: gaugeWidth, height: gaugeHeight }]}>
+          <Svg width={gaugeWidth} height={gaugeHeight}>
+            <Defs>
+              <LinearGradient id="clusterBg" x1="0%" y1="0%" x2="0%" y2="100%">
+                <Stop offset="0%" stopColor="#141820" />
+                <Stop offset="100%" stopColor="#0A0B0E" />
+              </LinearGradient>
+            </Defs>
+
+            <Rect
+              x={0}
+              y={0}
+              width={gaugeWidth}
+              height={gaugeHeight}
+              rx={12}
+              fill="url(#clusterBg)"
+            />
+            <Rect
+              x={1}
+              y={1}
+              width={gaugeWidth - 2}
+              height={gaugeHeight - 2}
+              rx={11}
+              fill="none"
+              stroke="#2A3448"
+              strokeWidth={0.5}
+            />
+
+            <SpeedGauge
+              cx={leftX}
+              cy={centerY}
+              r={gaugeR}
+              progress={displayProgress}
+              value={displaySpeed}
+            />
+
+            <RpmGauge
+              cx={rightX}
+              cy={centerY}
+              r={gaugeR}
+              progress={displayProgress}
+              value={displayRpm}
+            />
+
+            {/* Center - Gear Indicator */}
+            <G>
+              <Path
+                d={`M ${centerX - 45} ${centerY - 45} L ${centerX} ${centerY - 65} L ${centerX + 45} ${centerY - 45} L ${centerX} ${centerY - 25} Z`}
+                stroke="#2A3448"
+                strokeWidth={0.5}
+                fill="none"
+                opacity={0.5}
+              />
+              <Path
+                d={`M ${centerX - 45} ${centerY + 45} L ${centerX} ${centerY + 65} L ${centerX + 45} ${centerY + 45} L ${centerX} ${centerY + 25} Z`}
+                stroke="#2A3448"
+                strokeWidth={0.5}
+                fill="none"
+                opacity={0.5}
+              />
+              <Path
+                d={`M ${centerX - 65} ${centerY} L ${centerX - 45} ${centerY - 45} L ${centerX - 25} ${centerY} L ${centerX - 45} ${centerY + 45} Z`}
+                stroke="#2A3448"
+                strokeWidth={0.5}
+                fill="none"
+                opacity={0.5}
+              />
+              <Path
+                d={`M ${centerX + 65} ${centerY} L ${centerX + 45} ${centerY - 45} L ${centerX + 25} ${centerY} L ${centerX + 45} ${centerY + 45} Z`}
+                stroke="#2A3448"
+                strokeWidth={0.5}
+                fill="none"
+                opacity={0.5}
+              />
+
+              <Circle
+                cx={centerX}
+                cy={centerY}
+                r={34}
+                fill="#0A0B0E"
+                stroke="#2A3448"
+                strokeWidth={1.5}
+              />
+              <Circle
+                cx={centerX}
+                cy={centerY}
+                r={30}
+                fill="none"
+                stroke="#3A4A5A"
+                strokeWidth={0.5}
+                opacity={0.5}
+              />
+
+              <SvgText
+                x={centerX}
+                y={centerY + 7}
+                fill={TEXT_WHITE}
+                fontSize={24}
+                fontWeight="900"
+                textAnchor="middle"
+              >
+                {gear}
+              </SvgText>
+            </G>
+          </Svg>
+        </View>
+
+        {/* Phase Description */}
+        <View style={styles.phaseContainer}>
+          <Text style={styles.phaseTitle}>{phases[animationPhase]?.label || ''}</Text>
+          <Text style={styles.phaseDesc}>{phases[animationPhase]?.desc || ''}</Text>
+        </View>
+
+        {/* Bottom Bar */}
+        <View style={styles.bottomBar}>
+          <View style={styles.barSection}>
+            <Text style={styles.barLabel}>FUEL</Text>
+            <View style={styles.barTrack}>
+              <View style={[styles.barFill, { width: '65%', backgroundColor: BMW_ORANGE }]} />
+            </View>
+          </View>
+
+          <View style={styles.barSection}>
+            <Text style={styles.barLabel}>TEMP</Text>
+            <View style={styles.barTrack}>
+              <View style={[styles.barFill, { width: '75%', backgroundColor: GREEN }]} />
+            </View>
+          </View>
+
+          <View style={styles.barSection}>
+            <Text style={styles.barLabel}>OIL</Text>
+            <View style={styles.barTrack}>
+              <View style={[styles.barFill, { width: '85%', backgroundColor: BMW_LT_BLUE }]} />
+            </View>
+          </View>
+        </View>
+
+        {/* Settings */}
+        <View style={styles.settingsContainer}>
+          <View style={styles.settingsRow}>
+            <Text style={styles.settingsLabel}>Cockpit Layout Experience Theme</Text>
+            <View style={styles.themeIndicators}>
+              <View style={[styles.themeDot, { backgroundColor: BMW_RED }]} />
+              <View style={[styles.themeDot, { backgroundColor: BMW_ORANGE }]} />
+              <View style={[styles.themeDot, { backgroundColor: BMW_LT_BLUE }]} />
+              <View style={[styles.themeDot, { backgroundColor: GREEN }]} />
+            </View>
+          </View>
+          <View style={styles.settingsRow}>
+            <Text style={styles.settingsLabel}>M Performance</Text>
+            <View style={styles.performanceIndicators}>
+              <Text style={styles.performanceText}>Red</Text>
+              <View style={styles.performanceDivider} />
+              <Text style={styles.performanceText}>Comfort</Text>
+              <View style={styles.performanceDivider} />
+              <Text style={styles.performanceText}>Blue</Text>
+              <View style={styles.performanceDivider} />
+              <Text style={styles.performanceText}>Eco Pro</Text>
+              <View style={styles.performanceDivider} />
+              <Text style={styles.performanceText}>Green</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Status */}
+        <View style={styles.statusBar}>
+          <View style={styles.statusLeft}>
+            <View style={[styles.bulb, engineOn ? styles.bulbOn : styles.bulbOff]} />
+            <Text style={[styles.statusText, { color: engineOn ? GREEN : TEXT_GRAY }]}>
+              {engineOn ? 'ENGINE ON' : 'IGNITION'}
+            </Text>
+          </View>
+          <Text style={styles.centerText}>
+            {displaySpeed > 0 ? `${displaySpeed} km/h` : label}
+          </Text>
+          <Text style={styles.rightText}>12,847 km</Text>
+        </View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#000000',
-  },
-  pageContainer: {
+  container: {
     flex: 1,
     backgroundColor: '#000000',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
   },
-  container: {
+  dashboard: {
     width: '100%',
     backgroundColor: '#0A0B0E',
     borderRadius: 16,
