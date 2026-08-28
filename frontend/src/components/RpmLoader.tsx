@@ -30,7 +30,7 @@ interface Props {
 
 // BMW Live Cockpit Professional Authentic Colors
 const BG_DARK = '#0A0B0E';
-const TEXT_WHITE = '#F0F2F5';
+const TEXT_WHITE = '#FFFFFF';
 const TEXT_GRAY = '#8A95A8';
 const TEXT_DIM = '#4A5568';
 const BMW_ORANGE = '#FF5A00';
@@ -70,7 +70,7 @@ function SpeedGauge({
       key="bg"
       d={`M ${pt(cx, cy, r, startAngle).x} ${pt(cx, cy, r, startAngle).y} A ${r} ${r} 0 0 1 ${pt(cx, cy, r, endAngle).x} ${pt(cx, cy, r, endAngle).y}`}
       stroke="#1A2029"
-      strokeWidth={10}
+      strokeWidth={8}
       fill="none"
     />
   );
@@ -92,7 +92,7 @@ function SpeedGauge({
         x2={p2.x}
         y2={p2.y}
         stroke={active ? color : '#1A2029'}
-        strokeWidth={10}
+        strokeWidth={8}
         strokeLinecap="round"
         opacity={active ? 1 : 0.3}
       />
@@ -103,9 +103,9 @@ function SpeedGauge({
   for (let i = 0; i <= 10; i++) {
     const ratio = i / 10;
     const angle = startAngle + ratio * (endAngle - startAngle);
-    const inner = pt(cx, cy, r - 20, angle);
-    const outer = pt(cx, cy, r - 12, angle);
-    const label = pt(cx, cy, r - 34, angle);
+    const inner = pt(cx, cy, r - 18, angle);
+    const outer = pt(cx, cy, r - 10, angle);
+    const label = pt(cx, cy, r - 30, angle);
     const isMain = i % 2 === 0;
     const val = Math.round((i / 10) * 240);
     nodes.push(
@@ -126,7 +126,7 @@ function SpeedGauge({
           key={`l${i}`}
           x={label.x}
           y={label.y + 3}
-          fill={TEXT_GRAY}
+          fill={TEXT_WHITE}
           fontSize={9}
           fontWeight="600"
           textAnchor="middle"
@@ -137,14 +137,14 @@ function SpeedGauge({
     }
   }
 
-  // Speed value
+  // Speed value - WHITE
   nodes.push(
     <SvgText
       key="value"
       x={cx}
       y={cy + 8}
       fill={TEXT_WHITE}
-      fontSize={32}
+      fontSize={28}
       fontWeight="900"
       textAnchor="middle"
     >
@@ -155,9 +155,9 @@ function SpeedGauge({
     <SvgText
       key="unit"
       x={cx}
-      y={cy + 28}
-      fill={TEXT_GRAY}
-      fontSize={10}
+      y={cy + 26}
+      fill={TEXT_WHITE}
+      fontSize={9}
       fontWeight="600"
       textAnchor="middle"
       letterSpacing="2"
@@ -193,7 +193,7 @@ function RpmGauge({
       key="bg"
       d={`M ${pt(cx, cy, r, startAngle).x} ${pt(cx, cy, r, startAngle).y} A ${r} ${r} 0 0 0 ${pt(cx, cy, r, endAngle).x} ${pt(cx, cy, r, endAngle).y}`}
       stroke="#1A2029"
-      strokeWidth={10}
+      strokeWidth={8}
       fill="none"
     />
   );
@@ -215,7 +215,7 @@ function RpmGauge({
         x2={p2.x}
         y2={p2.y}
         stroke={active ? color : '#1A2029'}
-        strokeWidth={10}
+        strokeWidth={8}
         strokeLinecap="round"
         opacity={active ? 1 : 0.3}
       />
@@ -226,9 +226,9 @@ function RpmGauge({
   for (let i = 0; i <= 8; i++) {
     const ratio = i / 8;
     const angle = startAngle - ratio * (startAngle - endAngle);
-    const inner = pt(cx, cy, r - 20, angle);
-    const outer = pt(cx, cy, r - 12, angle);
-    const label = pt(cx, cy, r - 34, angle);
+    const inner = pt(cx, cy, r - 18, angle);
+    const outer = pt(cx, cy, r - 10, angle);
+    const label = pt(cx, cy, r - 30, angle);
     const isMain = i % 2 === 0;
     const val = Math.round((i / 8) * 8);
     nodes.push(
@@ -249,7 +249,7 @@ function RpmGauge({
           key={`l${i}`}
           x={label.x}
           y={label.y + 3}
-          fill={TEXT_GRAY}
+          fill={TEXT_WHITE}
           fontSize={9}
           fontWeight="600"
           textAnchor="middle"
@@ -260,14 +260,14 @@ function RpmGauge({
     }
   }
 
-  // RPM value
+  // RPM value - ORANGE
   nodes.push(
     <SvgText
       key="value"
       x={cx}
       y={cy + 8}
       fill={BMW_ORANGE}
-      fontSize={32}
+      fontSize={28}
       fontWeight="900"
       textAnchor="middle"
     >
@@ -278,9 +278,9 @@ function RpmGauge({
     <SvgText
       key="unit"
       x={cx}
-      y={cy + 28}
-      fill={TEXT_GRAY}
-      fontSize={10}
+      y={cy + 26}
+      fill={TEXT_WHITE}
+      fontSize={9}
       fontWeight="600"
       textAnchor="middle"
       letterSpacing="2"
@@ -290,6 +290,102 @@ function RpmGauge({
   );
 
   return <>{nodes}</>;
+}
+
+// BMW G-Series Style Fuel Gauge
+function FuelGauge({
+  cx,
+  cy,
+  r,
+  value,
+}: {
+  cx: number;
+  cy: number;
+  r: number;
+  value: number;
+}) {
+  const startAngle = -120;
+  const endAngle = 120;
+  const progress = value / 100;
+  
+  // Background arc
+  const bgPath = `M ${pt(cx, cy, r, startAngle).x} ${pt(cx, cy, r, startAngle).y} A ${r} ${r} 0 0 1 ${pt(cx, cy, r, endAngle).x} ${pt(cx, cy, r, endAngle).y}`;
+  
+  // Active arc
+  const activeAngle = startAngle + progress * (endAngle - startAngle);
+  const activePath = `M ${pt(cx, cy, r, startAngle).x} ${pt(cx, cy, r, startAngle).y} A ${r} ${r} 0 0 1 ${pt(cx, cy, r, activeAngle).x} ${pt(cx, cy, r, activeAngle).y}`;
+
+  return (
+    <G>
+      <Path d={bgPath} stroke="#1A2029" strokeWidth={4} fill="none" />
+      <Path d={activePath} stroke={value < 20 ? BMW_RED : BMW_ORANGE} strokeWidth={4} fill="none" strokeLinecap="round" />
+      
+      {/* E and F labels */}
+      <SvgText x={pt(cx, cy, r + 16, startAngle).x} y={pt(cx, cy, r + 16, startAngle).y + 3} fill={TEXT_WHITE} fontSize={8} fontWeight="600" textAnchor="middle">
+        E
+      </SvgText>
+      <SvgText x={pt(cx, cy, r + 16, endAngle).x} y={pt(cx, cy, r + 16, endAngle).y + 3} fill={TEXT_WHITE} fontSize={8} fontWeight="600" textAnchor="middle">
+        F
+      </SvgText>
+      
+      {/* Fuel percentage - WHITE */}
+      <SvgText x={cx} y={cy + 5} fill={TEXT_WHITE} fontSize={14} fontWeight="700" textAnchor="middle">
+        {Math.round(value)}%
+      </SvgText>
+      <SvgText x={cx} y={cy + 20} fill={TEXT_WHITE} fontSize={8} fontWeight="600" textAnchor="middle" letterSpacing="1">
+        FUEL
+      </SvgText>
+    </G>
+  );
+}
+
+// BMW G-Series Style Temperature Gauge
+function TempGauge({
+  cx,
+  cy,
+  r,
+  value,
+}: {
+  cx: number;
+  cy: number;
+  r: number;
+  value: number;
+}) {
+  const startAngle = -120;
+  const endAngle = 120;
+  const progress = Math.min(value / 120, 1);
+  
+  // Background arc
+  const bgPath = `M ${pt(cx, cy, r, startAngle).x} ${pt(cx, cy, r, startAngle).y} A ${r} ${r} 0 0 1 ${pt(cx, cy, r, endAngle).x} ${pt(cx, cy, r, endAngle).y}`;
+  
+  // Active arc
+  const activeAngle = startAngle + progress * (endAngle - startAngle);
+  const activePath = `M ${pt(cx, cy, r, startAngle).x} ${pt(cx, cy, r, startAngle).y} A ${r} ${r} 0 0 1 ${pt(cx, cy, r, activeAngle).x} ${pt(cx, cy, r, activeAngle).y}`;
+
+  const tempColor = value > 100 ? BMW_RED : value > 90 ? BMW_ORANGE : GREEN;
+
+  return (
+    <G>
+      <Path d={bgPath} stroke="#1A2029" strokeWidth={4} fill="none" />
+      <Path d={activePath} stroke={tempColor} strokeWidth={4} fill="none" strokeLinecap="round" />
+      
+      {/* Temperature labels */}
+      <SvgText x={pt(cx, cy, r + 16, startAngle).x} y={pt(cx, cy, r + 16, startAngle).y + 3} fill={TEXT_WHITE} fontSize={7} fontWeight="600" textAnchor="middle">
+        50°
+      </SvgText>
+      <SvgText x={pt(cx, cy, r + 16, endAngle).x} y={pt(cx, cy, r + 16, endAngle).y + 3} fill={TEXT_WHITE} fontSize={7} fontWeight="600" textAnchor="middle">
+        120°
+      </SvgText>
+      
+      {/* Temperature value - WHITE */}
+      <SvgText x={cx} y={cy + 5} fill={TEXT_WHITE} fontSize={14} fontWeight="700" textAnchor="middle">
+        {Math.round(value)}°
+      </SvgText>
+      <SvgText x={cx} y={cy + 20} fill={TEXT_WHITE} fontSize={8} fontWeight="600" textAnchor="middle" letterSpacing="1">
+        TEMP
+      </SvgText>
+    </G>
+  );
 }
 
 export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, onComplete }: Props) {
@@ -302,7 +398,8 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
   const [engineOn, setEngineOn] = useState(false);
   const [gear, setGear] = useState('N');
   const [animationPhase, setAnimationPhase] = useState(0);
-  const [animationComplete, setAnimationComplete] = useState(false);
+  const [fuelLevel, setFuelLevel] = useState(65);
+  const [tempLevel, setTempLevel] = useState(90);
 
   const phases = [
     { label: 'CHISELED OUTER SHROUD', desc: 'Premium aluminum frame with precision engineering' },
@@ -313,15 +410,15 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
   ];
 
   useEffect(() => {
-    // SMOOTH ACCELERATION SEQUENCE - 0 to 160 km/h in 8 seconds with gear shifts
+    // SMOOTH ACCELERATION SEQUENCE
     const accelerationSequence = withSequence(
       // Engine start - 0.5s
       withTiming(0.02, { duration: 500, easing: Easing.out(Easing.cubic) }),
       
-      // 1st gear (0-40 km/h) - 1.5s (smooth pull)
+      // 1st gear (0-40 km/h) - 1.5s
       withTiming(0.17, { duration: 1500, easing: Easing.out(Easing.quad) }),
       
-      // Shift to 2nd - quick but smooth drop
+      // Shift to 2nd
       withTiming(0.15, { duration: 400, easing: Easing.inOut(Easing.quad) }),
       
       // 2nd gear (40-80 km/h) - 1.5s
@@ -342,7 +439,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
       // Hold at max - 1s
       withDelay(1000, withTiming(0.67, { duration: 1 })),
       
-      // Decelerate smoothly - 2.5s
+      // Decelerate - 2.5s
       withTiming(0.05, { duration: 2500, easing: Easing.inOut(Easing.quad) }),
       
       // Stop - 0.5s
@@ -352,34 +449,30 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
     speed.value = withSequence(accelerationSequence);
   }, [speed]);
 
-  // RPM follows speed with smooth gear shifts
+  // RPM follows speed
   useEffect(() => {
     const rpmSequence = withSequence(
-      // Start - idle
       withTiming(800, { duration: 500, easing: Easing.out(Easing.cubic) }),
       
-      // 1st gear - smooth climb to 6500
+      // 1st gear
       withTiming(6500, { duration: 1500, easing: Easing.out(Easing.quad) }),
-      // Shift drop to 4500
       withTiming(4500, { duration: 400, easing: Easing.inOut(Easing.quad) }),
       
-      // 2nd gear - smooth climb to 6500
+      // 2nd gear
       withTiming(6500, { duration: 1500, easing: Easing.out(Easing.quad) }),
-      // Shift drop to 4800
       withTiming(4800, { duration: 400, easing: Easing.inOut(Easing.quad) }),
       
-      // 3rd gear - smooth climb to 6500
+      // 3rd gear
       withTiming(6500, { duration: 1500, easing: Easing.out(Easing.quad) }),
-      // Shift drop to 5200
       withTiming(5200, { duration: 400, easing: Easing.inOut(Easing.quad) }),
       
-      // 4th gear - smooth climb to 6200
+      // 4th gear
       withTiming(6200, { duration: 1500, easing: Easing.out(Easing.quad) }),
       
-      // Hold at 6200
+      // Hold
       withDelay(1000, withTiming(6200, { duration: 1 })),
       
-      // Decelerate smoothly
+      // Decelerate
       withTiming(1200, { duration: 2500, easing: Easing.inOut(Easing.quad) }),
       
       // Return to idle
@@ -389,23 +482,22 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
     rpm.value = withSequence(rpmSequence);
   }, [rpm]);
 
-  // Gear changes - realistic with smooth transitions
+  // Gear sequence
   useEffect(() => {
-    // Realistic gear sequence: N → 1 → 2 → 3 → 4 → 3 → 2 → 1 → N
     const gearSequence = [
       { time: 0, gear: 'N' },
       { time: 600, gear: '1' },
       { time: 2100, gear: '2' },
-      { time: 2500, gear: '2' }, // Hold 2nd
+      { time: 2500, gear: '2' },
       { time: 4000, gear: '3' },
-      { time: 4400, gear: '3' }, // Hold 3rd
+      { time: 4400, gear: '3' },
       { time: 5900, gear: '4' },
-      { time: 6300, gear: '4' }, // Hold 4th
-      { time: 7400, gear: '4' }, // Still 4th during decel
-      { time: 8400, gear: '3' }, // Downshift
-      { time: 9400, gear: '2' }, // Downshift
-      { time: 10400, gear: '1' }, // Downshift
-      { time: 11100, gear: 'N' }, // Neutral
+      { time: 6300, gear: '4' },
+      { time: 7400, gear: '4' },
+      { time: 8400, gear: '3' },
+      { time: 9400, gear: '2' },
+      { time: 10400, gear: '1' },
+      { time: 11100, gear: 'N' },
     ];
 
     let currentIndex = 0;
@@ -415,8 +507,6 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
         currentIndex++;
       } else {
         clearInterval(interval);
-        setAnimationComplete(true);
-        // Notify completion
         setTimeout(() => {
           if (onComplete) onComplete();
         }, 500);
@@ -425,6 +515,28 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
 
     return () => clearInterval(interval);
   }, [onComplete]);
+
+  // Simulate temperature rising during acceleration
+  useEffect(() => {
+    const tempInterval = setInterval(() => {
+      setTempLevel(prev => {
+        const newTemp = prev + (Math.random() * 2 - 0.5);
+        return Math.min(105, Math.max(80, newTemp));
+      });
+    }, 1000);
+    return () => clearInterval(tempInterval);
+  }, []);
+
+  // Simulate fuel decreasing
+  useEffect(() => {
+    const fuelInterval = setInterval(() => {
+      setFuelLevel(prev => {
+        const newFuel = prev - (Math.random() * 0.5);
+        return Math.max(10, newFuel);
+      });
+    }, 2000);
+    return () => clearInterval(fuelInterval);
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setEngineOn(true), 400);
@@ -441,7 +553,6 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
     runOnJS(setDisplaySpeed)(speedKmh);
     runOnJS(setDisplayRpm)(rpmDisplay);
     
-    // Update phase based on speed - smooth transitions
     let phaseIndex = 0;
     if (speedKmh > 140) phaseIndex = 4;
     else if (speedKmh > 100) phaseIndex = 3;
@@ -452,19 +563,26 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
     runOnJS(setAnimationPhase)(phaseIndex);
   }, [speed, rpm]);
 
-  const maxWidth = Math.min(containerWidth, 600);
+  // SHRUNKEN WIDTH - maxWidth 480 instead of 600
+  const maxWidth = Math.min(containerWidth, 480);
   const gaugeWidth = maxWidth;
-  const gaugeHeight = gaugeWidth * 0.48;
-  const centerY = gaugeHeight * 0.48;
-  const gaugeR = Math.min(gaugeWidth * 0.22, 80);
-  const leftX = gaugeWidth * 0.28;
-  const rightX = gaugeWidth * 0.72;
+  const gaugeHeight = gaugeWidth * 0.52; // Slightly taller for fuel/temp
+  const centerY = gaugeHeight * 0.45;
+  const gaugeR = Math.min(gaugeWidth * 0.19, 70);
+  const leftX = gaugeWidth * 0.27;
+  const rightX = gaugeWidth * 0.73;
   const centerX = gaugeWidth * 0.5;
+  
+  // Fuel and temp gauge positions - centered below main gauges
+  const fuelX = gaugeWidth * 0.28;
+  const tempX = gaugeWidth * 0.72;
+  const fuelTempY = gaugeHeight * 0.82;
+  const smallGaugeR = gaugeR * 0.6;
 
   return (
     <View style={styles.container}>
       <View
-        style={[styles.dashboard, { maxWidth: 600 }]}
+        style={[styles.dashboard, { maxWidth: 480 }]}
         onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
       >
         {/* Header */}
@@ -511,6 +629,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
               strokeWidth={0.5}
             />
 
+            {/* Speed Gauge */}
             <SpeedGauge
               cx={leftX}
               cy={centerY}
@@ -519,6 +638,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
               value={displaySpeed}
             />
 
+            {/* RPM Gauge */}
             <RpmGauge
               cx={rightX}
               cy={centerY}
@@ -530,28 +650,28 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
             {/* Center - Gear Indicator */}
             <G>
               <Path
-                d={`M ${centerX - 45} ${centerY - 45} L ${centerX} ${centerY - 65} L ${centerX + 45} ${centerY - 45} L ${centerX} ${centerY - 25} Z`}
+                d={`M ${centerX - 40} ${centerY - 40} L ${centerX} ${centerY - 58} L ${centerX + 40} ${centerY - 40} L ${centerX} ${centerY - 22} Z`}
                 stroke="#2A3448"
                 strokeWidth={0.5}
                 fill="none"
                 opacity={0.5}
               />
               <Path
-                d={`M ${centerX - 45} ${centerY + 45} L ${centerX} ${centerY + 65} L ${centerX + 45} ${centerY + 45} L ${centerX} ${centerY + 25} Z`}
+                d={`M ${centerX - 40} ${centerY + 40} L ${centerX} ${centerY + 58} L ${centerX + 40} ${centerY + 40} L ${centerX} ${centerY + 22} Z`}
                 stroke="#2A3448"
                 strokeWidth={0.5}
                 fill="none"
                 opacity={0.5}
               />
               <Path
-                d={`M ${centerX - 65} ${centerY} L ${centerX - 45} ${centerY - 45} L ${centerX - 25} ${centerY} L ${centerX - 45} ${centerY + 45} Z`}
+                d={`M ${centerX - 58} ${centerY} L ${centerX - 40} ${centerY - 40} L ${centerX - 22} ${centerY} L ${centerX - 40} ${centerY + 40} Z`}
                 stroke="#2A3448"
                 strokeWidth={0.5}
                 fill="none"
                 opacity={0.5}
               />
               <Path
-                d={`M ${centerX + 65} ${centerY} L ${centerX + 45} ${centerY - 45} L ${centerX + 25} ${centerY} L ${centerX + 45} ${centerY + 45} Z`}
+                d={`M ${centerX + 58} ${centerY} L ${centerX + 40} ${centerY - 40} L ${centerX + 22} ${centerY} L ${centerX + 40} ${centerY + 40} Z`}
                 stroke="#2A3448"
                 strokeWidth={0.5}
                 fill="none"
@@ -561,7 +681,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
               <Circle
                 cx={centerX}
                 cy={centerY}
-                r={34}
+                r={30}
                 fill="#0A0B0E"
                 stroke="#2A3448"
                 strokeWidth={1.5}
@@ -569,7 +689,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
               <Circle
                 cx={centerX}
                 cy={centerY}
-                r={30}
+                r={26}
                 fill="none"
                 stroke="#3A4A5A"
                 strokeWidth={0.5}
@@ -578,15 +698,31 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
 
               <SvgText
                 x={centerX}
-                y={centerY + 7}
+                y={centerY + 6}
                 fill={TEXT_WHITE}
-                fontSize={24}
+                fontSize={20}
                 fontWeight="900"
                 textAnchor="middle"
               >
                 {gear}
               </SvgText>
             </G>
+
+            {/* Fuel Gauge - BMW G-Series Style */}
+            <FuelGauge
+              cx={fuelX}
+              cy={fuelTempY}
+              r={smallGaugeR}
+              value={fuelLevel}
+            />
+
+            {/* Temperature Gauge - BMW G-Series Style */}
+            <TempGauge
+              cx={tempX}
+              cy={fuelTempY}
+              r={smallGaugeR}
+              value={tempLevel}
+            />
           </Svg>
         </View>
 
@@ -599,23 +735,21 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
         {/* Bottom Bar */}
         <View style={styles.bottomBar}>
           <View style={styles.barSection}>
-            <Text style={styles.barLabel}>FUEL</Text>
-            <View style={styles.barTrack}>
-              <View style={[styles.barFill, { width: '65%', backgroundColor: BMW_ORANGE }]} />
-            </View>
-          </View>
-
-          <View style={styles.barSection}>
-            <Text style={styles.barLabel}>TEMP</Text>
-            <View style={styles.barTrack}>
-              <View style={[styles.barFill, { width: '75%', backgroundColor: GREEN }]} />
-            </View>
-          </View>
-
-          <View style={styles.barSection}>
             <Text style={styles.barLabel}>OIL</Text>
             <View style={styles.barTrack}>
               <View style={[styles.barFill, { width: '85%', backgroundColor: BMW_LT_BLUE }]} />
+            </View>
+          </View>
+          <View style={styles.barSection}>
+            <Text style={styles.barLabel}>BATTERY</Text>
+            <View style={styles.barTrack}>
+              <View style={[styles.barFill, { width: '92%', backgroundColor: GREEN }]} />
+            </View>
+          </View>
+          <View style={styles.barSection}>
+            <Text style={styles.barLabel}>BRAKE</Text>
+            <View style={styles.barTrack}>
+              <View style={[styles.barFill, { width: '100%', backgroundColor: BMW_ORANGE }]} />
             </View>
           </View>
         </View>
@@ -651,7 +785,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600, on
         <View style={styles.statusBar}>
           <View style={styles.statusLeft}>
             <View style={[styles.bulb, engineOn ? styles.bulbOn : styles.bulbOff]} />
-            <Text style={[styles.statusText, { color: engineOn ? GREEN : TEXT_GRAY }]}>
+            <Text style={[styles.statusText, { color: engineOn ? GREEN : TEXT_WHITE }]}>
               {engineOn ? 'ENGINE ON' : 'IGNITION'}
             </Text>
           </View>
@@ -702,7 +836,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 9,
-    color: TEXT_GRAY,
+    color: TEXT_WHITE,
     fontWeight: '700',
     letterSpacing: 1.5,
   },
@@ -749,7 +883,7 @@ const styles = StyleSheet.create({
   },
   phaseDesc: {
     fontSize: 8,
-    color: TEXT_GRAY,
+    color: TEXT_WHITE,
     fontWeight: '400',
     letterSpacing: 0.5,
     textAlign: 'center',
@@ -766,7 +900,7 @@ const styles = StyleSheet.create({
   },
   barLabel: {
     fontSize: 8,
-    color: TEXT_GRAY,
+    color: TEXT_WHITE,
     fontWeight: '600',
     letterSpacing: 0.5,
     marginBottom: 2,
@@ -801,7 +935,7 @@ const styles = StyleSheet.create({
   },
   settingsLabel: {
     fontSize: 7,
-    color: TEXT_DIM,
+    color: TEXT_WHITE,
     fontWeight: '600',
     letterSpacing: 0.5,
   },
@@ -822,7 +956,7 @@ const styles = StyleSheet.create({
   },
   performanceText: {
     fontSize: 7,
-    color: TEXT_GRAY,
+    color: TEXT_WHITE,
     fontWeight: '600',
     letterSpacing: 0.5,
   },
@@ -869,13 +1003,13 @@ const styles = StyleSheet.create({
   },
   centerText: {
     fontSize: 8,
-    color: TEXT_GRAY,
+    color: TEXT_WHITE,
     fontWeight: '600',
     letterSpacing: 0.5,
   },
   rightText: {
     fontSize: 8,
-    color: TEXT_GRAY,
+    color: TEXT_WHITE,
     fontWeight: '600',
   },
 });
