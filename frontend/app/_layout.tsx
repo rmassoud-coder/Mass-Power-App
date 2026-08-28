@@ -12,15 +12,13 @@ import { runAutoPull } from '../src/utils/autoSync';
 
 SplashScreen.preventAutoHideAsync();
 
-const MIN_LOADER_MS = 1800; // give the revving animation room to play
-
 export default function RootLayout() {
   const [appIsReady, setAppIsReady] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
+  const [showLoader, setShowLoader] = useState(true);
 
   useEffect(() => {
     async function prepare() {
-      const startedAt = Date.now();
       try {
         // Initialize local SQLite database
         await initDatabase();
@@ -50,13 +48,8 @@ export default function RootLayout() {
         console.warn(e);
         setInitError(e?.message || 'Failed to initialize database');
       } finally {
-        // Hide the native splash so our RpmLoader becomes visible
+        // Hide the native splash
         await SplashScreen.hideAsync();
-        const elapsed = Date.now() - startedAt;
-        const remaining = Math.max(0, MIN_LOADER_MS - elapsed);
-        if (remaining > 0) {
-          await new Promise((r) => setTimeout(r, remaining));
-        }
         setAppIsReady(true);
       }
     }
@@ -64,12 +57,12 @@ export default function RootLayout() {
     prepare();
   }, []);
 
-  // Safe auto-pull: merges cloud changes in (additive-only, never deletes,
-  // see autoSync.ts / dbSync.ts). Runs once on launch, then again every time
-  // the app returns to the foreground, so the other device's new sales show
-  // up here without needing a manual Pull. Silently no-ops if GitHub isn't
-  // configured, and throttled internally so switching apps repeatedly
-  // doesn't hammer the API.
+  // Handle RpmLoader completion
+  const handleLoaderComplete = () => {
+    setShowLoader(false);
+  };
+
+  // Safe auto-pull: merges cloud changes in
   useEffect(() => {
     runAutoPull().catch(() => { /* swallowed intentionally */ });
 
@@ -81,25 +74,25 @@ export default function RootLayout() {
     return () => sub.remove();
   }, []);
 
-  if (!appIsReady) {
+  // Show loader while app is preparing or loader is visible
+  if (!appIsReady || showLoader) {
     return (
       <View
         style={{
           flex: 1,
-          backgroundColor: '#fff',
+          backgroundColor: '#000000', // Pure black background
           alignItems: 'center',
           justifyContent: 'center',
-          padding: 20,
         }}
       >
-        <RpmLoader />
+        <RpmLoader onComplete={handleLoaderComplete} />
       </View>
     );
   }
 
   if (initError) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: '#000' }}>
         <Text style={{ fontSize: 18, color: '#ef4444', textAlign: 'center' }}>
           Failed to start: {initError}
         </Text>
@@ -110,8 +103,6 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        {/* Hidden WebView that owns the HTML→bitmap rasterizer for the Cat
-            Printer BLE path. Mounted once for the whole app session. */}
         <HtmlRasterizerHost />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />
