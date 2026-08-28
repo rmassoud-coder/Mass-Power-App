@@ -3,9 +3,8 @@ import { View, Text, StyleSheet, Dimensions, SafeAreaView } from 'react-native';
 import Animated, {
   useSharedValue,
   useDerivedValue,
-  withRepeat,
-  withSequence,
   withTiming,
+  withSequence,
   withDelay,
   Easing,
   runOnJS,
@@ -299,11 +298,13 @@ function RpmGauge({
 
 export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600 }: Props) {
   const [containerWidth, setContainerWidth] = useState(Dimensions.get('window').width - 32);
-  const sweep = useSharedValue(0);
+  const speed = useSharedValue(0);
+  const rpm = useSharedValue(0);
   const [displayRpm, setDisplayRpm] = useState(0);
   const [displaySpeed, setDisplaySpeed] = useState(0);
   const [displayProgress, setDisplayProgress] = useState(0);
   const [engineOn, setEngineOn] = useState(false);
+  const [gear, setGear] = useState('N');
   const [currentPhase, setCurrentPhase] = useState(0);
 
   const phases = [
@@ -315,57 +316,151 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600 }: 
   ];
 
   useEffect(() => {
-    // Each phase progresses slowly - total cycle ~60 seconds
-    const animationSequence = withSequence(
-      // Phase 0: Chiseled Outer Shroud (0-0.2) - 6 seconds
-      withTiming(0.2, { duration: 6000, easing: Easing.out(Easing.cubic) }),
-      withDelay(2000, withTiming(0.2, { duration: 1 })), // Hold 2 seconds
+    // Realistic 0-160 km/h acceleration with gear shifts (5 seconds total)
+    const accelerationSequence = withSequence(
+      // Start engine - 0.5s
+      withTiming(0.01, { duration: 500, easing: Easing.out(Easing.cubic) }),
       
-      // Phase 1: Reverse-Sweeping Tachometer (0.2-0.4) - 6 seconds
-      withTiming(0.4, { duration: 6000, easing: Easing.out(Easing.cubic) }),
-      withDelay(2000, withTiming(0.4, { duration: 1 })), // Hold 2 seconds
+      // Launch - 1st gear (0-40 km/h) - 1.2s
+      withTiming(0.17, { duration: 1200, easing: Easing.out(Easing.cubic) }),
       
-      // Phase 2: Multi-Segmented Display (0.4-0.6) - 6 seconds
-      withTiming(0.6, { duration: 6000, easing: Easing.out(Easing.cubic) }),
-      withDelay(2000, withTiming(0.6, { duration: 1 })), // Hold 2 seconds
+      // Shift to 2nd gear (RPM drops, speed continues) - 0.3s
+      withTiming(0.15, { duration: 300, easing: Easing.in(Easing.cubic) }),
       
-      // Phase 3: Signature Telemetry (0.6-0.8) - 6 seconds
-      withTiming(0.8, { duration: 6000, easing: Easing.out(Easing.cubic) }),
-      withDelay(2000, withTiming(0.8, { duration: 1 })), // Hold 2 seconds
+      // 2nd gear (40-80 km/h) - 1.2s
+      withTiming(0.34, { duration: 1200, easing: Easing.out(Easing.cubic) }),
       
-      // Phase 4: M Sport Mode (0.8-1.0) - 8 seconds
-      withTiming(1.0, { duration: 8000, easing: Easing.out(Easing.cubic) }),
-      withDelay(3000, withTiming(1.0, { duration: 1 })), // Hold 3 seconds
+      // Shift to 3rd gear (RPM drops) - 0.3s
+      withTiming(0.30, { duration: 300, easing: Easing.in(Easing.cubic) }),
       
-      // Reset to idle - 3 seconds
-      withTiming(0.3, { duration: 3000, easing: Easing.in(Easing.cubic) }),
-      withDelay(3000, withTiming(0.3, { duration: 1 })) // Hold 3 seconds
+      // 3rd gear (80-120 km/h) - 1.0s
+      withTiming(0.50, { duration: 1000, easing: Easing.out(Easing.cubic) }),
+      
+      // Shift to 4th gear - 0.3s
+      withTiming(0.45, { duration: 300, easing: Easing.in(Easing.cubic) }),
+      
+      // 4th gear (120-160 km/h) - 1.0s
+      withTiming(0.67, { duration: 1000, easing: Easing.out(Easing.cubic) }),
+      
+      // Shift to 5th gear - 0.3s
+      withTiming(0.60, { duration: 300, easing: Easing.in(Easing.cubic) }),
+      
+      // 5th gear - hold at 160 km/h - 2s
+      withDelay(2000, withTiming(0.67, { duration: 1 })),
+      
+      // Decelerate - 3s
+      withTiming(0.20, { duration: 3000, easing: Easing.in(Easing.cubic) }),
+      
+      // Stop - 1s
+      withTiming(0, { duration: 1000, easing: Easing.in(Easing.cubic) })
     );
 
-    sweep.value = withRepeat(animationSequence, -1);
-  }, [sweep]);
+    speed.value = withSequence(accelerationSequence);
+  }, [speed]);
+
+  // RPM follows speed but with realistic gear shifts
+  useEffect(() => {
+    const rpmSequence = withSequence(
+      // Start - idle
+      withTiming(800, { duration: 500, easing: Easing.out(Easing.cubic) }),
+      
+      // 1st gear - RPM climbs to 6500
+      withTiming(6500, { duration: 1200, easing: Easing.out(Easing.cubic) }),
+      
+      // Shift drop
+      withTiming(4500, { duration: 300, easing: Easing.in(Easing.cubic) }),
+      
+      // 2nd gear - RPM climbs to 6500
+      withTiming(6500, { duration: 1200, easing: Easing.out(Easing.cubic) }),
+      
+      // Shift drop
+      withTiming(4800, { duration: 300, easing: Easing.in(Easing.cubic) }),
+      
+      // 3rd gear - RPM climbs to 6500
+      withTiming(6500, { duration: 1000, easing: Easing.out(Easing.cubic) }),
+      
+      // Shift drop
+      withTiming(5200, { duration: 300, easing: Easing.in(Easing.cubic) }),
+      
+      // 4th gear - RPM climbs to 6200
+      withTiming(6200, { duration: 1000, easing: Easing.out(Easing.cubic) }),
+      
+      // Shift drop
+      withTiming(5000, { duration: 300, easing: Easing.in(Easing.cubic) }),
+      
+      // 5th gear - hold at 5000
+      withDelay(2000, withTiming(5000, { duration: 1 })),
+      
+      // Decelerate
+      withTiming(2000, { duration: 3000, easing: Easing.in(Easing.cubic) }),
+      
+      // Stop
+      withTiming(800, { duration: 1000, easing: Easing.in(Easing.cubic) })
+    );
+
+    rpm.value = withSequence(rpmSequence);
+  }, [rpm]);
+
+  // Gear changes
+  useEffect(() => {
+    const gearSequence = withSequence(
+      withTiming(0, { duration: 1 }),
+      withDelay(500, withTiming(1, { duration: 1 })),
+      withDelay(1200, withTiming(2, { duration: 1 })),
+      withDelay(1500, withTiming(2, { duration: 1 })),
+      withDelay(2700, withTiming(3, { duration: 1 })),
+      withDelay(3000, withTiming(3, { duration: 1 })),
+      withDelay(4000, withTiming(4, { duration: 1 })),
+      withDelay(4300, withTiming(4, { duration: 1 })),
+      withDelay(5300, withTiming(5, { duration: 1 })),
+      withDelay(5600, withTiming(5, { duration: 1 })),
+      withDelay(7600, withTiming(4, { duration: 1 })),
+      withDelay(8600, withTiming(3, { duration: 1 })),
+      withDelay(9600, withTiming(2, { duration: 1 })),
+      withDelay(10600, withTiming(1, { duration: 1 })),
+      withDelay(11600, withTiming(0, { duration: 1 }))
+    );
+    // Just run it once
+    const gearTimer = setTimeout(() => {
+      let gearIndex = 0;
+      const gearInterval = setInterval(() => {
+        const gears = ['N', '1', '2', '3', '4', '5', '4', '3', '2', '1', 'N'];
+        if (gearIndex < gears.length) {
+          setGear(gears[gearIndex]);
+          gearIndex++;
+        } else {
+          clearInterval(gearInterval);
+        }
+      }, 1000);
+    }, 500);
+    return () => clearTimeout(gearTimer);
+  }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => setEngineOn(true), 3000);
+    const timer = setTimeout(() => setEngineOn(true), 500);
     return () => clearTimeout(timer);
   }, []);
 
   useDerivedValue(() => {
-    const progress = sweep.value;
-    runOnJS(setDisplayProgress)(progress);
-    runOnJS(setDisplaySpeed)(Math.round(progress * 240));
-    runOnJS(setDisplayRpm)(Math.round(progress * 8 * 1000));
+    const speedProgress = speed.value;
+    const rpmValue = rpm.value;
+    const speedKmh = Math.round(speedProgress * 240);
+    const rpmDisplay = Math.round(rpmValue);
     
-    // Phase tracking based on progress ranges
+    runOnJS(setDisplayProgress)(speedProgress);
+    runOnJS(setDisplaySpeed)(speedKmh);
+    runOnJS(setDisplayRpm)(rpmDisplay);
+    
+    // Update phase based on speed
     let phaseIndex = 0;
-    if (progress >= 0.8) phaseIndex = 4;
-    else if (progress >= 0.6) phaseIndex = 3;
-    else if (progress >= 0.4) phaseIndex = 2;
-    else if (progress >= 0.2) phaseIndex = 1;
+    if (speedKmh > 140) phaseIndex = 4;
+    else if (speedKmh > 100) phaseIndex = 3;
+    else if (speedKmh > 60) phaseIndex = 2;
+    else if (speedKmh > 20) phaseIndex = 1;
     else phaseIndex = 0;
     
     runOnJS(setCurrentPhase)(phaseIndex);
-  }, [sweep]);
+  }, [speed, rpm]);
 
   const maxWidth = Math.min(containerWidth, 600);
   const gaugeWidth = maxWidth;
@@ -406,10 +501,6 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600 }: 
                   <Stop offset="0%" stopColor="#141820" />
                   <Stop offset="100%" stopColor="#0A0B0E" />
                 </LinearGradient>
-                <RadialGradient id="glowEffect" cx="50%" cy="50%" r="50%">
-                  <Stop offset="0%" stopColor="#2A3448" stopOpacity="0.2" />
-                  <Stop offset="100%" stopColor="#0A0B0E" stopOpacity="0" />
-                </RadialGradient>
               </Defs>
 
               {/* Background */}
@@ -512,7 +603,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600 }: 
                   fontWeight="900"
                   textAnchor="middle"
                 >
-                  D
+                  {gear}
                 </SvgText>
               </G>
             </Svg>
@@ -520,8 +611,20 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600 }: 
 
           {/* Phase Description */}
           <View style={styles.phaseContainer}>
-            <Text style={styles.phaseTitle}>{phases[currentPhase]?.label || ''}</Text>
-            <Text style={styles.phaseDesc}>{phases[currentPhase]?.desc || ''}</Text>
+            <Text style={styles.phaseTitle}>
+              {displaySpeed > 140 ? 'M SPORT MODE' :
+               displaySpeed > 100 ? 'SIGNATURE TELEMETRY' :
+               displaySpeed > 60 ? 'MULTI-SEGMENTED DISPLAY' :
+               displaySpeed > 20 ? 'REVERSE-SWEEPING TACHOMETER' :
+               'CHISELED OUTER SHROUD'}
+            </Text>
+            <Text style={styles.phaseDesc}>
+              {displaySpeed > 140 ? 'Track-focused instrumentation with M performance' :
+               displaySpeed > 100 ? 'Real-time performance data at your fingertips' :
+               displaySpeed > 60 ? 'Dynamic color zones for optimal readability' :
+               displaySpeed > 20 ? 'Authentic BMW M sport instrument cluster' :
+               'Premium aluminum frame with precision engineering'}
+            </Text>
           </View>
 
           {/* Bottom Bar */}
@@ -583,7 +686,9 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 600 }: 
                 {engineOn ? 'ENGINE ON' : 'IGNITION'}
               </Text>
             </View>
-            <Text style={styles.centerText}>{label}</Text>
+            <Text style={styles.centerText}>
+              {displaySpeed > 0 ? `${displaySpeed} km/h` : label}
+            </Text>
             <Text style={styles.rightText}>12,847 km</Text>
           </View>
         </View>
