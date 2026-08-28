@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import Animated, {
   useSharedValue,
   useDerivedValue,
@@ -139,7 +139,10 @@ function GaugeTicks({
   );
 }
 
-export default function RpmLoader({ label = 'STARTING ENGINE...', size = 400 }: Props) {
+export default function RpmLoader({ label = 'STARTING ENGINE...', size = 500 }: Props) {
+  // size is now a MAX width cap, not the literal render width — the gauge
+  // scales down to fit whatever container/screen it's actually placed in.
+  const [containerWidth, setContainerWidth] = useState(Dimensions.get('window').width);
   const sweep = useSharedValue(0);
   const [displayRpm, setDisplayRpm] = useState(0);
   const [displaySpeed, setDisplaySpeed] = useState(0);
@@ -183,8 +186,8 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 400 }: 
     runOnJS(setDisplayRpm)(Math.round(sweep.value * 8.5 * 1000));
   }, [sweep]);
 
-  const outerW = size * 1.9;
-  const outerH = size * 1.05;
+  const outerW = Math.min(containerWidth - 24, size * 1.9);
+  const outerH = outerW * 0.55;
   const cy = outerH * 0.46;
   const gaugeR = size * 0.4;
   const leftCx = outerW * 0.27;
@@ -195,7 +198,10 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 400 }: 
   const rpmTickValues = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 
   return (
-    <View style={[styles.dashboard, { width: outerW + 24 }]}>
+    <View
+      style={styles.dashboard}
+      onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+    >
       <View style={styles.header}>
         <Text style={styles.headerTitle}>BMW LIVE COCKPIT PROFESSIONAL</Text>
         <View style={styles.mMode}>
@@ -208,7 +214,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 400 }: 
         </View>
       </View>
 
-      <View style={{ width: outerW, height: outerH }}>
+      <View style={{ width: outerW, height: outerH, alignSelf: 'center' }}>
         <Svg width={outerW} height={outerH}>
           {/* Left gauge: speed, sweeps bottom-left up to near-center-top */}
           <Circle cx={leftCx} cy={cy} r={gaugeR} fill={PANEL} opacity={0.3} />
@@ -320,6 +326,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 400 }: 
 
 const styles = StyleSheet.create({
   dashboard: {
+    width: '100%',
     backgroundColor: BG_DARK,
     borderRadius: 16,
     padding: 12,
