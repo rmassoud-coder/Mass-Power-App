@@ -11,47 +11,56 @@ import Animated, {
   Easing,
   runOnJS,
 } from 'react-native-reanimated';
-import Svg, { Circle, Path, G, Line, Text as SvgText, Defs, ClipPath } from 'react-native-svg';
+import Svg, { Circle, Path, G, Line, Text as SvgText, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { MASS_POWER_LOGO_PNG_BASE64 } from '../utils/logoBase64';
-
-const AnimatedG = Animated.createAnimatedComponent(G);
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const _ignore = AnimatedG;
 
 interface Props {
   label?: string;
   size?: number;
 }
 
-// BMW Signature Colors
+// BMW Live Cockpit Professional Colors
 const BMW_ORANGE = '#FF5A00';
 const BMW_RED = '#CE1316';
 const BMW_LT_BLUE = '#50B4E6';
 const BMW_DK_BLUE = '#0038A8';
 const BG_DARK = '#0B0C10';
 const TEXT_WHITE = '#FFFFFF';
+const M_BLUE = '#0066B1';
+const M_RED = '#FF0000';
+const M_PURPLE = '#333366';
 
-export default function RpmLoader({ label = 'STARTING ENGINE...', size = 260 }: Props) {
+export default function RpmLoader({ label = 'STARTING ENGINE...', size = 340 }: Props) {
   const sweep = useSharedValue(0);
   const [displayRpm, setDisplayRpm] = React.useState(0);
   const [displaySpeed, setDisplaySpeed] = React.useState(0);
   const [engineOn, setEngineOn] = React.useState(false);
 
   useEffect(() => {
-    const blip = (target: number, up: number, down: number) =>
-      withSequence(
-        withTiming(target, { duration: up, easing: Easing.out(Easing.cubic) }),
-        withTiming(target * 0.25, { duration: down, easing: Easing.in(Easing.cubic) })
-      );
+    // BMW-style startup animation
+    const startupSequence = withSequence(
+      withTiming(0.2, { duration: 400, easing: Easing.out(Easing.cubic) }),
+      withTiming(0.4, { duration: 300, easing: Easing.out(Easing.cubic) }),
+      withTiming(0.6, { duration: 250, easing: Easing.out(Easing.cubic) }),
+      withTiming(0.8, { duration: 200, easing: Easing.out(Easing.cubic) }),
+      withTiming(0.95, { duration: 150, easing: Easing.out(Easing.cubic) }),
+      withTiming(0.7, { duration: 400, easing: Easing.in(Easing.cubic) }),
+      withTiming(0.3, { duration: 500, easing: Easing.in(Easing.cubic) }),
+      withTiming(0.5, { duration: 300, easing: Easing.out(Easing.cubic) }),
+      withDelay(500, withTiming(0, { duration: 100 }))
+    );
 
     sweep.value = withRepeat(
       withSequence(
-        blip(0.7, 385, 550),
-        blip(0.85, 308, 495),
-        blip(0.95, 242, 660),
-        withTiming(0, { duration: 440, easing: Easing.in(Easing.cubic) }),
-        withDelay(165, withTiming(0, { duration: 1 })),
-        withTiming(0.5, { duration: 900, easing: Easing.out(Easing.cubic) })
+        startupSequence,
+        withTiming(0.1, { duration: 800 }),
+        withTiming(0.3, { duration: 600 }),
+        withTiming(0.5, { duration: 400 }),
+        withTiming(0.7, { duration: 300 }),
+        withTiming(0.85, { duration: 200 }),
+        withTiming(0.95, { duration: 150 }),
+        withTiming(0.8, { duration: 400 }),
+        withTiming(0.5, { duration: 600 })
       ),
       -1
     );
@@ -63,49 +72,49 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 260 }: 
   }, []);
 
   const needleStyle = useAnimatedStyle(() => {
-    const angle = -130 + sweep.value * 260;
+    const angle = -150 + sweep.value * 300;
     return { transform: [{ rotate: `${angle}deg` }] };
   });
 
-  const shakeStyle = useAnimatedStyle(() => {
-    const shake = withRepeat(
-      withSequence(
-        withTiming(0.5, { duration: 40 }),
-        withTiming(-0.5, { duration: 40 }),
-        withTiming(0, { duration: 40 })
-      ),
-      4
-    );
-    return { transform: [{ translateX: shake }] };
-  });
-
   useDerivedValue(() => {
-    const rpm = Math.round(sweep.value * 8000);
-    const speed = Math.round(sweep.value * 180);
+    const rpm = Math.round(sweep.value * 8500);
+    const speed = Math.round(sweep.value * 220);
     runOnJS(setDisplayRpm)(rpm);
     runOnJS(setDisplaySpeed)(speed);
   }, [sweep]);
 
   const radius = size / 2;
-  const inset = 8;
+  const inset = 12;
   const r = radius - inset;
   const cx = radius;
   const cy = radius;
 
-  const logoSize = Math.round(r * 1.42);
+  const logoSize = Math.round(r * 0.45);
   const logoRadius = logoSize / 2;
 
+  // Reverse sweep tachometer
+  const startAngle = -150;
+  const endAngle = 150;
+  
+  // Create tick marks
   const ticks: React.ReactNode[] = [];
-  for (let i = 0; i <= 10; i++) {
-    const angle = -130 + i * 26;
+  const segments = 12;
+  for (let i = 0; i <= segments; i++) {
+    const angle = startAngle + (i / segments) * (endAngle - startAngle);
     const rad = (angle - 90) * (Math.PI / 180);
-    const inner = r - (i % 2 === 0 ? 14 : 8);
-    const outer = r - 2;
+    const inner = r - (i % 3 === 0 ? 18 : 10);
+    const outer = r - 3;
     const x1 = cx + Math.cos(rad) * inner;
     const y1 = cy + Math.sin(rad) * inner;
     const x2 = cx + Math.cos(rad) * outer;
     const y2 = cy + Math.sin(rad) * outer;
-    const isRedline = i >= 7;
+    
+    let color = TEXT_WHITE;
+    const ratio = i / segments;
+    if (ratio < 0.35) color = BMW_LT_BLUE;
+    else if (ratio < 0.65) color = BMW_ORANGE;
+    else color = BMW_RED;
+    
     ticks.push(
       <Line
         key={`t-${i}`}
@@ -113,92 +122,186 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 260 }: 
         y1={y1}
         x2={x2}
         y2={y2}
-        stroke={isRedline ? BMW_RED : TEXT_WHITE}
-        strokeWidth={i % 2 === 0 ? 3 : 1.5}
+        stroke={color}
+        strokeWidth={i % 3 === 0 ? 3 : 1.5}
         strokeLinecap="round"
       />
     );
-    const tr = r - 26;
-    const tx = cx + Math.cos(rad) * tr;
-    const ty = cy + Math.sin(rad) * tr + 4;
-    ticks.push(
-      <SvgText
-        key={`n-${i}`}
-        x={tx}
-        y={ty}
-        fill={isRedline ? BMW_RED : TEXT_WHITE}
-        fontSize={12}
-        fontWeight="800"
-        textAnchor="middle"
-      >
-        {i}
-      </SvgText>
+    
+    if (i % 2 === 0) {
+      const labelR = r - 32;
+      const lx = cx + Math.cos(rad) * labelR;
+      const ly = cy + Math.sin(rad) * labelR + 4;
+      const rpmValue = Math.round((i / segments) * 7);
+      ticks.push(
+        <SvgText
+          key={`n-${i}`}
+          x={lx}
+          y={ly}
+          fill={color}
+          fontSize={11}
+          fontWeight="700"
+          textAnchor="middle"
+        >
+          {rpmValue}
+        </SvgText>
+      );
+    }
+  }
+
+  // Multi-segmented arc
+  const arcSegments = 30;
+  const arcNodes: React.ReactNode[] = [];
+  for (let i = 0; i < arcSegments; i++) {
+    const angle1 = startAngle + (i / arcSegments) * (endAngle - startAngle);
+    const angle2 = startAngle + ((i + 1) / arcSegments) * (endAngle - startAngle);
+    const rad1 = (angle1 - 90) * (Math.PI / 180);
+    const rad2 = (angle2 - 90) * (Math.PI / 180);
+    
+    const ratio = i / arcSegments;
+    let color = BMW_LT_BLUE;
+    if (ratio > 0.35 && ratio < 0.65) color = BMW_ORANGE;
+    else if (ratio >= 0.65) color = BMW_RED;
+    
+    const arcR = r - 8;
+    const x1 = cx + Math.cos(rad1) * arcR;
+    const y1 = cy + Math.sin(rad1) * arcR;
+    const x2 = cx + Math.cos(rad2) * arcR;
+    const y2 = cy + Math.sin(rad2) * arcR;
+    
+    const active = (i / arcSegments) <= sweep.value;
+    
+    arcNodes.push(
+      <Line
+        key={`arc-${i}`}
+        x1={x1}
+        y1={y1}
+        x2={x2}
+        y2={y2}
+        stroke={active ? color : '#1A1A2A'}
+        strokeWidth={5}
+        strokeLinecap="round"
+        opacity={active ? 1 : 0.2}
+      />
     );
   }
 
-  const startAngle = (-130 + 7 * 26 - 90) * (Math.PI / 180);
-  const endAngle = (-130 + 10 * 26 - 90) * (Math.PI / 180);
-  const arcR = r - 1;
-  const startX = cx + Math.cos(startAngle) * arcR;
-  const startY = cy + Math.sin(startAngle) * arcR;
-  const endX = cx + Math.cos(endAngle) * arcR;
-  const endY = cy + Math.sin(endAngle) * arcR;
-  const redlinePath = `M ${startX} ${startY} A ${arcR} ${arcR} 0 0 1 ${endX} ${endY}`;
-
-  const needleLength = r - 6;
-
   return (
     <View style={[styles.container, { width: size + 40 }]}>
-      {/* Engine Shake */}
-      <Animated.View style={[{ width: size, height: size }, shakeStyle]}>
+      <View style={[styles.gaugeContainer, { width: size, height: size }]}>
         <Svg width={size} height={size}>
-          {/* Hexagonal Outer Shroud */}
+          <Defs>
+            <LinearGradient id="shroudGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <Stop offset="0%" stopColor="#1A1F2A" />
+              <Stop offset="50%" stopColor="#252D3A" />
+              <Stop offset="100%" stopColor="#151A22" />
+            </LinearGradient>
+          </Defs>
+
+          {/* Chiseled Outer Shroud */}
           <Path
-            d={`M ${cx - 120} ${cy + 120} L ${cx - 160} ${cy} L ${cx - 80} ${cy - 120} L ${cx + 80} ${cy - 120} L ${cx + 160} ${cy} L ${cx + 120} ${cy + 120} Z`}
-            fill="none"
-            stroke="#1F2833"
-            strokeWidth={6}
+            d={`
+              M ${cx} ${cy - r - 15}
+              L ${cx + r * 0.65} ${cy - r * 0.85}
+              L ${cx + r * 0.92} ${cy - r * 0.5}
+              L ${cx + r * 0.97} ${cy}
+              L ${cx + r * 0.92} ${cy + r * 0.5}
+              L ${cx + r * 0.65} ${cy + r * 0.85}
+              L ${cx} ${cy + r + 15}
+              L ${cx - r * 0.65} ${cy + r * 0.85}
+              L ${cx - r * 0.92} ${cy + r * 0.5}
+              L ${cx - r * 0.97} ${cy}
+              L ${cx - r * 0.92} ${cy - r * 0.5}
+              L ${cx - r * 0.65} ${cy - r * 0.85}
+              Z
+            `}
+            fill="url(#shroudGrad)"
+            stroke="#3A4A5A"
+            strokeWidth={1.5}
           />
 
-          {/* Outer Ring */}
-          <Circle cx={cx} cy={cy} r={r} fill={BG_DARK} stroke="#1F2833" strokeWidth={4} />
-          <Circle cx={cx} cy={cy} r={r - 5} fill="none" stroke="#232A34" strokeWidth={1} />
+          {/* Inner Ring */}
+          <Circle cx={cx} cy={cy} r={r} fill={BG_DARK} />
+          <Circle cx={cx} cy={cy} r={r} stroke="#2A3440" strokeWidth={2} fill="none" />
+          <Circle cx={cx} cy={cy} r={r - 4} stroke="#1A1F2A" strokeWidth={1} fill="none" />
 
-          {/* Redline Arc */}
-          <Path d={redlinePath} stroke={BMW_RED} strokeWidth={5} fill="none" strokeLinecap="round" />
+          {/* Multi-segmented Arc */}
+          {arcNodes}
 
-          {/* RPM Active Track (Orange/Red) */}
-          <Path
-            d={`M ${cx - 100} ${cy + 50} A ${r - 10} ${r - 10} 0 0 1 ${cx + 100} ${cy + 50}`}
-            stroke={sweep.value > 0.7 ? BMW_RED : BMW_ORANGE}
-            strokeWidth={8}
-            fill="none"
-            strokeLinecap="round"
-            opacity={0.6 + sweep.value * 0.4}
-          />
-
+          {/* Tick Marks */}
           {ticks}
 
+          {/* BMW M Sport Mode Indicator - Top */}
+          <G transform={`translate(${cx - 45}, ${cy - r + 28})`}>
+            <Text style={styles.mSportText}>M SPORT</Text>
+          </G>
+
           {/* Centered Logo */}
-          <View
-            pointerEvents="none"
-            style={[
-              styles.logoWrap,
-              {
-                width: logoSize,
-                height: logoSize,
-                borderRadius: logoRadius,
-                left: (size - logoSize) / 2,
-                top: (size - logoSize) / 2,
-              },
-            ]}
-          >
-            <Image
-              source={{ uri: MASS_POWER_LOGO_PNG_BASE64 }}
-              style={{ width: logoSize, height: logoSize }}
-              resizeMode="contain"
-            />
-          </View>
+          <Image
+            source={{ uri: MASS_POWER_LOGO_PNG_BASE64 }}
+            style={{
+              position: 'absolute',
+              width: logoSize,
+              height: logoSize,
+              borderRadius: logoRadius,
+              left: (size - logoSize) / 2,
+              top: (size - logoSize) / 2,
+              backgroundColor: BG_DARK,
+            }}
+            resizeMode="contain"
+          />
+
+          {/* Speed Display - Integrated in Gauge */}
+          <G transform={`translate(${cx - 50}, ${cy + 20})`}>
+            <SvgText
+              x="50"
+              y="0"
+              fill={TEXT_WHITE}
+              fontSize={38}
+              fontWeight="900"
+              textAnchor="middle"
+              fontFamily="System"
+            >
+              {displaySpeed}
+            </SvgText>
+            <SvgText
+              x="50"
+              y="22"
+              fill="#8A9AAD"
+              fontSize={12}
+              fontWeight="600"
+              textAnchor="middle"
+              letterSpacing="2"
+            >
+              km/h
+            </SvgText>
+          </G>
+
+          {/* RPM Display - Integrated in Gauge */}
+          <G transform={`translate(${cx + 20}, ${cy + 20})`}>
+            <SvgText
+              x="30"
+              y="0"
+              fill={BMW_ORANGE}
+              fontSize={30}
+              fontWeight="800"
+              textAnchor="middle"
+              fontFamily="System"
+            >
+              {displayRpm}
+            </SvgText>
+            <SvgText
+              x="30"
+              y="22"
+              fill="#8A9AAD"
+              fontSize={10}
+              fontWeight="600"
+              textAnchor="middle"
+              letterSpacing="1"
+            >
+              RPM
+            </SvgText>
+          </G>
         </Svg>
 
         {/* Needle */}
@@ -219,153 +322,144 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size = 260 }: 
         >
           <View
             style={{
-              width: 4,
-              height: needleLength,
+              width: 2.5,
+              height: r - 25,
               backgroundColor: BMW_RED,
-              borderTopLeftRadius: 2,
-              borderTopRightRadius: 2,
-              marginBottom: needleLength - 12,
+              borderTopLeftRadius: 1.5,
+              borderTopRightRadius: 1.5,
+              marginBottom: r - 35,
               shadowColor: BMW_RED,
-              shadowOpacity: 0.8,
-              shadowRadius: 4,
-              elevation: 8,
+              shadowOpacity: 0.3,
+              shadowRadius: 6,
+              elevation: 6,
+            }}
+          />
+          <View
+            style={{
+              width: 6,
+              height: 16,
+              backgroundColor: '#2A3440',
+              borderRadius: 2,
+              marginTop: -8,
             }}
           />
         </Animated.View>
 
         {/* Center Hub */}
-        <View pointerEvents="none" style={[styles.hubOuter, { left: cx - 11, top: cy - 11 }]} />
-        <View pointerEvents="none" style={[styles.hubInner, { left: cx - 4, top: cy - 4 }]} />
-      </Animated.View>
-
-      {/* BMW Style Digital Center Telemetry */}
-      <View style={styles.telemetryBox}>
-        <Text style={styles.speedText}>{displaySpeed}</Text>
-        <Text style={styles.unitText}>km/h</Text>
-        <Text style={styles.rpmText}>{displayRpm}</Text>
-        <Text style={styles.rpmLabel}>RPM 1/min</Text>
+        <View
+          pointerEvents="none"
+          style={[
+            styles.hubOuter,
+            { left: cx - 12, top: cy - 12, width: 24, height: 24, borderRadius: 12 },
+          ]}
+        >
+          <View
+            style={[
+              styles.hubInner,
+              { width: 8, height: 8, borderRadius: 4, backgroundColor: BMW_ORANGE },
+            ]}
+          />
+        </View>
       </View>
 
-      {/* M Performance Stripes */}
-      <View style={styles.mStripe}>
-        <View style={[styles.stripeSegment, { backgroundColor: BMW_LT_BLUE }]} />
-        <View style={[styles.stripeSegment, { backgroundColor: BMW_DK_BLUE }]} />
-        <View style={[styles.stripeSegment, { backgroundColor: BMW_RED }]} />
-      </View>
-
-      <Text style={styles.label}>{label}</Text>
-
-      {/* Engine Light */}
-      <View style={[styles.engineLight, engineOn ? styles.engineLightOn : styles.engineLightOff]}>
-        <View style={[styles.engineBulb, engineOn ? styles.engineBulbOn : styles.engineBulbOff]} />
-        <Text style={styles.engineText}>{engineOn ? 'ENGINE ON' : 'IGNITION'}</Text>
+      {/* Bottom Status Bar */}
+      <View style={styles.statusBar}>
+        <View style={styles.statusLeft}>
+          <View style={[styles.statusBulb, engineOn ? styles.bulbOn : styles.bulbOff]} />
+          <Text style={[styles.statusText, { color: engineOn ? '#22C55E' : '#8A9AAD' }]}>
+            {engineOn ? 'ENGINE ON' : 'IGNITION'}
+          </Text>
+        </View>
+        <Text style={styles.statusLabel}>{label}</Text>
+        <View style={styles.mStripes}>
+          <View style={[styles.stripe, { backgroundColor: M_BLUE }]} />
+          <View style={[styles.stripe, { backgroundColor: M_PURPLE }]} />
+          <View style={[styles.stripe, { backgroundColor: M_RED }]} />
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { alignItems: 'center', justifyContent: 'center' },
-  logoWrap: {
-    position: 'absolute',
-    overflow: 'hidden',
-    backgroundColor: BG_DARK,
+  container: {
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#0A0D14',
+    padding: 16,
+    borderRadius: 24,
+  },
+  gaugeContainer: {
+    position: 'relative',
   },
   hubOuter: {
     position: 'absolute',
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#0B0C10',
+    backgroundColor: BG_DARK,
+    borderWidth: 2,
+    borderColor: '#2A3440',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   hubInner: {
-    position: 'absolute',
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: BMW_RED,
+    backgroundColor: BMW_ORANGE,
   },
-  telemetryBox: {
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  speedText: {
-    fontSize: 48,
-    fontWeight: '900',
-    color: TEXT_WHITE,
-    fontVariant: ['tabular-nums'],
-  },
-  unitText: {
-    fontSize: 16,
-    color: '#8A9AAD',
-    fontWeight: '700',
-    letterSpacing: 2,
-  },
-  rpmText: {
-    fontSize: 24,
+  mSportText: {
+    fontSize: 9,
     fontWeight: '800',
-    color: BMW_ORANGE,
-    marginTop: 4,
-  },
-  rpmLabel: {
-    fontSize: 12,
     color: '#8A9AAD',
-    letterSpacing: 1,
+    letterSpacing: 2.5,
+    textAlign: 'center',
   },
-  mStripe: {
-    flexDirection: 'row',
-    marginTop: 12,
-    gap: 4,
-  },
-  stripeSegment: {
-    width: 40,
-    height: 6,
-    borderRadius: 3,
-  },
-  label: {
-    marginTop: 14,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 2,
-    color: '#8A9AAD',
-  },
-  engineLight: {
+  statusBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
     marginTop: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(26, 31, 42, 0.5)',
+    borderRadius: 8,
+    borderWidth: 0.5,
+    borderColor: '#1A1F2A',
   },
-  engineLightOn: {
-    backgroundColor: 'rgba(0, 255, 0, 0.1)',
-    borderColor: '#22C55E',
+  statusLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  engineLightOff: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderColor: '#333',
-  },
-  engineBulb: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  statusBulb: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     marginRight: 6,
   },
-  engineBulbOn: {
+  bulbOn: {
     backgroundColor: '#22C55E',
     shadowColor: '#22C55E',
     shadowOpacity: 1,
     shadowRadius: 4,
   },
-  engineBulbOff: {
+  bulbOff: {
     backgroundColor: '#555',
   },
-  engineText: {
-    fontSize: 10,
-    fontWeight: '800',
+  statusText: {
+    fontSize: 8,
+    fontWeight: '700',
     letterSpacing: 1,
+  },
+  statusLabel: {
+    fontSize: 8,
+    color: '#5A6A7A',
+    fontWeight: '600',
+    letterSpacing: 1,
+  },
+  mStripes: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  stripe: {
+    width: 10,
+    height: 2,
+    borderRadius: 1,
   },
 });
