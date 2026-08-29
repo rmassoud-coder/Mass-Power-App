@@ -113,9 +113,9 @@ function SpeedGauge({
   for (let i = 0; i < tickValues.length; i++) {
     const ratio = i / (tickValues.length - 1);
     const angle = startAngle + ratio * (endAngle - startAngle);
-    const inner = pt(cx, cy, r - 18, angle);
-    const outer = pt(cx, cy, r - 10, angle);
-    const label = pt(cx, cy, r - 30, angle);
+    const inner = pt(cx, cy, r * 0.74, angle);
+    const outer = pt(cx, cy, r * 0.86, angle);
+    const label = pt(cx, cy, r * 0.57, angle);
 
     nodes.push(
       <Line key={`t${i}`} x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y} stroke={TEXT_WHITE} strokeWidth={2.5} strokeLinecap="round" />
@@ -128,12 +128,12 @@ function SpeedGauge({
   }
 
   nodes.push(
-    <SvgText key="value" x={cx} y={cy + 10} fill={TEXT_WHITE} fontSize={32} fontWeight="900" textAnchor="middle">
+    <SvgText key="value" x={cx} y={cy + r * 0.14} fill={TEXT_WHITE} fontSize={32} fontWeight="900" textAnchor="middle">
       {value}
     </SvgText>
   );
   nodes.push(
-    <SvgText key="unit" x={cx} y={cy + 30} fill={TEXT_WHITE} fontSize={10} fontWeight="600" textAnchor="middle" letterSpacing="2">
+    <SvgText key="unit" x={cx} y={cy + r * 0.43} fill={TEXT_WHITE} fontSize={10} fontWeight="600" textAnchor="middle" letterSpacing="2">
       km/h
     </SvgText>
   );
@@ -205,9 +205,9 @@ function RpmGauge({
   for (let i = 0; i < tickValues.length; i++) {
     const ratio = i / (tickValues.length - 1);
     const angle = startAngle - ratio * (startAngle - endAngle);
-    const inner = pt(cx, cy, r - 18, angle);
-    const outer = pt(cx, cy, r - 10, angle);
-    const label = pt(cx, cy, r - 30, angle);
+    const inner = pt(cx, cy, r * 0.74, angle);
+    const outer = pt(cx, cy, r * 0.86, angle);
+    const label = pt(cx, cy, r * 0.57, angle);
 
     nodes.push(
       <Line key={`t${i}`} x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y} stroke={TEXT_WHITE} strokeWidth={2.5} strokeLinecap="round" />
@@ -220,12 +220,12 @@ function RpmGauge({
   }
 
   nodes.push(
-    <SvgText key="value" x={cx} y={cy + 10} fill={BMW_ORANGE} fontSize={32} fontWeight="900" textAnchor="middle">
+    <SvgText key="value" x={cx} y={cy + r * 0.14} fill={BMW_ORANGE} fontSize={32} fontWeight="900" textAnchor="middle">
       {value}
     </SvgText>
   );
   nodes.push(
-    <SvgText key="unit" x={cx} y={cy + 30} fill={TEXT_WHITE} fontSize={10} fontWeight="600" textAnchor="middle" letterSpacing="2">
+    <SvgText key="unit" x={cx} y={cy + r * 0.43} fill={TEXT_WHITE} fontSize={10} fontWeight="600" textAnchor="middle" letterSpacing="2">
       RPM
     </SvgText>
   );
@@ -379,16 +379,19 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComple
 
   const outerMaxWidth = size ? Math.min(size, 480) : 480;
   const gaugeWidth = Math.min(containerWidth, outerMaxWidth);
-  const gaugeHeight = gaugeWidth * 0.52;
-  const centerY = gaugeHeight * 0.45;
-  const gaugeR = Math.min(gaugeWidth * 0.19, 70);
+  const gaugeR = Math.min(gaugeWidth * 0.16, 60);
+  const smallGaugeR = gaugeR * 0.45; // smaller fuel/temp dials
+  const topPad = 42; // clears the top tick labels + gear-diamond points above center
+  const rowGap = 34; // guaranteed gap between the main gauges and fuel/temp row
+  const bottomPad = 36; // clears the E/F and 50°/120° labels below the small dials
+  const centerY = topPad + gaugeR;
+  const fuelTempY = centerY + gaugeR + rowGap + smallGaugeR;
+  const gaugeHeight = fuelTempY + smallGaugeR + bottomPad;
   const leftX = gaugeWidth * 0.27;
   const rightX = gaugeWidth * 0.73;
   const centerX = gaugeWidth * 0.5;
   const fuelX = gaugeWidth * 0.28;
   const tempX = gaugeWidth * 0.72;
-  const fuelTempY = gaugeHeight * 0.82;
-  const smallGaugeR = gaugeR * 0.6;
 
   return (
     <View style={styles.container}>
