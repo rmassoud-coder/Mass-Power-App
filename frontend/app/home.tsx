@@ -38,9 +38,9 @@ export default function HomeScreen() {
   const { height } = useWindowDimensions();
 
   const isSmallScreen = height < 700;
-  const cardPadding = isSmallScreen ? 14 : 20;
-  const cardMargin = isSmallScreen ? 10 : 16;
-  const buttonPadding = isSmallScreen ? 10 : 14;
+  const cardPadding = isSmallScreen ? 12 : 16;
+  const cardMargin = isSmallScreen ? 8 : 12;
+  const buttonPadding = isSmallScreen ? 8 : 12;
 
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [pinInput, setPinInput] = useState('');
@@ -206,10 +206,10 @@ export default function HomeScreen() {
       >
         <View style={styles.header}>
           <View style={styles.logoRow}>
-            <MassPowerLogo size={55} />
+            <MassPowerLogo size={75} />
             <Text style={styles.headerSubtitle}>Auto Services</Text>
           </View>
-          <View style={{ marginTop: 8 }}>
+          <View style={{ marginTop: 6 }}>
             <SyncStatusPill />
           </View>
         </View>
@@ -221,7 +221,7 @@ export default function HomeScreen() {
         >
           <View style={[styles.searchCard, { padding: cardPadding, marginBottom: cardMargin }]}>
             <View style={styles.searchHeader}>
-              <Ionicons name="search-outline" size={isSmallScreen ? 20 : 24} color="#00e5ff" />
+              <Ionicons name="search-outline" size={isSmallScreen ? 18 : 22} color="#00e5ff" />
               <Text style={styles.searchTitle}>ابحث عن عميل</Text>
             </View>
             <Text style={styles.searchHint}>
@@ -245,7 +245,7 @@ export default function HomeScreen() {
               disabled={loading}
               testID="unified-search-button"
             >
-              <Ionicons name="search" size={isSmallScreen ? 16 : 20} color="#fff" />
+              <Ionicons name="search" size={isSmallScreen ? 14 : 18} color="#fff" />
               <Text style={styles.searchButtonText}>بحث</Text>
             </TouchableOpacity>
           </View>
@@ -255,7 +255,7 @@ export default function HomeScreen() {
             onPress={() => router.push('/add-customer')}
             testID="add-customer-button"
           >
-            <Ionicons name="person-add-outline" size={isSmallScreen ? 16 : 20} color="#00e5ff" />
+            <Ionicons name="person-add-outline" size={isSmallScreen ? 14 : 18} color="#00e5ff" />
             <Text style={styles.addCustomerButtonText}>إضافة عميل جديد</Text>
           </TouchableOpacity>
 
@@ -264,7 +264,7 @@ export default function HomeScreen() {
             onPress={() => router.push('/quick-walkin')}
             testID="quick-walkin-button"
           >
-            <Ionicons name="walk-outline" size={isSmallScreen ? 16 : 20} color="#ff5722" />
+            <Ionicons name="walk-outline" size={isSmallScreen ? 14 : 18} color="#ff5722" />
             <Text style={styles.walkinButtonText}>بيع سريع</Text>
           </TouchableOpacity>
 
@@ -272,7 +272,7 @@ export default function HomeScreen() {
             style={[styles.orderButton, { paddingVertical: buttonPadding }]}
             onPress={() => router.push('/order-list')}
           >
-            <Ionicons name="list-outline" size={isSmallScreen ? 16 : 20} color="#00e676" />
+            <Ionicons name="list-outline" size={isSmallScreen ? 14 : 18} color="#00e676" />
             <Text style={styles.orderButtonText}>قائمة مشتريات</Text>
           </TouchableOpacity>
 
@@ -281,7 +281,7 @@ export default function HomeScreen() {
             onPress={handleBackendPress}
             testID="management-button"
           >
-            <Ionicons name="construct-outline" size={isSmallScreen ? 16 : 20} color="#94a3b8" />
+            <Ionicons name="construct-outline" size={isSmallScreen ? 14 : 18} color="#94a3b8" />
             <Text style={styles.managementButtonText}>الإدارة و الاعدادات</Text>
           </TouchableOpacity>
 
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
   
   header: {
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: 16,
     backgroundColor: '#151c26',
     borderBottomWidth: 1,
     borderBottomColor: '#1e293b',
@@ -348,18 +348,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerSubtitle: {
-    fontSize: 20,
+    fontSize: 18,
     color: '#ffffff',
     fontWeight: '700',
     letterSpacing: 0.5,
   },
   
   content: { flex: 1 },
-  contentContainer: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 30 },
+  contentContainer: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24 },
   
   searchCard: {
     backgroundColor: '#1a2332',
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#2d3a4f',
   },
@@ -369,35 +369,35 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   searchTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: '#ffffff',
-    marginLeft: 12,
+    marginLeft: 10,
   },
   searchHint: {
-    fontSize: 13,
+    fontSize: 11,
     color: '#cbd5e1',
-    marginBottom: 14,
-    marginLeft: 36,
+    marginBottom: 12,
+    marginLeft: 32,
   },
   inputContainer: {
     backgroundColor: '#0f141c',
-    borderRadius: 12,
-    marginBottom: 14,
+    borderRadius: 10,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#2d3a4f',
   },
   input: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
     color: '#ffffff',
     textAlign: 'right',
   },
   searchButton: {
     backgroundColor: '#0052cc',
-    borderRadius: 12,
-    paddingVertical: 13,
+    borderRadius: 10,
+    paddingVertical: 11,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
@@ -407,81 +407,81 @@ const styles = StyleSheet.create({
   },
   searchButtonText: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
-    marginLeft: 8,
+    marginLeft: 6,
   },
   
   addCustomerButton: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1.5,
     borderColor: '#00e5ff',
     backgroundColor: '#1a2332',
     marginTop: 10,
   },
   addCustomerButtonText: {
-    color: '#e2e8f0', // grey-white text
-    fontSize: 16,
+    color: '#e2e8f0',
+    fontSize: 14,
     fontWeight: '700',
-    marginLeft: 8,
+    marginLeft: 6,
   },
   walkinButton: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: '#1a2332',
     borderWidth: 1.5,
     borderColor: '#ff5722',
-    marginTop: 12,
+    marginTop: 10,
   },
   walkinButtonText: {
-    color: '#e2e8f0', // grey-white text
-    fontSize: 16,
+    color: '#e2e8f0',
+    fontSize: 14,
     fontWeight: '700',
-    marginLeft: 8,
+    marginLeft: 6,
   },
   orderButton: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: '#1a2332',
     borderWidth: 1.5,
     borderColor: '#00e676',
-    marginTop: 12,
+    marginTop: 10,
   },
   orderButtonText: {
-    color: '#e2e8f0', // grey-white text
-    fontSize: 16,
+    color: '#e2e8f0',
+    fontSize: 14,
     fontWeight: '700',
-    marginLeft: 8,
+    marginLeft: 6,
   },
   managementButton: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: '#1e293b',
     borderWidth: 1.5,
     borderColor: '#475569',
-    marginTop: 12,
+    marginTop: 10,
   },
   managementButtonText: {
-    color: '#e2e8f0', // grey-white text
-    fontSize: 16,
+    color: '#e2e8f0',
+    fontSize: 14,
     fontWeight: '700',
-    marginLeft: 8,
+    marginLeft: 6,
   },
   
   buildStamp: {
-    marginTop: 24,
-    marginBottom: 8,
+    marginTop: 20,
+    marginBottom: 6,
     textAlign: 'center',
-    fontSize: 13,
+    fontSize: 11,
     color: '#94a3b8',
     fontWeight: '500',
   },
@@ -495,36 +495,36 @@ const styles = StyleSheet.create({
   modalContent: {
     width: '85%',
     backgroundColor: '#1a2332',
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: '#2d3a4f',
-    padding: 24,
+    padding: 22,
     alignItems: 'center',
   },
   modalTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#ffffff',
     marginBottom: 4,
   },
   modalSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#cbd5e1',
-    marginBottom: 20,
+    marginBottom: 18,
   },
   pinInput: {
     width: '100%',
     borderWidth: 2,
     borderColor: '#00e5ff',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    fontSize: 26,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    fontSize: 24,
     fontWeight: '700',
     textAlign: 'center',
-    letterSpacing: 10,
+    letterSpacing: 8,
     color: '#ffffff',
-    marginBottom: 24,
+    marginBottom: 20,
     backgroundColor: '#0f141c',
   },
   modalButtons: {
@@ -534,26 +534,26 @@ const styles = StyleSheet.create({
   },
   modalCancelBtn: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderRadius: 10,
     backgroundColor: '#2d3a4f',
     alignItems: 'center',
   },
   modalCancelText: {
     color: '#cbd5e1',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   modalConfirmBtn: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderRadius: 10,
     backgroundColor: '#0052cc',
     alignItems: 'center',
   },
   modalConfirmText: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
 });
