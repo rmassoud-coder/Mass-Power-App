@@ -18,6 +18,7 @@ import Svg, {
   Path,
   Defs,
   LinearGradient,
+  RadialGradient,
   Stop,
   Rect,
 } from 'react-native-svg';
@@ -105,9 +106,18 @@ function SpeedGauge({
   }
 
   // Glowing tip marker at the current value — real clusters light the leading edge.
-  const tip = pt(cx, cy, r, startAngle + progress * (endAngle - startAngle));
+  const tipAngle = startAngle + progress * (endAngle - startAngle);
+  const tip = pt(cx, cy, r, tipAngle);
   nodes.push(<Circle key="tipGlow" cx={tip.x} cy={tip.y} r={7} fill={tipColor} opacity={0.35} />);
   nodes.push(<Circle key="tipDot" cx={tip.x} cy={tip.y} r={3} fill={tipColor} />);
+
+  // A real pointer needle alongside the arc fill — the bit that reads as "BMW cluster"
+  // rather than a generic progress ring.
+  const needleInner = pt(cx, cy, r * 0.48, tipAngle);
+  const needleOuter = pt(cx, cy, r * 0.94, tipAngle);
+  nodes.push(
+    <Line key="needle" x1={needleInner.x} y1={needleInner.y} x2={needleOuter.x} y2={needleOuter.y} stroke={TEXT_WHITE} strokeWidth={1.5} opacity={0.85} strokeLinecap="round" />
+  );
 
   const tickValues = [0, 40, 80, 120, 160, 200, 240];
   for (let i = 0; i < tickValues.length; i++) {
@@ -115,25 +125,34 @@ function SpeedGauge({
     const angle = startAngle + ratio * (endAngle - startAngle);
     const inner = pt(cx, cy, r * 0.74, angle);
     const outer = pt(cx, cy, r * 0.86, angle);
-    const label = pt(cx, cy, r * 0.57, angle);
+    const label = pt(cx, cy, r * 0.58, angle);
 
     nodes.push(
       <Line key={`t${i}`} x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y} stroke={TEXT_WHITE} strokeWidth={2.5} strokeLinecap="round" />
     );
     nodes.push(
-      <SvgText key={`l${i}`} x={label.x} y={label.y + 4} fill={TEXT_WHITE} fontSize={10} fontWeight="600" textAnchor="middle">
+      <SvgText key={`l${i}`} x={label.x} y={label.y + 4} fill={TEXT_WHITE} fontSize={9} fontWeight="600" textAnchor="middle">
         {tickValues[i]}
       </SvgText>
     );
   }
 
+  const valueFontSize = Math.max(18, Math.round(r * 0.34));
+  const unitFontSize = Math.max(8, Math.round(r * 0.12));
+
+  nodes.push(<Circle key="glow" cx={cx} cy={cy} r={r * 0.5} fill="url(#speedGlow)" />);
   nodes.push(
-    <SvgText key="value" x={cx} y={cy + r * 0.14} fill={TEXT_WHITE} fontSize={32} fontWeight="900" textAnchor="middle">
+    <SvgText key="valueShadow" x={cx + 1} y={cy + r * 0.14 + 1} fill="#000" opacity={0.35} fontSize={valueFontSize} fontWeight="900" textAnchor="middle">
       {value}
     </SvgText>
   );
   nodes.push(
-    <SvgText key="unit" x={cx} y={cy + r * 0.43} fill={TEXT_WHITE} fontSize={10} fontWeight="600" textAnchor="middle" letterSpacing="2">
+    <SvgText key="value" x={cx} y={cy + r * 0.14} fill={TEXT_WHITE} fontSize={valueFontSize} fontWeight="900" textAnchor="middle">
+      {value}
+    </SvgText>
+  );
+  nodes.push(
+    <SvgText key="unit" x={cx} y={cy + r * 0.44} fill={TEXT_GRAY} fontSize={unitFontSize} fontWeight="600" textAnchor="middle" letterSpacing="2">
       km/h
     </SvgText>
   );
@@ -197,9 +216,16 @@ function RpmGauge({
     );
   }
 
-  const tip = pt(cx, cy, r, startAngle - progress * (startAngle - endAngle));
+  const tipAngle = startAngle - progress * (startAngle - endAngle);
+  const tip = pt(cx, cy, r, tipAngle);
   nodes.push(<Circle key="tipGlow" cx={tip.x} cy={tip.y} r={7} fill={tipColor} opacity={0.35} />);
   nodes.push(<Circle key="tipDot" cx={tip.x} cy={tip.y} r={3} fill={tipColor} />);
+
+  const needleInner = pt(cx, cy, r * 0.48, tipAngle);
+  const needleOuter = pt(cx, cy, r * 0.94, tipAngle);
+  nodes.push(
+    <Line key="needle" x1={needleInner.x} y1={needleInner.y} x2={needleOuter.x} y2={needleOuter.y} stroke={TEXT_WHITE} strokeWidth={1.5} opacity={0.85} strokeLinecap="round" />
+  );
 
   const tickValues = [0, 1, 2, 3, 4, 5, 6, 7, 8];
   for (let i = 0; i < tickValues.length; i++) {
@@ -207,17 +233,37 @@ function RpmGauge({
     const angle = startAngle - ratio * (startAngle - endAngle);
     const inner = pt(cx, cy, r * 0.74, angle);
     const outer = pt(cx, cy, r * 0.86, angle);
-    const label = pt(cx, cy, r * 0.57, angle);
+    const label = pt(cx, cy, r * 0.58, angle);
 
     nodes.push(
       <Line key={`t${i}`} x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y} stroke={TEXT_WHITE} strokeWidth={2.5} strokeLinecap="round" />
     );
     nodes.push(
-      <SvgText key={`l${i}`} x={label.x} y={label.y + 4} fill={TEXT_WHITE} fontSize={10} fontWeight="600" textAnchor="middle">
+      <SvgText key={`l${i}`} x={label.x} y={label.y + 4} fill={TEXT_WHITE} fontSize={9} fontWeight="600" textAnchor="middle">
         {tickValues[i]}
       </SvgText>
     );
   }
+
+  const valueFontSize = Math.max(18, Math.round(r * 0.34));
+  const unitFontSize = Math.max(8, Math.round(r * 0.12));
+
+  nodes.push(<Circle key="glow" cx={cx} cy={cy} r={r * 0.5} fill="url(#rpmGlow)" />);
+  nodes.push(
+    <SvgText key="valueShadow" x={cx + 1} y={cy + r * 0.14 + 1} fill="#000" opacity={0.35} fontSize={valueFontSize} fontWeight="900" textAnchor="middle">
+      {value}
+    </SvgText>
+  );
+  nodes.push(
+    <SvgText key="value" x={cx} y={cy + r * 0.14} fill={BMW_ORANGE} fontSize={valueFontSize} fontWeight="900" textAnchor="middle">
+      {value}
+    </SvgText>
+  );
+  nodes.push(
+    <SvgText key="unit" x={cx} y={cy + r * 0.44} fill={TEXT_GRAY} fontSize={unitFontSize} fontWeight="600" textAnchor="middle" letterSpacing="2">
+      RPM
+    </SvgText>
+  );
 
   nodes.push(
     <SvgText key="value" x={cx} y={cy + r * 0.14} fill={BMW_ORANGE} fontSize={32} fontWeight="900" textAnchor="middle">
@@ -381,9 +427,9 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComple
   const gaugeWidth = Math.min(containerWidth, outerMaxWidth);
   const gaugeR = Math.min(gaugeWidth * 0.16, 60);
   const smallGaugeR = gaugeR * 0.45; // smaller fuel/temp dials
-  const topPad = 42; // clears the top tick labels + gear-diamond points above center
-  const rowGap = 34; // guaranteed gap between the main gauges and fuel/temp row
-  const bottomPad = 36; // clears the E/F and 50°/120° labels below the small dials
+  const topPad = 38; // clears the top tick labels + gear-diamond points above center
+  const rowGap = 14; // gap between the main gauges and fuel/temp row
+  const bottomPad = 30; // clears the E/F and 50°/120° labels below the small dials
   const centerY = topPad + gaugeR;
   const fuelTempY = centerY + gaugeR + rowGap + smallGaugeR;
   const gaugeHeight = fuelTempY + smallGaugeR + bottomPad;
@@ -434,6 +480,14 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComple
                     <Stop offset="0%" stopColor="#141820" />
                     <Stop offset="100%" stopColor="#0A0B0E" />
                   </LinearGradient>
+                  <RadialGradient id="speedGlow" cx="50%" cy="50%" r="50%">
+                    <Stop offset="0%" stopColor={BMW_LT_BLUE} stopOpacity={0.22} />
+                    <Stop offset="100%" stopColor={BMW_LT_BLUE} stopOpacity={0} />
+                  </RadialGradient>
+                  <RadialGradient id="rpmGlow" cx="50%" cy="50%" r="50%">
+                    <Stop offset="0%" stopColor={BMW_ORANGE} stopOpacity={0.22} />
+                    <Stop offset="100%" stopColor={BMW_ORANGE} stopOpacity={0} />
+                  </RadialGradient>
                 </Defs>
 
                 <Rect x={0} y={0} width={gaugeWidth} height={gaugeHeight} rx={12} fill="url(#clusterBg)" />
