@@ -27,7 +27,7 @@ import {
 import SyncStatusPill from '@/src/components/SyncStatusPill';
 import MassPowerLogo from '@/src/components/MassPowerLogo';
 
-// Module-level flags so the out-of-stock + reminder alerts only trigger once per app session
+// Module-level flags
 let outOfStockReminderShown = false;
 let oilReminderShown = false;
 
@@ -38,13 +38,11 @@ export default function HomeScreen() {
   const router = useRouter();
   const { height } = useWindowDimensions();
 
-  // Responsive sizing
   const isSmallScreen = height < 700;
   const cardPadding = isSmallScreen ? 14 : 20;
   const cardMargin = isSmallScreen ? 10 : 16;
   const buttonPadding = isSmallScreen ? 10 : 14;
 
-  // PIN STATE FOR BACKEND MANAGEMENT
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const SECRET_PIN = '3945';
@@ -207,7 +205,6 @@ export default function HomeScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        {/* HEADER WITH NEW SVG LOGO */}
         <View style={styles.header}>
           <View style={styles.logoRow}>
             <MassPowerLogo width={55} height={55} />
@@ -223,7 +220,6 @@ export default function HomeScreen() {
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
         >
-          {/* SEARCH CARD */}
           <View style={[styles.searchCard, { padding: cardPadding, marginBottom: cardMargin }]}>
             <View style={styles.searchHeader}>
               <Ionicons name="search-outline" size={isSmallScreen ? 20 : 24} color="#00e5ff" />
@@ -236,7 +232,7 @@ export default function HomeScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="موبايل • هيكل • لوحة"
-                placeholderTextColor="#64748b"
+                placeholderTextColor="#94a3b8" // FIXED: brighter
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 autoCapitalize="characters"
@@ -255,7 +251,6 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* ADD CUSTOMER BUTTON */}
           <TouchableOpacity
             style={[styles.addCustomerButton, { paddingVertical: buttonPadding }]}
             onPress={() => router.push('/add-customer')}
@@ -265,7 +260,6 @@ export default function HomeScreen() {
             <Text style={styles.addCustomerButtonText}>إضافة عميل جديد</Text>
           </TouchableOpacity>
 
-          {/* QUICK WALK-IN */}
           <TouchableOpacity
             style={[styles.walkinButton, { paddingVertical: buttonPadding }]}
             onPress={() => router.push('/quick-walkin')}
@@ -275,7 +269,6 @@ export default function HomeScreen() {
             <Text style={styles.walkinButtonText}>بيع سريع</Text>
           </TouchableOpacity>
 
-          {/* ORDER LIST */}
           <TouchableOpacity
             style={[styles.orderButton, { paddingVertical: buttonPadding }]}
             onPress={() => router.push('/order-list')}
@@ -284,7 +277,6 @@ export default function HomeScreen() {
             <Text style={styles.orderButtonText}>قائمة مشتريات</Text>
           </TouchableOpacity>
 
-          {/* MANAGEMENT */}
           <TouchableOpacity
             style={[styles.managementButton, { paddingVertical: buttonPadding }]}
             onPress={handleBackendPress}
@@ -294,7 +286,6 @@ export default function HomeScreen() {
             <Text style={styles.managementButtonText}>الإدارة و الاعدادات</Text>
           </TouchableOpacity>
 
-          {/* Build timestamp */}
           <Text style={styles.buildStamp} testID="build-timestamp">
             {Updates.createdAt
               ? `آخر تحديث: ${new Date(Updates.createdAt).toLocaleString()}`
@@ -303,7 +294,6 @@ export default function HomeScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* PIN MODAL */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -347,7 +337,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f141c' },
   keyboardView: { flex: 1 },
   
-  // HEADER
   header: {
     alignItems: 'center',
     paddingVertical: 20,
@@ -369,7 +358,6 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   contentContainer: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 30 },
   
-  // SEARCH CARD
   searchCard: {
     backgroundColor: '#151c26',
     borderRadius: 16,
@@ -393,8 +381,8 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   searchHint: {
-    fontSize: 12,
-    color: '#94a3b8', // Fixed: more readable
+    fontSize: 13, // slightly larger
+    color: '#cbd5e1', // FIXED: much brighter
     marginBottom: 14,
     marginLeft: 36,
   },
@@ -430,7 +418,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   
-  // BUTTONS - FIXED TEXT COLORS FOR READABILITY
   addCustomerButton: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -442,7 +429,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   addCustomerButtonText: {
-    color: '#00e5ff', // Cyan - readable on dark
+    color: '#00e5ff',
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
@@ -458,7 +445,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   walkinButtonText: {
-    color: '#ff5722', // Orange - readable on dark
+    color: '#ff5722',
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
@@ -474,7 +461,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   orderButtonText: {
-    color: '#00e676', // Green - readable on dark
+    color: '#00e676',
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
@@ -490,7 +477,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   managementButtonText: {
-    color: '#e2e8f0', // Light gray - readable on dark
+    color: '#f8fafc', // FIXED: white for max readability
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
@@ -501,10 +488,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlign: 'center',
     fontSize: 12,
-    color: '#64748b', // Fixed: more readable
+    color: '#94a3b8', // FIXED: brighter
   },
   
-  // MODAL
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 20, 28, 0.85)',
