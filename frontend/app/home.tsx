@@ -221,7 +221,7 @@ export default function HomeScreen() {
         >
           <View style={[styles.searchCard, { padding: cardPadding, marginBottom: cardMargin }]}>
             <View style={styles.searchHeader}>
-              <Ionicons name="search-outline" size={isSmallScreen ? 20 : 24} color="#94a3b8" />
+              <Ionicons name="search-outline" size={isSmallScreen ? 20 : 24} color="#00e5ff" />
               <Text style={styles.searchTitle}>ابحث عن عميل</Text>
             </View>
             <Text style={styles.searchHint}>
@@ -255,7 +255,7 @@ export default function HomeScreen() {
             onPress={() => router.push('/add-customer')}
             testID="add-customer-button"
           >
-            <Ionicons name="person-add-outline" size={isSmallScreen ? 16 : 20} color="#94a3b8" />
+            <Ionicons name="person-add-outline" size={isSmallScreen ? 16 : 20} color="#00e5ff" />
             <Text style={styles.addCustomerButtonText}>إضافة عميل جديد</Text>
           </TouchableOpacity>
 
@@ -264,7 +264,7 @@ export default function HomeScreen() {
             onPress={() => router.push('/quick-walkin')}
             testID="quick-walkin-button"
           >
-            <Ionicons name="walk-outline" size={isSmallScreen ? 16 : 20} color="#94a3b8" />
+            <Ionicons name="walk-outline" size={isSmallScreen ? 16 : 20} color="#ff5722" />
             <Text style={styles.walkinButtonText}>بيع سريع</Text>
           </TouchableOpacity>
 
@@ -272,7 +272,7 @@ export default function HomeScreen() {
             style={[styles.orderButton, { paddingVertical: buttonPadding }]}
             onPress={() => router.push('/order-list')}
           >
-            <Ionicons name="list-outline" size={isSmallScreen ? 16 : 20} color="#94a3b8" />
+            <Ionicons name="list-outline" size={isSmallScreen ? 16 : 20} color="#00e676" />
             <Text style={styles.orderButtonText}>قائمة مشتريات</Text>
           </TouchableOpacity>
 
@@ -395,7 +395,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   searchButton: {
-    backgroundColor: '#2d3a4f',
+    backgroundColor: '#0052cc',
     borderRadius: 12,
     paddingVertical: 13,
     flexDirection: 'row',
@@ -417,13 +417,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#2d3a4f',
+    borderWidth: 1.5,
+    borderColor: '#00e5ff',
     backgroundColor: '#1a2332',
     marginTop: 10,
   },
   addCustomerButtonText: {
-    color: '#e2e8f0',
+    color: '#e2e8f0', // grey-white text
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
@@ -434,12 +434,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 12,
     backgroundColor: '#1a2332',
-    borderWidth: 2,
-    borderColor: '#2d3a4f',
+    borderWidth: 1.5,
+    borderColor: '#ff5722',
     marginTop: 12,
   },
   walkinButtonText: {
-    color: '#e2e8f0',
+    color: '#e2e8f0', // grey-white text
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
@@ -450,12 +450,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 12,
     backgroundColor: '#1a2332',
-    borderWidth: 2,
-    borderColor: '#2d3a4f',
+    borderWidth: 1.5,
+    borderColor: '#00e676',
     marginTop: 12,
   },
   orderButtonText: {
-    color: '#e2e8f0',
+    color: '#e2e8f0', // grey-white text
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
@@ -466,12 +466,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 12,
     backgroundColor: '#1e293b',
-    borderWidth: 2,
-    borderColor: '#2d3a4f',
+    borderWidth: 1.5,
+    borderColor: '#475569',
     marginTop: 12,
   },
   managementButtonText: {
-    color: '#e2e8f0',
+    color: '#e2e8f0', // grey-white text
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
@@ -515,7 +515,7 @@ const styles = StyleSheet.create({
   pinInput: {
     width: '100%',
     borderWidth: 2,
-    borderColor: '#2d3a4f',
+    borderColor: '#00e5ff',
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,
@@ -548,7 +548,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: '#2d3a4f',
+    backgroundColor: '#0052cc',
     alignItems: 'center',
   },
   modalConfirmText: {
