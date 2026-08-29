@@ -265,17 +265,6 @@ function RpmGauge({
     </SvgText>
   );
 
-  nodes.push(
-    <SvgText key="value" x={cx} y={cy + r * 0.14} fill={BMW_ORANGE} fontSize={32} fontWeight="900" textAnchor="middle">
-      {value}
-    </SvgText>
-  );
-  nodes.push(
-    <SvgText key="unit" x={cx} y={cy + r * 0.43} fill={TEXT_WHITE} fontSize={10} fontWeight="600" textAnchor="middle" letterSpacing="2">
-      RPM
-    </SvgText>
-  );
-
   return <>{nodes}</>;
 }
 
