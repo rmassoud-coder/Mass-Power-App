@@ -221,7 +221,7 @@ export default function HomeScreen() {
         >
           <View style={[styles.searchCard, { padding: cardPadding, marginBottom: cardMargin }]}>
             <View style={styles.searchHeader}>
-              <Ionicons name="search-outline" size={isSmallScreen ? 18 : 22} color="#00e5ff" />
+              <Ionicons name="search-outline" size={isSmallScreen ? 18 : 22} color="#00d4ff" />
               <Text style={styles.searchTitle}>ابحث عن عميل</Text>
             </View>
             <Text style={styles.searchHint}>
@@ -255,7 +255,7 @@ export default function HomeScreen() {
             onPress={() => router.push('/add-customer')}
             testID="add-customer-button"
           >
-            <Ionicons name="person-add-outline" size={isSmallScreen ? 14 : 18} color="#00e5ff" />
+            <Ionicons name="person-add-outline" size={isSmallScreen ? 14 : 18} color="#39ff14" />
             <Text style={styles.addCustomerButtonText}>إضافة عميل جديد</Text>
           </TouchableOpacity>
 
@@ -264,7 +264,7 @@ export default function HomeScreen() {
             onPress={() => router.push('/quick-walkin')}
             testID="quick-walkin-button"
           >
-            <Ionicons name="walk-outline" size={isSmallScreen ? 14 : 18} color="#ff5722" />
+            <Ionicons name="walk-outline" size={isSmallScreen ? 14 : 18} color="#ffff00" />
             <Text style={styles.walkinButtonText}>بيع سريع</Text>
           </TouchableOpacity>
 
@@ -272,7 +272,7 @@ export default function HomeScreen() {
             style={[styles.orderButton, { paddingVertical: buttonPadding }]}
             onPress={() => router.push('/order-list')}
           >
-            <Ionicons name="list-outline" size={isSmallScreen ? 14 : 18} color="#00e676" />
+            <Ionicons name="list-outline" size={isSmallScreen ? 14 : 18} color="#ff00ff" />
             <Text style={styles.orderButtonText}>قائمة مشتريات</Text>
           </TouchableOpacity>
 
@@ -281,7 +281,7 @@ export default function HomeScreen() {
             onPress={handleBackendPress}
             testID="management-button"
           >
-            <Ionicons name="construct-outline" size={isSmallScreen ? 14 : 18} color="#94a3b8" />
+            <Ionicons name="construct-outline" size={isSmallScreen ? 14 : 18} color="#ff1493" />
             <Text style={styles.managementButtonText}>الإدارة و الاعدادات</Text>
           </TouchableOpacity>
 
@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: '#00e5ff',
+    borderColor: '#39ff14',
     backgroundColor: '#1a2332',
     marginTop: 10,
   },
@@ -435,7 +435,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: '#1a2332',
     borderWidth: 1.5,
-    borderColor: '#ff5722',
+    borderColor: '#ffff00',
     marginTop: 10,
   },
   walkinButtonText: {
@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: '#1a2332',
     borderWidth: 1.5,
-    borderColor: '#00e676',
+    borderColor: '#ff00ff',
     marginTop: 10,
   },
   orderButtonText: {
@@ -467,7 +467,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: '#1e293b',
     borderWidth: 1.5,
-    borderColor: '#475569',
+    borderColor: '#ff1493',
     marginTop: 10,
   },
   managementButtonText: {
@@ -515,7 +515,7 @@ const styles = StyleSheet.create({
   pinInput: {
     width: '100%',
     borderWidth: 2,
-    borderColor: '#00e5ff',
+    borderColor: '#00d4ff',
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 14,
