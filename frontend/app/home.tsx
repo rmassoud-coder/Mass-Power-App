@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: '#39ff14',
+    borderColor: '#00e5ff', // KEPT ORIGINAL
     backgroundColor: '#1a2332',
     marginTop: 10,
   },
@@ -435,7 +435,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: '#1a2332',
     borderWidth: 1.5,
-    borderColor: '#ffff00',
+    borderColor: '#ff5722', // KEPT ORIGINAL
     marginTop: 10,
   },
   walkinButtonText: {
@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: '#1a2332',
     borderWidth: 1.5,
-    borderColor: '#ff00ff',
+    borderColor: '#00e676', // KEPT ORIGINAL
     marginTop: 10,
   },
   orderButtonText: {
@@ -467,7 +467,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: '#1e293b',
     borderWidth: 1.5,
-    borderColor: '#ff1493',
+    borderColor: '#475569', // KEPT ORIGINAL
     marginTop: 10,
   },
   managementButtonText: {
@@ -515,7 +515,7 @@ const styles = StyleSheet.create({
   pinInput: {
     width: '100%',
     borderWidth: 2,
-    borderColor: '#00d4ff',
+    borderColor: '#00e5ff', // KEPT ORIGINAL
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 14,
