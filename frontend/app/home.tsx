@@ -25,6 +25,7 @@ import {
   listDueOilReminders,
 } from '@/src/db/database';
 import SyncStatusPill from '@/src/components/SyncStatusPill';
+import MassPowerLogo from '@/src/components/MassPowerLogo';
 
 // Module-level flags so the out-of-stock + reminder alerts only trigger once per app session
 let outOfStockReminderShown = false;
@@ -206,14 +207,10 @@ export default function HomeScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        {/* HEADER - KEPT FROM YOUR ORIGINAL */}
+        {/* HEADER WITH NEW SVG LOGO */}
         <View style={styles.header}>
           <View style={styles.logoRow}>
-            <Image
-              source={require('../assets/images/mass-power-logo.png')}
-              style={styles.headerLogo}
-              resizeMode="contain"
-            />
+            <MassPowerLogo width={55} height={55} />
             <Text style={styles.headerSubtitle}>Auto Services</Text>
           </View>
           <View style={{ marginTop: 8 }}>
@@ -226,7 +223,7 @@ export default function HomeScreen() {
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
         >
-          {/* SEARCH CARD - KEPT WITH GEMINI STYLES */}
+          {/* SEARCH CARD */}
           <View style={[styles.searchCard, { padding: cardPadding, marginBottom: cardMargin }]}>
             <View style={styles.searchHeader}>
               <Ionicons name="search-outline" size={isSmallScreen ? 20 : 24} color="#00e5ff" />
@@ -258,7 +255,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* ADD CUSTOMER BUTTON - GEMINI STYLE */}
+          {/* ADD CUSTOMER BUTTON */}
           <TouchableOpacity
             style={[styles.addCustomerButton, { paddingVertical: buttonPadding }]}
             onPress={() => router.push('/add-customer')}
@@ -268,7 +265,7 @@ export default function HomeScreen() {
             <Text style={styles.addCustomerButtonText}>إضافة عميل جديد</Text>
           </TouchableOpacity>
 
-          {/* QUICK WALK-IN - GEMINI STYLE */}
+          {/* QUICK WALK-IN */}
           <TouchableOpacity
             style={[styles.walkinButton, { paddingVertical: buttonPadding }]}
             onPress={() => router.push('/quick-walkin')}
@@ -278,7 +275,7 @@ export default function HomeScreen() {
             <Text style={styles.walkinButtonText}>بيع سريع</Text>
           </TouchableOpacity>
 
-          {/* ORDER LIST - GEMINI STYLE */}
+          {/* ORDER LIST */}
           <TouchableOpacity
             style={[styles.orderButton, { paddingVertical: buttonPadding }]}
             onPress={() => router.push('/order-list')}
@@ -287,7 +284,7 @@ export default function HomeScreen() {
             <Text style={styles.orderButtonText}>قائمة مشتريات</Text>
           </TouchableOpacity>
 
-          {/* MANAGEMENT - GEMINI STYLE */}
+          {/* MANAGEMENT */}
           <TouchableOpacity
             style={[styles.managementButton, { paddingVertical: buttonPadding }]}
             onPress={handleBackendPress}
@@ -306,7 +303,7 @@ export default function HomeScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* PIN MODAL - GEMINI STYLE */}
+      {/* PIN MODAL */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -350,7 +347,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f141c' },
   keyboardView: { flex: 1 },
   
-  // HEADER - YOUR ORIGINAL STYLE (light) but adjusted to dark
+  // HEADER
   header: {
     alignItems: 'center',
     paddingVertical: 20,
@@ -362,12 +359,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  headerLogo: {
-    width: 55,
-    height: 55,
-    borderRadius: 27.5,
-    marginRight: 12,
-  },
   headerSubtitle: {
     fontSize: 20,
     color: '#f8fafc',
@@ -378,7 +369,7 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   contentContainer: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 30 },
   
-  // SEARCH CARD - GEMINI DARK STYLE
+  // SEARCH CARD
   searchCard: {
     backgroundColor: '#151c26',
     borderRadius: 16,
@@ -403,7 +394,7 @@ const styles = StyleSheet.create({
   },
   searchHint: {
     fontSize: 12,
-    color: '#64748b',
+    color: '#94a3b8', // Fixed: more readable
     marginBottom: 14,
     marginLeft: 36,
   },
@@ -439,7 +430,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   
-  // BUTTONS - GEMINI DARK STYLE
+  // BUTTONS - FIXED TEXT COLORS FOR READABILITY
   addCustomerButton: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -451,7 +442,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   addCustomerButtonText: {
-    color: '#00e5ff',
+    color: '#00e5ff', // Cyan - readable on dark
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
@@ -467,7 +458,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   walkinButtonText: {
-    color: '#ff5722',
+    color: '#ff5722', // Orange - readable on dark
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
@@ -483,7 +474,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   orderButtonText: {
-    color: '#00e676',
+    color: '#00e676', // Green - readable on dark
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
@@ -499,7 +490,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   managementButtonText: {
-    color: '#94a3b8',
+    color: '#e2e8f0', // Light gray - readable on dark
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
@@ -510,10 +501,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlign: 'center',
     fontSize: 12,
-    color: '#475569',
+    color: '#64748b', // Fixed: more readable
   },
   
-  // MODAL - GEMINI DARK STYLE
+  // MODAL
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 20, 28, 0.85)',
@@ -537,7 +528,7 @@ const styles = StyleSheet.create({
   },
   modalSubtitle: {
     fontSize: 14,
-    color: '#64748b',
+    color: '#94a3b8',
     marginBottom: 20,
   },
   pinInput: {
