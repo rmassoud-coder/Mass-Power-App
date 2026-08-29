@@ -5,19 +5,16 @@ export default function MassPowerLogo({ size = 60 }: { size?: number }) {
   return (
     <Svg viewBox="0 0 300 300" width={size} height={size}>
       <Defs>
-        {/* Sleek Blue Instrument Glow */}
         <LinearGradient id="blueGlow" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#00e5ff" />
-          <stop offset="100%" stopColor="#0066ff" />
+          <Stop offset="0%" stopColor="#00e5ff" />   {/* FIXED: capital S */}
+          <Stop offset="100%" stopColor="#0066ff" /> {/* FIXED: capital S */}
         </LinearGradient>
-        {/* Silver Chrome Indicator Gradient */}
         <LinearGradient id="chromeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#f8fafc" />
-          <stop offset="100%" stopColor="#94a3b8" />
+          <Stop offset="0%" stopColor="#f8fafc" />   {/* FIXED: capital S */}
+          <Stop offset="100%" stopColor="#94a3b8" /> {/* FIXED: capital S */}
         </LinearGradient>
       </Defs>
 
-      {/* Top Dynamic Curved Arch */}
       <Path
         d="M 60,110 A 110,110 0 0,1 240,110"
         fill="none"
@@ -33,7 +30,6 @@ export default function MassPowerLogo({ size = 60 }: { size?: number }) {
         strokeLinecap="round"
       />
 
-      {/* Bottom Dynamic Curved Arch */}
       <Path
         d="M 240,190 A 110,110 0 0,1 60,190"
         fill="none"
@@ -49,7 +45,6 @@ export default function MassPowerLogo({ size = 60 }: { size?: number }) {
         strokeLinecap="round"
       />
 
-      {/* Corporate Typography Layer */}
       <Text
         x="150"
         y="125"
@@ -77,7 +72,6 @@ export default function MassPowerLogo({ size = 60 }: { size?: number }) {
           P WER
         </Text>
 
-        {/* Central Core Turbine / Globe Icon inside the 'O' */}
         <Circle cx="132" cy="162" r="15" fill="#0052cc" />
         <Path
           d="M 132,147 A 15,15 0 0,1 147,162 L 132,162 Z"
@@ -89,7 +83,7 @@ export default function MassPowerLogo({ size = 60 }: { size?: number }) {
           fill="#f8fafc"
           opacity="0.9"
         />
-      </g>
+      </G>
     </Svg>
   );
 }
