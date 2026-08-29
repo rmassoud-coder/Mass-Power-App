@@ -221,7 +221,7 @@ export default function HomeScreen() {
         >
           <View style={[styles.searchCard, { padding: cardPadding, marginBottom: cardMargin }]}>
             <View style={styles.searchHeader}>
-              <Ionicons name="search-outline" size={isSmallScreen ? 20 : 24} color="#00e5ff" />
+              <Ionicons name="search-outline" size={isSmallScreen ? 20 : 24} color="#94a3b8" />
               <Text style={styles.searchTitle}>ابحث عن عميل</Text>
             </View>
             <Text style={styles.searchHint}>
@@ -231,7 +231,7 @@ export default function HomeScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="موبايل • هيكل • لوحة"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor="#64748b"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 autoCapitalize="characters"
@@ -255,7 +255,7 @@ export default function HomeScreen() {
             onPress={() => router.push('/add-customer')}
             testID="add-customer-button"
           >
-            <Ionicons name="person-add-outline" size={isSmallScreen ? 16 : 20} color="#00e5ff" />
+            <Ionicons name="person-add-outline" size={isSmallScreen ? 16 : 20} color="#94a3b8" />
             <Text style={styles.addCustomerButtonText}>إضافة عميل جديد</Text>
           </TouchableOpacity>
 
@@ -264,7 +264,7 @@ export default function HomeScreen() {
             onPress={() => router.push('/quick-walkin')}
             testID="quick-walkin-button"
           >
-            <Ionicons name="walk-outline" size={isSmallScreen ? 16 : 20} color="#ff5722" />
+            <Ionicons name="walk-outline" size={isSmallScreen ? 16 : 20} color="#94a3b8" />
             <Text style={styles.walkinButtonText}>بيع سريع</Text>
           </TouchableOpacity>
 
@@ -272,7 +272,7 @@ export default function HomeScreen() {
             style={[styles.orderButton, { paddingVertical: buttonPadding }]}
             onPress={() => router.push('/order-list')}
           >
-            <Ionicons name="list-outline" size={isSmallScreen ? 16 : 20} color="#00e676" />
+            <Ionicons name="list-outline" size={isSmallScreen ? 16 : 20} color="#94a3b8" />
             <Text style={styles.orderButtonText}>قائمة مشتريات</Text>
           </TouchableOpacity>
 
@@ -333,7 +333,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0f16' }, // darker background
+  container: { flex: 1, backgroundColor: '#0a0f16' },
   keyboardView: { flex: 1 },
   
   header: {
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: 20,
-    color: '#ffffff', // pure white
+    color: '#ffffff',
     fontWeight: '700',
     letterSpacing: 0.5,
   },
@@ -358,15 +358,10 @@ const styles = StyleSheet.create({
   contentContainer: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 30 },
   
   searchCard: {
-    backgroundColor: '#1a2332', // slightly lighter than background
+    backgroundColor: '#1a2332',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#2d3a4f',
-    shadowColor: '#00e5ff',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 3,
   },
   searchHeader: {
     flexDirection: 'row',
@@ -376,12 +371,12 @@ const styles = StyleSheet.create({
   searchTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#ffffff', // pure white
+    color: '#ffffff',
     marginLeft: 12,
   },
   searchHint: {
     fontSize: 13,
-    color: '#cbd5e1', // bright gray-white
+    color: '#cbd5e1',
     marginBottom: 14,
     marginLeft: 36,
   },
@@ -396,11 +391,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#ffffff', // pure white for input text
+    color: '#ffffff',
     textAlign: 'right',
   },
   searchButton: {
-    backgroundColor: '#0066ff',
+    backgroundColor: '#2d3a4f',
     borderRadius: 12,
     paddingVertical: 13,
     flexDirection: 'row',
@@ -423,12 +418,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#00e5ff',
+    borderColor: '#2d3a4f',
     backgroundColor: '#1a2332',
     marginTop: 10,
   },
   addCustomerButtonText: {
-    color: '#00e5ff',
+    color: '#e2e8f0',
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
@@ -440,11 +435,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#1a2332',
     borderWidth: 2,
-    borderColor: '#ff5722',
+    borderColor: '#2d3a4f',
     marginTop: 12,
   },
   walkinButtonText: {
-    color: '#ff5722',
+    color: '#e2e8f0',
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
@@ -456,11 +451,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#1a2332',
     borderWidth: 2,
-    borderColor: '#00e676',
+    borderColor: '#2d3a4f',
     marginTop: 12,
   },
   orderButtonText: {
-    color: '#00e676',
+    color: '#e2e8f0',
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
@@ -472,11 +467,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#1e293b',
     borderWidth: 2,
-    borderColor: '#64748b',
+    borderColor: '#2d3a4f',
     marginTop: 12,
   },
   managementButtonText: {
-    color: '#ffffff', // pure white
+    color: '#e2e8f0',
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
@@ -520,7 +515,7 @@ const styles = StyleSheet.create({
   pinInput: {
     width: '100%',
     borderWidth: 2,
-    borderColor: '#00e5ff',
+    borderColor: '#2d3a4f',
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,
@@ -553,7 +548,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: '#0066ff',
+    backgroundColor: '#2d3a4f',
     alignItems: 'center',
   },
   modalConfirmText: {
