@@ -9,7 +9,6 @@ import {
   Platform,
   Alert,
   ScrollView,
-  Image,
   useWindowDimensions,
   Modal,
 } from 'react-native';
@@ -207,7 +206,7 @@ export default function HomeScreen() {
       >
         <View style={styles.header}>
           <View style={styles.logoRow}>
-            <MassPowerLogo width={55} height={55} />
+            <MassPowerLogo size={55} />
             <Text style={styles.headerSubtitle}>Auto Services</Text>
           </View>
           <View style={{ marginTop: 8 }}>
@@ -232,7 +231,7 @@ export default function HomeScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="موبايل • هيكل • لوحة"
-                placeholderTextColor="#94a3b8" // FIXED: brighter
+                placeholderTextColor="#94a3b8"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 autoCapitalize="characters"
@@ -308,7 +307,7 @@ export default function HomeScreen() {
             <TextInput
               style={styles.pinInput}
               placeholder="****"
-              placeholderTextColor="#334155"
+              placeholderTextColor="#475569"
               keyboardType="number-pad"
               maxLength={4}
               secureTextEntry={true}
@@ -334,7 +333,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f141c' },
+  container: { flex: 1, backgroundColor: '#0a0f16' }, // darker background
   keyboardView: { flex: 1 },
   
   header: {
@@ -350,7 +349,7 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: 20,
-    color: '#f8fafc',
+    color: '#ffffff', // pure white
     fontWeight: '700',
     letterSpacing: 0.5,
   },
@@ -359,13 +358,13 @@ const styles = StyleSheet.create({
   contentContainer: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 30 },
   
   searchCard: {
-    backgroundColor: '#151c26',
+    backgroundColor: '#1a2332', // slightly lighter than background
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#2d3a4f',
     shadowColor: '#00e5ff',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 10,
     elevation: 3,
   },
@@ -377,12 +376,12 @@ const styles = StyleSheet.create({
   searchTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#f8fafc',
+    color: '#ffffff', // pure white
     marginLeft: 12,
   },
   searchHint: {
-    fontSize: 13, // slightly larger
-    color: '#cbd5e1', // FIXED: much brighter
+    fontSize: 13,
+    color: '#cbd5e1', // bright gray-white
     marginBottom: 14,
     marginLeft: 36,
   },
@@ -391,17 +390,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#2d3a4f',
   },
   input: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#f8fafc',
+    color: '#ffffff', // pure white for input text
     textAlign: 'right',
   },
   searchButton: {
-    backgroundColor: '#0052cc',
+    backgroundColor: '#0066ff',
     borderRadius: 12,
     paddingVertical: 13,
     flexDirection: 'row',
@@ -412,7 +411,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   searchButtonText: {
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
@@ -423,9 +422,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 12,
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: '#00e5ff',
-    backgroundColor: '#151c26',
+    backgroundColor: '#1a2332',
     marginTop: 10,
   },
   addCustomerButtonText: {
@@ -439,8 +438,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 12,
-    backgroundColor: '#151c26',
-    borderWidth: 1,
+    backgroundColor: '#1a2332',
+    borderWidth: 2,
     borderColor: '#ff5722',
     marginTop: 12,
   },
@@ -455,8 +454,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 12,
-    backgroundColor: '#151c26',
-    borderWidth: 1,
+    backgroundColor: '#1a2332',
+    borderWidth: 2,
     borderColor: '#00e676',
     marginTop: 12,
   },
@@ -472,12 +471,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 12,
     backgroundColor: '#1e293b',
-    borderWidth: 1,
-    borderColor: '#475569',
+    borderWidth: 2,
+    borderColor: '#64748b',
     marginTop: 12,
   },
   managementButtonText: {
-    color: '#f8fafc', // FIXED: white for max readability
+    color: '#ffffff', // pure white
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
@@ -487,39 +486,40 @@ const styles = StyleSheet.create({
     marginTop: 24,
     marginBottom: 8,
     textAlign: 'center',
-    fontSize: 12,
-    color: '#94a3b8', // FIXED: brighter
+    fontSize: 13,
+    color: '#94a3b8',
+    fontWeight: '500',
   },
   
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 20, 28, 0.85)',
+    backgroundColor: 'rgba(10, 15, 22, 0.92)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
     width: '85%',
-    backgroundColor: '#151c26',
+    backgroundColor: '#1a2332',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#2d3a4f',
     padding: 24,
     alignItems: 'center',
   },
   modalTitle: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#f8fafc',
+    color: '#ffffff',
     marginBottom: 4,
   },
   modalSubtitle: {
     fontSize: 14,
-    color: '#94a3b8',
+    color: '#cbd5e1',
     marginBottom: 20,
   },
   pinInput: {
     width: '100%',
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#00e5ff',
     borderRadius: 12,
     paddingVertical: 12,
@@ -528,7 +528,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     letterSpacing: 10,
-    color: '#f8fafc',
+    color: '#ffffff',
     marginBottom: 24,
     backgroundColor: '#0f141c',
   },
@@ -541,11 +541,11 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: '#1e293b',
+    backgroundColor: '#2d3a4f',
     alignItems: 'center',
   },
   modalCancelText: {
-    color: '#94a3b8',
+    color: '#cbd5e1',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -553,11 +553,11 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: '#0052cc',
+    backgroundColor: '#0066ff',
     alignItems: 'center',
   },
   modalConfirmText: {
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
   },
