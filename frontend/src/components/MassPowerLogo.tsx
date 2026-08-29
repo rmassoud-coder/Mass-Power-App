@@ -1,17 +1,17 @@
 import React from 'react';
 import Svg, { Path, Text, Circle, G, Defs, LinearGradient, Stop } from 'react-native-svg';
 
-export default function MassPowerLogo({ size = 60 }: { size?: number }) {
+export default function MassPowerLogo({ size = 55 }: { size?: number }) {
   return (
     <Svg viewBox="0 0 300 300" width={size} height={size}>
       <Defs>
         <LinearGradient id="blueGlow" x1="0%" y1="0%" x2="100%" y2="100%">
-          <Stop offset="0%" stopColor="#00e5ff" />   {/* FIXED: capital S */}
-          <Stop offset="100%" stopColor="#0066ff" /> {/* FIXED: capital S */}
+          <Stop offset="0%" stopColor="#00e5ff" />
+          <Stop offset="100%" stopColor="#0066ff" />
         </LinearGradient>
         <LinearGradient id="chromeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-          <Stop offset="0%" stopColor="#f8fafc" />   {/* FIXED: capital S */}
-          <Stop offset="100%" stopColor="#94a3b8" /> {/* FIXED: capital S */}
+          <Stop offset="0%" stopColor="#f8fafc" />
+          <Stop offset="100%" stopColor="#94a3b8" />
         </LinearGradient>
       </Defs>
 
