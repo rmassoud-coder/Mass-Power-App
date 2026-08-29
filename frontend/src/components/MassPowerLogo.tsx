@@ -1,69 +1,95 @@
 import React from 'react';
-import { Svg, Defs, LinearGradient, Stop, Rect, G, Polygon, Text, Circle } from 'react-native-svg';
+import Svg, { Path, Text, Circle, G, Defs, LinearGradient, Stop } from 'react-native-svg';
 
-interface MassPowerLogoProps {
-  width?: number;
-  height?: number;
-}
-
-export default function MassPowerLogo({ width = 60, height = 60 }: MassPowerLogoProps) {
-  // Calculate viewBox scaling
-  const viewBoxSize = 500;
-  const scale = width / viewBoxSize;
-  
+export default function MassPowerLogo({ size = 60 }: { size?: number }) {
   return (
-    <Svg width={width} height={height} viewBox={`0 0 ${viewBoxSize} ${viewBoxSize}`}>
+    <Svg viewBox="0 0 300 300" width={size} height={size}>
       <Defs>
-        <LinearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <Stop offset="0%" stopColor="#151c26"/>
-          <Stop offset="100%" stopColor="#0f141c"/>
+        {/* Sleek Blue Instrument Glow */}
+        <LinearGradient id="blueGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#00e5ff" />
+          <stop offset="100%" stopColor="#0066ff" />
         </LinearGradient>
-        <LinearGradient id="neonGlow" x1="0%" y1="0%" x2="100%" y2="0%">
-          <Stop offset="0%" stopColor="#00e5ff"/>
-          <Stop offset="50%" stopColor="#ff5722"/>
-          <Stop offset="100%" stopColor="#00e676"/>
+        {/* Silver Chrome Indicator Gradient */}
+        <LinearGradient id="chromeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#f8fafc" />
+          <stop offset="100%" stopColor="#94a3b8" />
         </LinearGradient>
       </Defs>
-      
-      <Rect x="0" y="0" width="500" height="500" rx="250" fill="url(#bgGrad)" stroke="#1e293b" strokeWidth="8"/>
 
-      {/* M-Style Power Slashes (Instrument Cluster Style) */}
-      <G transform="translate(140, 110)">
-        <Polygon points="0,100 40,0 90,0 50,100" fill="#00e5ff" opacity="0.9"/>
-        <Polygon points="70,100 110,0 160,0 120,100" fill="#ff5722" opacity="0.9"/>
-        <Polygon points="140,100 180,0 230,0 190,100" fill="#00e676" opacity="0.9"/>
-      </G>
+      {/* Top Dynamic Curved Arch */}
+      <Path
+        d="M 60,110 A 110,110 0 0,1 240,110"
+        fill="none"
+        stroke="url(#blueGlow)"
+        strokeWidth="12"
+        strokeLinecap="round"
+      />
+      <Path
+        d="M 85,95 A 110,110 0 0,1 215,95"
+        fill="none"
+        stroke="url(#chromeGrad)"
+        strokeWidth="6"
+        strokeLinecap="round"
+      />
 
-      {/* Typography */}
+      {/* Bottom Dynamic Curved Arch */}
+      <Path
+        d="M 240,190 A 110,110 0 0,1 60,190"
+        fill="none"
+        stroke="url(#blueGlow)"
+        strokeWidth="12"
+        strokeLinecap="round"
+      />
+      <Path
+        d="M 215,205 A 110,110 0 0,1 85,205"
+        fill="none"
+        stroke="url(#chromeGrad)"
+        strokeWidth="6"
+        strokeLinecap="round"
+      />
+
+      {/* Corporate Typography Layer */}
       <Text
-        x="250"
-        y="310"
+        x="150"
+        y="125"
         textAnchor="middle"
-        fontFamily="Arial, sans-serif"
-        fontWeight="900"
-        fontStyle="italic"
-        fontSize="52"
-        fill="#ffffff"
-        letterSpacing="4"
+        fontFamily="System"
+        fontWeight="bold"
+        fontSize="34"
+        fill="#00e5ff"
+        letterSpacing="2"
       >
         MASS
       </Text>
-      <Text
-        x="250"
-        y="375"
-        textAnchor="middle"
-        fontFamily="Arial, sans-serif"
-        fontWeight="700"
-        fontStyle="italic"
-        fontSize="38"
-        fill="#94a3b8"
-        letterSpacing="8"
-      >
-        POWER
-      </Text>
-      
-      {/* Sleek Trim Ring */}
-      <Circle cx="250" cy="250" r="225" fill="none" stroke="url(#neonGlow)" strokeWidth="4" strokeDasharray="15 10"/>
+
+      <G transform="translate(0, 0)">
+        <Text
+          x="150"
+          y="172"
+          textAnchor="middle"
+          fontFamily="System"
+          fontWeight="bold"
+          fontSize="32"
+          fill="#f8fafc"
+          letterSpacing="1"
+        >
+          P WER
+        </Text>
+
+        {/* Central Core Turbine / Globe Icon inside the 'O' */}
+        <Circle cx="132" cy="162" r="15" fill="#0052cc" />
+        <Path
+          d="M 132,147 A 15,15 0 0,1 147,162 L 132,162 Z"
+          fill="#00e5ff"
+          opacity="0.8"
+        />
+        <Path
+          d="M 132,177 A 15,15 0 0,1 117,162 L 132,162 Z"
+          fill="#f8fafc"
+          opacity="0.9"
+        />
+      </g>
     </Svg>
   );
 }
