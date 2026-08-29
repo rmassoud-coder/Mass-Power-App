@@ -279,6 +279,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComple
   const [containerWidth, setContainerWidth] = useState(Dimensions.get('window').width - 32);
   const speed = useSharedValue(0);
   const rpm = useSharedValue(0);
+  const tempSV = useSharedValue(42);
 
   const [displayRpm, setDisplayRpm] = useState(0);
   const [displaySpeed, setDisplaySpeed] = useState(0);
@@ -302,16 +303,14 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComple
   ];
 
   useEffect(() => {
+    // Speed climbs monotonically — a car does not slow down when it shifts up.
+    // (RPM below is the one that's supposed to dip at each shift.)
     speed.value = withSequence(
       withTiming(0.02, { duration: 500, easing: Easing.out(Easing.cubic) }),
-      withTiming(0.17, { duration: 1500, easing: Easing.out(Easing.quad) }),
-      withTiming(0.15, { duration: 400, easing: Easing.inOut(Easing.quad) }),
-      withTiming(0.34, { duration: 1500, easing: Easing.out(Easing.quad) }),
-      withTiming(0.3, { duration: 400, easing: Easing.inOut(Easing.quad) }),
-      withTiming(0.5, { duration: 1500, easing: Easing.out(Easing.quad) }),
-      withTiming(0.45, { duration: 400, easing: Easing.inOut(Easing.quad) }),
-      withTiming(0.67, { duration: 1500, easing: Easing.out(Easing.quad) }),
-      withTiming(0.6, { duration: 400, easing: Easing.inOut(Easing.quad) }),
+      withTiming(0.17, { duration: 1600, easing: Easing.inOut(Easing.quad) }),
+      withTiming(0.34, { duration: 1600, easing: Easing.inOut(Easing.quad) }),
+      withTiming(0.5, { duration: 1600, easing: Easing.inOut(Easing.quad) }),
+      withTiming(0.67, { duration: 1600, easing: Easing.inOut(Easing.quad) }),
       withDelay(3000, withTiming(0.67, { duration: 1 }))
     );
   }, [speed]);
@@ -331,17 +330,17 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComple
     );
   }, [rpm]);
 
-  // Cold-start ramp for temp, then a gentle idle jitter — uses the whole gauge scale.
+  // Cold-start ramp for temp, then a slow smooth idle drift — animated like
+  // speed/rpm (via a shared value) instead of discrete random jumps, so it
+  // interpolates instead of snapping.
   useEffect(() => {
-    const tempInterval = setInterval(() => {
-      setTempLevel((prev) => {
-        if (prev < 88) return Math.min(88, prev + 2.2 + Math.random());
-        const jitter = prev + (Math.random() * 1.4 - 0.6);
-        return Math.min(96, Math.max(85, jitter));
-      });
-    }, 400);
-    return () => clearInterval(tempInterval);
-  }, []);
+    tempSV.value = withSequence(
+      withTiming(88, { duration: 4000, easing: Easing.out(Easing.quad) }),
+      withTiming(93, { duration: 2500, easing: Easing.inOut(Easing.sin) }),
+      withTiming(89, { duration: 2500, easing: Easing.inOut(Easing.sin) }),
+      withDelay(1000, withTiming(91, { duration: 2000, easing: Easing.inOut(Easing.sin) }))
+    );
+  }, [tempSV]);
 
   useEffect(() => {
     const fuelInterval = setInterval(() => {
@@ -368,6 +367,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComple
     runOnJS(setRpmProgress)(Math.min(rp / MAX_RPM, 1));
     runOnJS(setDisplaySpeed)(speedKmh);
     runOnJS(setDisplayRpm)(Math.round(rp));
+    runOnJS(setTempLevel)(tempSV.value);
 
     let phaseIndex = 0;
     if (speedKmh > 140) phaseIndex = 4;
@@ -375,7 +375,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComple
     else if (speedKmh > 60) phaseIndex = 2;
     else if (speedKmh > 20) phaseIndex = 1;
     runOnJS(setAnimationPhase)(phaseIndex);
-  }, [speed, rpm]);
+  }, [speed, rpm, tempSV]);
 
   const outerMaxWidth = size ? Math.min(size, 480) : 480;
   const gaugeWidth = Math.min(containerWidth, outerMaxWidth);
@@ -395,7 +395,17 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComple
       {/* Bezel: metal frame -> dark groove -> panel, mimicking a real cluster housing */}
       <View style={[styles.outerFrame, { maxWidth: outerMaxWidth + 8 }]}>
         <View style={styles.innerGroove}>
-          <View style={styles.dashboard} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width - 4)}>
+          <View
+            style={styles.dashboard}
+            onLayout={(e) => {
+              const measured = e.nativeEvent.layout.width - 4;
+              // Never trust a measured width larger than the actual device
+              // window — some preview/emulator surfaces report their own
+              // (wider) canvas rather than the visible phone frame.
+              const safe = Math.min(measured, Dimensions.get('window').width - 32);
+              setContainerWidth(safe);
+            }}
+          >
             <View style={styles.topSheen} pointerEvents="none" />
 
             <View style={styles.header}>
