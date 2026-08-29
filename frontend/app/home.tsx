@@ -26,7 +26,7 @@ import {
 } from '@/src/db/database';
 import SyncStatusPill from '@/src/components/SyncStatusPill';
 
-// Module-level flag so the out-of-stock + reminder alerts only trigger once per app session
+// Module-level flags so the out-of-stock + reminder alerts only trigger once per app session
 let outOfStockReminderShown = false;
 let oilReminderShown = false;
 
@@ -43,7 +43,7 @@ export default function HomeScreen() {
   const cardMargin = isSmallScreen ? 10 : 16;
   const buttonPadding = isSmallScreen ? 10 : 14;
 
-  // 🔥 PIN STATE FOR BACKEND MANAGEMENT
+  // PIN STATE FOR BACKEND MANAGEMENT
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const SECRET_PIN = '3945';
@@ -97,7 +97,6 @@ export default function HomeScreen() {
       try {
         const due = await listDueOilReminders();
         
-        // If empty, we stop here and mark it as done
         if (due.length === 0) {
           oilReminderShown = true;
           return;
@@ -131,9 +130,6 @@ export default function HomeScreen() {
         }, 900);
       } catch (e) {
         console.warn('Oil reminder check failed:', e);
-        
-        // ⚠️ CRITICAL FIX: If an error happens, we MUST mark this as true
-        // so the app NEVER retries this in an infinite loop.
         oilReminderShown = true; 
       }
     };
@@ -152,17 +148,14 @@ export default function HomeScreen() {
     try {
       let results: any[] = [];
 
-      // Try searching by mobile
       const mobileResults = await searchCustomers(query);
       if (mobileResults.length > 0) {
         results = mobileResults;
       } else {
-        // Try searching by VIN
         const vinResults = await searchVehiclesByVin(query);
         if (vinResults.length > 0) {
           results = vinResults;
         } else {
-          // Try searching by Plate
           const plateResults = await searchVehiclesByPlate(query);
           if (plateResults.length > 0) {
             results = plateResults;
@@ -192,7 +185,6 @@ export default function HomeScreen() {
     }
   };
 
-  // 🔥 HANDLE BACKEND MANAGEMENT BUTTON WITH PIN
   const handleBackendPress = () => {
     setPinModalVisible(true);
   };
@@ -214,7 +206,7 @@ export default function HomeScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        {/* 🔥 LOGO BESIDE AUTO SERVICES TEXT + SYNC PILL */}
+        {/* HEADER - KEPT FROM YOUR ORIGINAL */}
         <View style={styles.header}>
           <View style={styles.logoRow}>
             <Image
@@ -224,8 +216,7 @@ export default function HomeScreen() {
             />
             <Text style={styles.headerSubtitle}>Auto Services</Text>
           </View>
-          {/* 🔥 ADDED SYNC STATUS PILL HERE */}
-          <View style={{ marginTop: 6 }}>
+          <View style={{ marginTop: 8 }}>
             <SyncStatusPill />
           </View>
         </View>
@@ -235,10 +226,10 @@ export default function HomeScreen() {
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
         >
-          {/* Unified Search */}
+          {/* SEARCH CARD - KEPT WITH GEMINI STYLES */}
           <View style={[styles.searchCard, { padding: cardPadding, marginBottom: cardMargin }]}>
             <View style={styles.searchHeader}>
-              <Ionicons name="search-outline" size={isSmallScreen ? 20 : 24} color="#2563eb" />
+              <Ionicons name="search-outline" size={isSmallScreen ? 20 : 24} color="#00e5ff" />
               <Text style={styles.searchTitle}>ابحث عن عميل</Text>
             </View>
             <Text style={styles.searchHint}>
@@ -248,6 +239,7 @@ export default function HomeScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="موبايل • هيكل • لوحة"
+                placeholderTextColor="#64748b"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 autoCapitalize="characters"
@@ -266,43 +258,43 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Add New Customer */}
+          {/* ADD CUSTOMER BUTTON - GEMINI STYLE */}
           <TouchableOpacity
             style={[styles.addCustomerButton, { paddingVertical: buttonPadding }]}
             onPress={() => router.push('/add-customer')}
             testID="add-customer-button"
           >
-            <Ionicons name="person-add-outline" size={isSmallScreen ? 16 : 20} color="#2563eb" />
+            <Ionicons name="person-add-outline" size={isSmallScreen ? 16 : 20} color="#00e5ff" />
             <Text style={styles.addCustomerButtonText}>إضافة عميل جديد</Text>
           </TouchableOpacity>
 
-          {/* Quick Walk-in Button */}
+          {/* QUICK WALK-IN - GEMINI STYLE */}
           <TouchableOpacity
             style={[styles.walkinButton, { paddingVertical: buttonPadding }]}
             onPress={() => router.push('/quick-walkin')}
             testID="quick-walkin-button"
           >
-            <Ionicons name="walk-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
+            <Ionicons name="walk-outline" size={isSmallScreen ? 16 : 20} color="#ff5722" />
             <Text style={styles.walkinButtonText}>بيع سريع</Text>
           </TouchableOpacity>
 
-          {/* Order List Button */}
+          {/* ORDER LIST - GEMINI STYLE */}
           <TouchableOpacity
             style={[styles.orderButton, { paddingVertical: buttonPadding }]}
             onPress={() => router.push('/order-list')}
           >
-            <Ionicons name="list-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
+            <Ionicons name="list-outline" size={isSmallScreen ? 16 : 20} color="#00e676" />
             <Text style={styles.orderButtonText}>قائمة مشتريات</Text>
           </TouchableOpacity>
 
-          {/* 🔥 BACKEND MANAGEMENT WITH PIN */}
+          {/* MANAGEMENT - GEMINI STYLE */}
           <TouchableOpacity
-            style={[styles.reportButton, styles.managementButton, { paddingVertical: buttonPadding }]}
+            style={[styles.managementButton, { paddingVertical: buttonPadding }]}
             onPress={handleBackendPress}
             testID="management-button"
           >
-            <Ionicons name="construct-outline" size={isSmallScreen ? 16 : 20} color="#fff" />
-            <Text style={styles.reportButtonText}>الإدارة و الاعدادات</Text>
+            <Ionicons name="construct-outline" size={isSmallScreen ? 16 : 20} color="#94a3b8" />
+            <Text style={styles.managementButtonText}>الإدارة و الاعدادات</Text>
           </TouchableOpacity>
 
           {/* Build timestamp */}
@@ -314,9 +306,9 @@ export default function HomeScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* 🔥 PIN ENTRY MODAL FOR BACKEND MANAGEMENT */}
+      {/* PIN MODAL - GEMINI STYLE */}
       <Modal
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         visible={pinModalVisible}
         onRequestClose={() => setPinModalVisible(false)}
@@ -325,10 +317,11 @@ export default function HomeScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>أدخل رمز PIN</Text>
             <Text style={styles.modalSubtitle}>أدخل رمز الأمان المكوّن من 4 أرقام</Text>
-            
+
             <TextInput
               style={styles.pinInput}
               placeholder="****"
+              placeholderTextColor="#334155"
               keyboardType="number-pad"
               maxLength={4}
               secureTextEntry={true}
@@ -354,42 +347,48 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
+  container: { flex: 1, backgroundColor: '#0f141c' },
   keyboardView: { flex: 1 },
   
-  // 🔥 LOGO BESIDE TEXT STYLES
+  // HEADER - YOUR ORIGINAL STYLE (light) but adjusted to dark
   header: {
     alignItems: 'center',
     paddingVertical: 20,
-    backgroundColor: '#fff',
+    backgroundColor: '#151c26',
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: '#1e293b',
   },
   logoRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   headerLogo: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 55,
+    height: 55,
+    borderRadius: 27.5,
     marginRight: 12,
   },
   headerSubtitle: {
-    fontSize: 18,
-    color: '#64748b',
-    fontWeight: '600',
+    fontSize: 20,
+    color: '#f8fafc',
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   
   content: { flex: 1 },
-  contentContainer: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 30 },
+  contentContainer: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 30 },
+  
+  // SEARCH CARD - GEMINI DARK STYLE
   searchCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#151c26',
     borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#1e293b',
+    shadowColor: '#00e5ff',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
   },
   searchHeader: {
     flexDirection: 'row',
@@ -398,140 +397,142 @@ const styles = StyleSheet.create({
   },
   searchTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1e293b',
+    fontWeight: '700',
+    color: '#f8fafc',
     marginLeft: 12,
   },
   searchHint: {
     fontSize: 12,
-    color: '#94a3b8',
-    marginBottom: 12,
+    color: '#64748b',
+    marginBottom: 14,
     marginLeft: 36,
   },
   inputContainer: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#0f141c',
     borderRadius: 12,
-    marginBottom: 12,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#334155',
   },
   input: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#1e293b',
+    color: '#f8fafc',
+    textAlign: 'right',
   },
   searchButton: {
-    backgroundColor: '#2563eb',
+    backgroundColor: '#0052cc',
     borderRadius: 12,
-    paddingVertical: 12,
+    paddingVertical: 13,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
   },
   searchButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   searchButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     marginLeft: 8,
   },
+  
+  // BUTTONS - GEMINI DARK STYLE
   addCustomerButton: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 14,
     borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#2563eb',
-    backgroundColor: '#fff',
-    marginTop: 8,
+    borderWidth: 1.5,
+    borderColor: '#00e5ff',
+    backgroundColor: '#151c26',
+    marginTop: 10,
   },
   addCustomerButtonText: {
-    color: '#2563eb',
+    color: '#00e5ff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     marginLeft: 8,
   },
   walkinButton: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: '#d97706',
-    marginTop: 8,
+    backgroundColor: '#151c26',
+    borderWidth: 1,
+    borderColor: '#ff5722',
+    marginTop: 12,
   },
   walkinButtonText: {
-    color: '#fff',
+    color: '#ff5722',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     marginLeft: 8,
   },
   orderButton: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: '#059669',
-    marginTop: 8,
-  },
-  orderButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  reportButton: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#10b981',
+    backgroundColor: '#151c26',
+    borderWidth: 1,
+    borderColor: '#00e676',
     marginTop: 12,
   },
-  reportButtonText: {
-    color: '#fff',
+  orderButtonText: {
+    color: '#00e676',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     marginLeft: 8,
   },
   managementButton: {
-    backgroundColor: '#0f172a',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+    backgroundColor: '#1e293b',
+    borderWidth: 1,
+    borderColor: '#475569',
+    marginTop: 12,
   },
+  managementButtonText: {
+    color: '#94a3b8',
+    fontSize: 16,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+  
   buildStamp: {
-    marginTop: 20,
+    marginTop: 24,
     marginBottom: 8,
     textAlign: 'center',
-    fontSize: 11,
-    color: '#94a3b8',
+    fontSize: 12,
+    color: '#475569',
   },
+  
+  // MODAL - GEMINI DARK STYLE
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(15, 20, 28, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    width: '80%',
-    backgroundColor: '#fff',
+    width: '85%',
+    backgroundColor: '#151c26',
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#334155',
     padding: 24,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
   },
   modalTitle: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#1e293b',
+    color: '#f8fafc',
     marginBottom: 4,
   },
   modalSubtitle: {
@@ -542,17 +543,17 @@ const styles = StyleSheet.create({
   pinInput: {
     width: '100%',
     borderWidth: 1,
-    borderColor: '#2563eb',
-    borderRadius: 10,
+    borderColor: '#00e5ff',
+    borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '700',
     textAlign: 'center',
-    letterSpacing: 8,
-    color: '#0f172a',
+    letterSpacing: 10,
+    color: '#f8fafc',
     marginBottom: 24,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#0f141c',
   },
   modalButtons: {
     flexDirection: 'row',
@@ -563,11 +564,11 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#1e293b',
     alignItems: 'center',
   },
   modalCancelText: {
-    color: '#64748b',
+    color: '#94a3b8',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -575,7 +576,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: '#2563eb',
+    backgroundColor: '#0052cc',
     alignItems: 'center',
   },
   modalConfirmText: {
