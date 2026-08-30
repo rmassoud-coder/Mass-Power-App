@@ -24,7 +24,7 @@ import {
   listDueOilReminders,
 } from '@/src/db/database';
 import SyncStatusPill from '@/src/components/SyncStatusPill';
-import MassPowerLogo from '@/src/components/MassPowerLogo';
+// TEMPORARILY COMMENT OUT - import MassPowerLogo from '@/src/components/MassPowerLogo';
 
 // Module-level flags
 let outOfStockReminderShown = false;
@@ -204,10 +204,10 @@ export default function HomeScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        {/* DARK HEADER - FIXED */}
         <View style={styles.header}>
           <View style={styles.logoRow}>
-            <MassPowerLogo size={75} />
+            {/* TEMPORARILY REPLACE LOGO WITH A VIEW */}
+            <View style={{ width: 75, height: 75, backgroundColor: '#00e5ff', borderRadius: 37.5 }} />
             <Text style={styles.headerSubtitle}>Auto Services</Text>
           </View>
           <View style={{ marginTop: 6 }}>
@@ -337,11 +337,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f1f5f9' },
   keyboardView: { flex: 1 },
   
-  // DARK HEADER - FIXED
   header: {
     alignItems: 'center',
     paddingVertical: 16,
-    backgroundColor: '#0f172a', // Dark background
+    backgroundColor: '#0f172a',
     borderBottomWidth: 1,
     borderBottomColor: '#1e293b',
   },
@@ -351,7 +350,7 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: 18,
-    color: '#ffffff', // White text on dark
+    color: '#ffffff',
     fontWeight: '700',
     letterSpacing: 0.5,
   },
