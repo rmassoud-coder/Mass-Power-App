@@ -41,7 +41,7 @@ const M_BLUE = '#0066B1';
 const M_PURPLE = '#333366';
 const M_RED = '#FF0000';
 const MAX_RPM = 8500;
-const TOTAL_ANIMATION_MS = 12500;
+const TOTAL_ANIMATION_MS = 8500;
 
 function pt(cx: number, cy: number, r: number, deg: number) {
   const rad = ((deg - 90) * Math.PI) / 180;
@@ -105,14 +105,11 @@ function SpeedGauge({
     );
   }
 
-  // Glowing tip marker at the current value — real clusters light the leading edge.
   const tipAngle = startAngle + progress * (endAngle - startAngle);
   const tip = pt(cx, cy, r, tipAngle);
   nodes.push(<Circle key="tipGlow" cx={tip.x} cy={tip.y} r={7} fill={tipColor} opacity={0.35} />);
   nodes.push(<Circle key="tipDot" cx={tip.x} cy={tip.y} r={3} fill={tipColor} />);
 
-  // A real pointer needle alongside the arc fill — the bit that reads as "BMW cluster"
-  // rather than a generic progress ring.
   const needleInner = pt(cx, cy, r * 0.48, tipAngle);
   const needleOuter = pt(cx, cy, r * 0.94, tipAngle);
   nodes.push(
@@ -292,7 +289,7 @@ function FuelGauge({ cx, cy, r, value }: { cx: number; cy: number; r: number; va
 function TempGauge({ cx, cy, r, value }: { cx: number; cy: number; r: number; value: number }) {
   const startAngle = -120;
   const endAngle = 120;
-  const progress = Math.min(Math.max((value - 40) / 80, 0), 1); // scale now matches the 50°-120° labels
+  const progress = Math.min(Math.max((value - 40) / 80, 0), 1);
   const bgPath = `M ${pt(cx, cy, r, startAngle).x} ${pt(cx, cy, r, startAngle).y} A ${r} ${r} 0 0 1 ${pt(cx, cy, r, endAngle).x} ${pt(cx, cy, r, endAngle).y}`;
   const activeAngle = startAngle + progress * (endAngle - startAngle);
   const activePath = `M ${pt(cx, cy, r, startAngle).x} ${pt(cx, cy, r, startAngle).y} A ${r} ${r} 0 0 1 ${pt(cx, cy, r, activeAngle).x} ${pt(cx, cy, r, activeAngle).y}`;
@@ -323,10 +320,8 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComple
   const [engineOn, setEngineOn] = useState(false);
   const [animationPhase, setAnimationPhase] = useState(0);
   const [fuelLevel, setFuelLevel] = useState(65);
-  const [tempLevel, setTempLevel] = useState(42); // cold start — climbs to operating temp below
+  const [tempLevel, setTempLevel] = useState(42);
 
-  // Gear is *derived* from the speed phase, not tracked separately — there's
-  // no reason for it to be its own timer when it's fully determined by speed.
   const gear = String(animationPhase + 1);
 
   const phases = [
@@ -337,37 +332,35 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComple
     { label: 'M SPORT MODE', desc: 'Track-focused instrumentation with M performance' },
   ];
 
+  // SPEED - faster transitions, shorter final pause
   useEffect(() => {
-    // Speed climbs monotonically — a car does not slow down when it shifts up.
-    // (RPM below is the one that's supposed to dip at each shift.)
     speed.value = withSequence(
-      withTiming(0.02, { duration: 500, easing: Easing.out(Easing.cubic) }),
-      withTiming(0.17, { duration: 1600, easing: Easing.inOut(Easing.quad) }),
-      withTiming(0.34, { duration: 1600, easing: Easing.inOut(Easing.quad) }),
-      withTiming(0.5, { duration: 1600, easing: Easing.inOut(Easing.quad) }),
-      withTiming(0.67, { duration: 1600, easing: Easing.inOut(Easing.quad) }),
-      withDelay(3000, withTiming(0.67, { duration: 1 }))
+      withTiming(0.02, { duration: 400, easing: Easing.out(Easing.cubic) }),
+      withTiming(0.17, { duration: 1000, easing: Easing.inOut(Easing.quad) }),
+      withTiming(0.34, { duration: 1000, easing: Easing.inOut(Easing.quad) }),
+      withTiming(0.5, { duration: 1000, easing: Easing.inOut(Easing.quad) }),
+      withTiming(0.67, { duration: 1000, easing: Easing.inOut(Easing.quad) }),
+      withDelay(1000, withTiming(0.67, { duration: 1 }))
     );
   }, [speed]);
 
+  // RPM - faster shifts, shorter final pause
   useEffect(() => {
     rpm.value = withSequence(
-      withTiming(800, { duration: 500, easing: Easing.out(Easing.cubic) }),
-      withTiming(6500, { duration: 1500, easing: Easing.out(Easing.quad) }),
-      withTiming(4500, { duration: 400, easing: Easing.inOut(Easing.quad) }),
-      withTiming(6500, { duration: 1500, easing: Easing.out(Easing.quad) }),
-      withTiming(4800, { duration: 400, easing: Easing.inOut(Easing.quad) }),
-      withTiming(6500, { duration: 1500, easing: Easing.out(Easing.quad) }),
-      withTiming(5200, { duration: 400, easing: Easing.inOut(Easing.quad) }),
-      withTiming(6200, { duration: 1500, easing: Easing.out(Easing.quad) }),
-      withTiming(5000, { duration: 400, easing: Easing.inOut(Easing.quad) }),
-      withDelay(3000, withTiming(5000, { duration: 1 }))
+      withTiming(800, { duration: 400, easing: Easing.out(Easing.cubic) }),
+      withTiming(6500, { duration: 1200, easing: Easing.out(Easing.quad) }),
+      withTiming(4500, { duration: 300, easing: Easing.inOut(Easing.quad) }),
+      withTiming(6500, { duration: 1200, easing: Easing.out(Easing.quad) }),
+      withTiming(4800, { duration: 300, easing: Easing.inOut(Easing.quad) }),
+      withTiming(6500, { duration: 1200, easing: Easing.out(Easing.quad) }),
+      withTiming(5200, { duration: 300, easing: Easing.inOut(Easing.quad) }),
+      withTiming(6200, { duration: 1200, easing: Easing.out(Easing.quad) }),
+      withTiming(5000, { duration: 300, easing: Easing.inOut(Easing.quad) }),
+      withDelay(1000, withTiming(5000, { duration: 1 }))
     );
   }, [rpm]);
 
-  // Cold-start ramp for temp, then a slow smooth idle drift — animated like
-  // speed/rpm (via a shared value) instead of discrete random jumps, so it
-  // interpolates instead of snapping.
+  // Cold-start ramp for temp
   useEffect(() => {
     tempSV.value = withSequence(
       withTiming(88, { duration: 4000, easing: Easing.out(Easing.quad) }),
@@ -415,10 +408,10 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComple
   const outerMaxWidth = size ? Math.min(size, 480) : 480;
   const gaugeWidth = Math.min(containerWidth, outerMaxWidth);
   const gaugeR = Math.min(gaugeWidth * 0.16, 60);
-  const smallGaugeR = gaugeR * 0.45; // smaller fuel/temp dials
-  const topPad = 38; // clears the top tick labels + gear-diamond points above center
-  const rowGap = 14; // gap between the main gauges and fuel/temp row
-  const bottomPad = 30; // clears the E/F and 50°/120° labels below the small dials
+  const smallGaugeR = gaugeR * 0.45;
+  const topPad = 38;
+  const rowGap = 14;
+  const bottomPad = 30;
   const centerY = topPad + gaugeR;
   const fuelTempY = centerY + gaugeR + rowGap + smallGaugeR;
   const gaugeHeight = fuelTempY + smallGaugeR + bottomPad;
@@ -430,16 +423,12 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComple
 
   return (
     <View style={styles.container}>
-      {/* Bezel: metal frame -> dark groove -> panel, mimicking a real cluster housing */}
       <View style={[styles.outerFrame, { maxWidth: outerMaxWidth + 8 }]}>
         <View style={styles.innerGroove}>
           <View
             style={styles.dashboard}
             onLayout={(e) => {
               const measured = e.nativeEvent.layout.width - 4;
-              // Never trust a measured width larger than the actual device
-              // window — some preview/emulator surfaces report their own
-              // (wider) canvas rather than the visible phone frame.
               const safe = Math.min(measured, Dimensions.get('window').width - 32);
               setContainerWidth(safe);
             }}
@@ -560,7 +549,6 @@ const styles = StyleSheet.create({
     padding: 16,
     overflow: 'hidden',
   },
-  // Brushed-metal outer ring
   outerFrame: {
     width: '100%',
     borderRadius: 20,
@@ -572,7 +560,6 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 14,
   },
-  // Recessed dark groove between the metal ring and the panel
   innerGroove: {
     borderRadius: 17,
     padding: 2,
