@@ -231,7 +231,7 @@ export default function HomeScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="موبايل • هيكل • لوحة"
-                placeholderTextColor="#64748b"
+                placeholderTextColor="#94a3b8"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 autoCapitalize="characters"
@@ -307,7 +307,7 @@ export default function HomeScreen() {
             <TextInput
               style={styles.pinInput}
               placeholder="****"
-              placeholderTextColor="#475569"
+              placeholderTextColor="#94a3b8"
               keyboardType="number-pad"
               maxLength={4}
               secureTextEntry={true}
@@ -333,15 +333,15 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0f16' },
+  container: { flex: 1, backgroundColor: '#f1f5f9' }, // Light gray background
   keyboardView: { flex: 1 },
   
   header: {
     alignItems: 'center',
     paddingVertical: 16,
-    backgroundColor: '#151c26',
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: '#e2e8f0',
   },
   logoRow: {
     flexDirection: 'row',
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: 18,
-    color: '#ffffff',
+    color: '#1e293b', // Dark text for light background
     fontWeight: '700',
     letterSpacing: 0.5,
   },
@@ -358,10 +358,15 @@ const styles = StyleSheet.create({
   contentContainer: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24 },
   
   searchCard: {
-    backgroundColor: '#1a2332',
+    backgroundColor: '#ffffff',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#2d3a4f',
+    borderColor: '#e2e8f0',
+    shadowColor: '#94a3b8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
   searchHeader: {
     flexDirection: 'row',
@@ -371,27 +376,27 @@ const styles = StyleSheet.create({
   searchTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#ffffff',
+    color: '#1e293b',
     marginLeft: 10,
   },
   searchHint: {
     fontSize: 11,
-    color: '#cbd5e1',
+    color: '#64748b',
     marginBottom: 12,
     marginLeft: 32,
   },
   inputContainer: {
-    backgroundColor: '#0f141c',
+    backgroundColor: '#f8fafc',
     borderRadius: 10,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#2d3a4f',
+    borderColor: '#e2e8f0',
   },
   input: {
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontSize: 14,
-    color: '#ffffff',
+    color: '#1e293b',
     textAlign: 'right',
   },
   searchButton: {
@@ -418,12 +423,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: '#00e5ff', // KEPT ORIGINAL
-    backgroundColor: '#1a2332',
+    borderColor: '#00e5ff',
+    backgroundColor: '#ffffff',
     marginTop: 10,
   },
   addCustomerButtonText: {
-    color: '#e2e8f0',
+    color: '#1e293b', // Dark text for light background
     fontSize: 14,
     fontWeight: '700',
     marginLeft: 6,
@@ -433,13 +438,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 10,
-    backgroundColor: '#1a2332',
+    backgroundColor: '#ffffff',
     borderWidth: 1.5,
-    borderColor: '#ff5722', // KEPT ORIGINAL
+    borderColor: '#ff5722',
     marginTop: 10,
   },
   walkinButtonText: {
-    color: '#e2e8f0',
+    color: '#1e293b',
     fontSize: 14,
     fontWeight: '700',
     marginLeft: 6,
@@ -449,13 +454,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 10,
-    backgroundColor: '#1a2332',
+    backgroundColor: '#ffffff',
     borderWidth: 1.5,
-    borderColor: '#00e676', // KEPT ORIGINAL
+    borderColor: '#00e676',
     marginTop: 10,
   },
   orderButtonText: {
-    color: '#e2e8f0',
+    color: '#1e293b',
     fontSize: 14,
     fontWeight: '700',
     marginLeft: 6,
@@ -465,13 +470,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 10,
-    backgroundColor: '#1e293b',
+    backgroundColor: '#f8fafc',
     borderWidth: 1.5,
-    borderColor: '#475569', // KEPT ORIGINAL
+    borderColor: '#94a3b8',
     marginTop: 10,
   },
   managementButtonText: {
-    color: '#e2e8f0',
+    color: '#1e293b',
     fontSize: 14,
     fontWeight: '700',
     marginLeft: 6,
@@ -488,34 +493,34 @@ const styles = StyleSheet.create({
   
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(10, 15, 22, 0.92)',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
     width: '85%',
-    backgroundColor: '#1a2332',
+    backgroundColor: '#ffffff',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#2d3a4f',
+    borderColor: '#e2e8f0',
     padding: 22,
     alignItems: 'center',
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#ffffff',
+    color: '#1e293b',
     marginBottom: 4,
   },
   modalSubtitle: {
     fontSize: 13,
-    color: '#cbd5e1',
+    color: '#64748b',
     marginBottom: 18,
   },
   pinInput: {
     width: '100%',
     borderWidth: 2,
-    borderColor: '#00e5ff', // KEPT ORIGINAL
+    borderColor: '#00e5ff',
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -523,9 +528,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     letterSpacing: 8,
-    color: '#ffffff',
+    color: '#1e293b',
     marginBottom: 20,
-    backgroundColor: '#0f141c',
+    backgroundColor: '#f8fafc',
   },
   modalButtons: {
     flexDirection: 'row',
@@ -536,11 +541,11 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: '#2d3a4f',
+    backgroundColor: '#f1f5f9',
     alignItems: 'center',
   },
   modalCancelText: {
-    color: '#cbd5e1',
+    color: '#64748b',
     fontSize: 14,
     fontWeight: '600',
   },
