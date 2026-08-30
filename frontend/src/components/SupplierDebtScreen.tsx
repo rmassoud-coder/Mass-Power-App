@@ -58,9 +58,9 @@ export default function SupplierDebtScreen() {
       const today = new Date();
       const todayStr = today.toISOString().slice(0, 10);
       
-      // ✅ CORRECT LOGIC: Week starts Monday, INCLUDES Sunday
+      // ✅ CORRECT LOGIC: Include Sunday in current week, reset on Monday
       const dayOfWeek = today.getDay();
-      const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      const diffToMonday = (dayOfWeek === 0 ? 0 : dayOfWeek - 1);
       const monday = new Date(today);
       monday.setDate(today.getDate() - diffToMonday);
       const mondayStr = monday.toISOString().slice(0, 10);
