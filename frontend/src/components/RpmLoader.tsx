@@ -41,7 +41,7 @@ const M_BLUE = '#0066B1';
 const M_PURPLE = '#333366';
 const M_RED = '#FF0000';
 const MAX_RPM = 8500;
-const TOTAL_ANIMATION_MS = 8500;
+const TOTAL_ANIMATION_MS = 7200; // 15% reduction from 8500
 
 function pt(cx: number, cy: number, r: number, deg: number) {
   const rad = ((deg - 90) * Math.PI) / 180;
@@ -325,48 +325,48 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComple
   const gear = String(animationPhase + 1);
 
   const phases = [
-    { label: 'CHISELED OUTER SHROUD', desc: 'Premium aluminum frame with precision engineering' },
-    { label: 'REVERSE-SWEEPING TACHOMETER', desc: 'Authentic BMW M sport instrument cluster' },
-    { label: 'MULTI-SEGMENTED DISPLAY', desc: 'Dynamic color zones for optimal readability' },
-    { label: 'SIGNATURE TELEMETRY', desc: 'Real-time performance data at your fingertips' },
-    { label: 'M SPORT MODE', desc: 'Track-focused instrumentation with M performance' },
+    { label: 'CHISELED OUTER SHROUD', desc: 'Loading data and frameworks' },
+    { label: 'REVERSE-SWEEPING TACHOMETER', desc: 'Loading customer database' },
+    { label: 'MULTI-SEGMENTED DISPLAY', desc: 'Sugar and Spice and everything Nice' },
+    { label: 'SIGNATURE TELEMETRY', desc: 'Almost There' },
+    { label: 'M SPORT MODE', desc: 'Reached destination SAFELY' },
   ];
 
-  // SPEED - faster transitions, shorter final pause
+  // SPEED - 15% faster transitions
   useEffect(() => {
     speed.value = withSequence(
-      withTiming(0.02, { duration: 400, easing: Easing.out(Easing.cubic) }),
-      withTiming(0.17, { duration: 1000, easing: Easing.inOut(Easing.quad) }),
-      withTiming(0.34, { duration: 1000, easing: Easing.inOut(Easing.quad) }),
-      withTiming(0.5, { duration: 1000, easing: Easing.inOut(Easing.quad) }),
-      withTiming(0.67, { duration: 1000, easing: Easing.inOut(Easing.quad) }),
-      withDelay(1000, withTiming(0.67, { duration: 1 }))
+      withTiming(0.02, { duration: 340, easing: Easing.out(Easing.cubic) }),
+      withTiming(0.17, { duration: 850, easing: Easing.inOut(Easing.quad) }),
+      withTiming(0.34, { duration: 850, easing: Easing.inOut(Easing.quad) }),
+      withTiming(0.5, { duration: 850, easing: Easing.inOut(Easing.quad) }),
+      withTiming(0.67, { duration: 850, easing: Easing.inOut(Easing.quad) }),
+      withDelay(850, withTiming(0.67, { duration: 1 }))
     );
   }, [speed]);
 
-  // RPM - faster shifts, shorter final pause
+  // RPM - 15% faster shifts
   useEffect(() => {
     rpm.value = withSequence(
-      withTiming(800, { duration: 400, easing: Easing.out(Easing.cubic) }),
-      withTiming(6500, { duration: 1200, easing: Easing.out(Easing.quad) }),
-      withTiming(4500, { duration: 300, easing: Easing.inOut(Easing.quad) }),
-      withTiming(6500, { duration: 1200, easing: Easing.out(Easing.quad) }),
-      withTiming(4800, { duration: 300, easing: Easing.inOut(Easing.quad) }),
-      withTiming(6500, { duration: 1200, easing: Easing.out(Easing.quad) }),
-      withTiming(5200, { duration: 300, easing: Easing.inOut(Easing.quad) }),
-      withTiming(6200, { duration: 1200, easing: Easing.out(Easing.quad) }),
-      withTiming(5000, { duration: 300, easing: Easing.inOut(Easing.quad) }),
-      withDelay(1000, withTiming(5000, { duration: 1 }))
+      withTiming(800, { duration: 340, easing: Easing.out(Easing.cubic) }),
+      withTiming(6500, { duration: 1020, easing: Easing.out(Easing.quad) }),
+      withTiming(4500, { duration: 255, easing: Easing.inOut(Easing.quad) }),
+      withTiming(6500, { duration: 1020, easing: Easing.out(Easing.quad) }),
+      withTiming(4800, { duration: 255, easing: Easing.inOut(Easing.quad) }),
+      withTiming(6500, { duration: 1020, easing: Easing.out(Easing.quad) }),
+      withTiming(5200, { duration: 255, easing: Easing.inOut(Easing.quad) }),
+      withTiming(6200, { duration: 1020, easing: Easing.out(Easing.quad) }),
+      withTiming(5000, { duration: 255, easing: Easing.inOut(Easing.quad) }),
+      withDelay(850, withTiming(5000, { duration: 1 }))
     );
   }, [rpm]);
 
-  // Cold-start ramp for temp
+  // Temp - 15% faster warmup
   useEffect(() => {
     tempSV.value = withSequence(
-      withTiming(88, { duration: 4000, easing: Easing.out(Easing.quad) }),
-      withTiming(93, { duration: 2500, easing: Easing.inOut(Easing.sin) }),
-      withTiming(89, { duration: 2500, easing: Easing.inOut(Easing.sin) }),
-      withDelay(1000, withTiming(91, { duration: 2000, easing: Easing.inOut(Easing.sin) }))
+      withTiming(88, { duration: 3400, easing: Easing.out(Easing.quad) }),
+      withTiming(93, { duration: 2125, easing: Easing.inOut(Easing.sin) }),
+      withTiming(89, { duration: 2125, easing: Easing.inOut(Easing.sin) }),
+      withDelay(850, withTiming(91, { duration: 1700, easing: Easing.inOut(Easing.sin) }))
     );
   }, [tempSV]);
 
