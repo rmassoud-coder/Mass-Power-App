@@ -24,7 +24,7 @@ import {
   listDueOilReminders,
 } from '@/src/db/database';
 import SyncStatusPill from '@/src/components/SyncStatusPill';
-// TEMPORARILY COMMENT OUT - import MassPowerLogo from '@/src/components/MassPowerLogo';
+import MassPowerLogo from '@/src/components/MassPowerLogo';
 
 // Module-level flags
 let outOfStockReminderShown = false;
