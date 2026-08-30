@@ -204,6 +204,7 @@ export default function HomeScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
+        {/* DARK HEADER - FIXED */}
         <View style={styles.header}>
           <View style={styles.logoRow}>
             <MassPowerLogo size={75} />
@@ -333,15 +334,16 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f1f5f9' }, // Light gray background
+  container: { flex: 1, backgroundColor: '#f1f5f9' },
   keyboardView: { flex: 1 },
   
+  // DARK HEADER - FIXED
   header: {
     alignItems: 'center',
     paddingVertical: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0f172a', // Dark background
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: '#1e293b',
   },
   logoRow: {
     flexDirection: 'row',
@@ -349,7 +351,7 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: 18,
-    color: '#1e293b', // Dark text for light background
+    color: '#ffffff', // White text on dark
     fontWeight: '700',
     letterSpacing: 0.5,
   },
@@ -428,7 +430,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   addCustomerButtonText: {
-    color: '#1e293b', // Dark text for light background
+    color: '#1e293b',
     fontSize: 14,
     fontWeight: '700',
     marginLeft: 6,
