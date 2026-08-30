@@ -1207,7 +1207,7 @@ export async function getReport(
 
   const today = new Date();
   const dayOfWeek = today.getDay();
-  const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+  const diffToMonday = (dayOfWeek === 0 ? 0 : dayOfWeek - 1);
   const monday = new Date(today);
   monday.setDate(today.getDate() - diffToMonday);
 
