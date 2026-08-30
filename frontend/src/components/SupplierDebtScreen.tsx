@@ -57,11 +57,13 @@ export default function SupplierDebtScreen() {
     try {
       const today = new Date();
       const todayStr = today.toISOString().slice(0, 10);
-      const dayOfWeek = today.getDay();
-      const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
-      const monday = new Date(today);
-      monday.setDate(today.getDate() - diffToMonday);
-      const mondayStr = monday.toISOString().slice(0, 10);
+      
+      // 🔥 NEW LOGIC: Week starts on SUNDAY
+      const dayOfWeek = today.getDay(); // 0 = Sunday
+      const diffToSunday = dayOfWeek;
+      const weekStart = new Date(today);
+      weekStart.setDate(today.getDate() - diffToSunday);
+      const weekStartStr = weekStart.toISOString().slice(0, 10);
 
       const todayReport = await getReport(
         `${todayStr}T00:00:00`,
@@ -69,7 +71,7 @@ export default function SupplierDebtScreen() {
       );
 
       const wtdReport = await getReport(
-        `${mondayStr}T00:00:00`,
+        `${weekStartStr}T00:00:00`,
         `${todayStr}T23:59:59`
       );
 
