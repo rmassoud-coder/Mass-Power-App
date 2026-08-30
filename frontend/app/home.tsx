@@ -206,8 +206,8 @@ export default function HomeScreen() {
       >
         <View style={styles.header}>
           <View style={styles.logoRow}>
-            {/* TEMPORARILY REPLACE LOGO WITH A VIEW */}
-            <View style={{ width: 75, height: 75, backgroundColor: '#00e5ff', borderRadius: 37.5 }} />
+            {/* REAL LOGO - RESTORED */}
+            <MassPowerLogo size={75} />
             <Text style={styles.headerSubtitle}>Auto Services</Text>
           </View>
           <View style={{ marginTop: 6 }}>
