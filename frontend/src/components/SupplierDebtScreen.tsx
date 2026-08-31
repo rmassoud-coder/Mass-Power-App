@@ -18,6 +18,8 @@ import {
   getWeeklyCashSummary,
   getReport,
   saveWeeklyWages,
+  getLocalDateStr,
+  getWeekStartMonday,
 } from '../../src/db/database';
 
 export default function SupplierDebtScreen() {
@@ -56,14 +58,13 @@ export default function SupplierDebtScreen() {
     setLoading(true);
     try {
       const today = new Date();
-      const todayStr = today.toISOString().slice(0, 10);
-      
-      // ✅ ORIGINAL WORKING LOGIC: Week starts on Monday (Mon-Sat only)
-      const dayOfWeek = today.getDay();
-      const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
-      const monday = new Date(today);
-      monday.setDate(today.getDate() - diffToMonday);
-      const mondayStr = monday.toISOString().slice(0, 10);
+
+      // ✅ UNIFIED: use the same helpers everywhere (database.ts) so
+      // "today" and "week start" are computed identically across the
+      // whole app. Week always starts Monday and only rolls over at
+      // local midnight Monday (fixes Sat/Sun reset mismatch).
+      const todayStr = getLocalDateStr(today);
+      const mondayStr = getLocalDateStr(getWeekStartMonday(today));
 
       const todayReport = await getReport(
         `${todayStr}T00:00:00`,
