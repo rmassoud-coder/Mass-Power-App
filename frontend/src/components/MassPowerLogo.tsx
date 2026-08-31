@@ -29,7 +29,7 @@ const MassPowerLogo = ({ width = 75, height = 75 }) => {
       <SvgText
         x="210"
         y="680"
-        fontSize="175"
+        fontSize="180"
         fontWeight="bold"
         fill="url(#blueGrad)"
         textAnchor="start"
@@ -64,7 +64,7 @@ const MassPowerLogo = ({ width = 75, height = 75 }) => {
       <SvgText
         x="420"
         y="680"
-        fontSize="175"
+        fontSize="180"
         fontWeight="bold"
         fill="url(#blueGrad)"
         textAnchor="start"
