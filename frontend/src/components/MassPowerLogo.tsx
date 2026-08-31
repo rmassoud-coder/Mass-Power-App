@@ -33,7 +33,7 @@ const MassPowerLogo = ({ width = 75, height = 75 }) => {
         fontWeight="bold"
         fill="url(#blueGrad)"
         textAnchor="start"
-        letterSpacing="10"
+        letterSpacing="12"
         fontFamily="Times New Roman, Times, serif"
       >
         Po
@@ -69,10 +69,10 @@ const MassPowerLogo = ({ width = 75, height = 75 }) => {
         fontWeight="bold"
         fill="url(#blueGrad)"
         textAnchor="start"
-        letterSpacing="10"
+        letterSpacing="12"
         fontFamily="Times New Roman, Times, serif"
       >
-        WER
+        .WER
       </SvgText>
 
     </Svg>
