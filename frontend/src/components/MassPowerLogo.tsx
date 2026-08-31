@@ -1,9 +1,9 @@
 import React from 'react';
 import Svg, { Circle, Defs, LinearGradient, Stop, Text as SvgText, G, Path } from 'react-native-svg';
 
-const MassPowerLogo = ({ width = 100, height = 100 }) => {
+const MassPowerLogo = ({ width = 75, height = 75 }) => {
   return (
-    <Svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width={width} height={height}>
+    <Svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75" width={width} height={height}>
       <Defs>
         {/* Gradient for text and borders */}
         <LinearGradient id="blueGrad" x1="0%" y1="0%" x2="0%" y2="100%">
