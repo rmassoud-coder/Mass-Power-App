@@ -11,72 +11,69 @@ const MassPowerLogo = ({ width = 75, height = 75 }) => {
         </LinearGradient>
       </Defs>
 
+      <Circle cx="500" cy="500" r="485" fill="#ffffff" stroke="url(#blueGrad)" strokeWidth="14" />
+      
+      <SvgText
+        x="500"
+        y="460"
+        fontSize="195"
+        fontWeight="bold"
+        fill="url(#blueGrad)"
+        textAnchor="middle"
+        letterSpacing="12"
+        fontFamily="Times New Roman, Times, serif"
+      >
+        MASS
+      </SvgText>
+
+      <SvgText
+        x="210"
+        y="680"
+        fontSize="160"
+        fontWeight="bold"
+        fill="url(#blueGrad)"
+        textAnchor="start"
+        fontFamily="Times New Roman, Times, serif"
+      >
+        P
+      </SvgText>
+      
       {/* >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> */}
-      {/* >>>>>>>>>>>>>>  EDIT THIS PART TO SHIFT LEFT OR RIGHT  <<<<<<<<<<<<<<<<< */}
-      {/* >>>>>>>>>>>>>>  Change '50' to '0' (center), or '-50' (left)  <<<<<<<<<< */}
+      {/* >>>>>>>>>>>>>>>>>>>>>>>>>>  EDIT THIS PART  <<<<<<<<<<<<<<<<<<<<<<<<<<<<< */}
+      {/* >>>>>>>>>> Change '355' to '305' (center), or '255' (shift left)  <<<<<<< */}
       {/* >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> */}
-      <G transform="translate(-100, 0)">
-        
-        <Circle cx="500" cy="500" r="485" fill="#ffffff" stroke="url(#blueGrad)" strokeWidth="14" />
-        
-        <SvgText
-          x="500"
-          y="460"
-          fontSize="195"
-          fontWeight="bold"
-          fill="url(#blueGrad)"
-          textAnchor="middle"
-          letterSpacing="12"
-          fontFamily="Times New Roman, Times, serif"
-        >
-          MASS
-        </SvgText>
-
-        <SvgText
-          x="210"
-          y="680"
-          fontSize="160"
-          fontWeight="bold"
-          fill="url(#blueGrad)"
-          textAnchor="start"
-          fontFamily="Times New Roman, Times, serif"
-        >
-          P
-        </SvgText>
-        
-        <G transform="translate(305, 625)">
-          <Circle cx="0" cy="0" r="75" fill="url(#blueGrad)" />
-          <Path 
-            d="M -45,-25 L -20,-25 L -5,-5 M -45,15 L -20,15 L 0,-5 L 0,-45 M -25,45 L -5,25 L -5,5 L 35,5 M 10,45 L 25,30 L 25,-25" 
-            stroke="#ffffff" 
-            strokeWidth="4" 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
-            fill="none" 
-          />
-          <Circle cx="-45" cy="-25" r="4" fill="#ffffff" />
-          <Circle cx="-45" cy="15" r="4" fill="#ffffff" />
-          <Circle cx="0" cy="-45" r="4" fill="#ffffff" />
-          <Circle cx="-25" cy="45" r="4" fill="#ffffff" />
-          <Circle cx="10" cy="45" r="4" fill="#ffffff" />
-          <Circle cx="35" cy="5" r="4" fill="#ffffff" />
-          <Circle cx="25" cy="-25" r="4" fill="#ffffff" />
-        </G>
-
-        <SvgText
-          x="420"
-          y="680"
-          fontSize="160"
-          fontWeight="bold"
-          fill="url(#blueGrad)"
-          textAnchor="start"
-          letterSpacing="8"
-          fontFamily="Times New Roman, Times, serif"
-        >
-          WER
-        </SvgText>
-
+      <G transform="translate(355, 625)">
+        <Circle cx="0" cy="0" r="75" fill="url(#blueGrad)" />
+        <Path 
+          d="M -45,-25 L -20,-25 L -5,-5 M -45,15 L -20,15 L 0,-5 L 0,-45 M -25,45 L -5,25 L -5,5 L 35,5 M 10,45 L 25,30 L 25,-25" 
+          stroke="#ffffff" 
+          strokeWidth="4" 
+          strokeLinecap="round" 
+          strokeLinejoin="round" 
+          fill="none" 
+        />
+        <Circle cx="-45" cy="-25" r="4" fill="#ffffff" />
+        <Circle cx="-45" cy="15" r="4" fill="#ffffff" />
+        <Circle cx="0" cy="-45" r="4" fill="#ffffff" />
+        <Circle cx="-25" cy="45" r="4" fill="#ffffff" />
+        <Circle cx="10" cy="45" r="4" fill="#ffffff" />
+        <Circle cx="35" cy="5" r="4" fill="#ffffff" />
+        <Circle cx="25" cy="-25" r="4" fill="#ffffff" />
       </G>
+
+      <SvgText
+        x="420"
+        y="680"
+        fontSize="160"
+        fontWeight="bold"
+        fill="url(#blueGrad)"
+        textAnchor="start"
+        letterSpacing="8"
+        fontFamily="Times New Roman, Times, serif"
+      >
+        WER
+      </SvgText>
+
     </Svg>
   );
 };
