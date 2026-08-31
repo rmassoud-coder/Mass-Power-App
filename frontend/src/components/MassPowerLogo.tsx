@@ -1,83 +1,82 @@
 import React from 'react';
 import Svg, { Circle, Defs, LinearGradient, Stop, Text as SvgText, G, Path } from 'react-native-svg';
 
-const MassPowerLogo = ({ width = 75, height = 75 }) => {
+const MassPowerLogo = ({ width = 37.8, height = 37.8 }) => {
   return (
-    <Svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75" width={width} height={height}>
+    <Svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width={width} height={height}>
       <Defs>
-        {/* Gradient for text and borders */}
         <LinearGradient id="blueGrad" x1="0%" y1="0%" x2="0%" y2="100%">
           <Stop offset="0%" stopColor="#0066b2" />
           <Stop offset="100%" stopColor="#002d62" />
         </LinearGradient>
       </Defs>
 
-      {/* Outside background is transparent by default. Inside circle is white. */}
-      <Circle cx="500" cy="500" r="485" fill="#ffffff" stroke="url(#blueGrad)" strokeWidth="14" />
-      
-      {/* MASS Text */}
-      <SvgText
-        x="500"
-        y="460"
-        fontSize="195"
-        fontWeight="bold"
-        fill="url(#blueGrad)"
-        textAnchor="middle"
-        letterSpacing="12"
-        fontFamily="Times New Roman, Times, serif"
-      >
-        MASS
-      </SvgText>
+      {/* >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> */}
+      {/* >>>>>>>>>>>>>>  EDIT THIS PART TO SHIFT LEFT OR RIGHT  <<<<<<<<<<<<<<<<< */}
+      {/* >>>>>>>>>>>>>>  Change '50' to '0' (center), or '-50' (left)  <<<<<<<<<< */}
+      {/* >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> */}
+      <G transform="translate(50, 0)">
+        
+        <Circle cx="500" cy="500" r="485" fill="#ffffff" stroke="url(#blueGrad)" strokeWidth="14" />
+        
+        <SvgText
+          x="500"
+          y="460"
+          fontSize="195"
+          fontWeight="bold"
+          fill="url(#blueGrad)"
+          textAnchor="middle"
+          letterSpacing="12"
+          fontFamily="Times New Roman, Times, serif"
+        >
+          MASS
+        </SvgText>
 
-      {/* POWER Layout */}
-      {/* P */}
-      <SvgText
-        x="210"
-        y="680"
-        fontSize="160"
-        fontWeight="bold"
-        fill="url(#blueGrad)"
-        textAnchor="start"
-        fontFamily="Times New Roman, Times, serif"
-      >
-        P
-      </SvgText>
-      
-      {/* O (Circuit Orb) */}
-      <G transform="translate(305, 625)">
-        <Circle cx="0" cy="0" r="75" fill="url(#blueGrad)" />
-        {/* Circuit traces inside O */}
-        <Path 
-          d="M -45,-25 L -20,-25 L -5,-5 M -45,15 L -20,15 L 0,-5 L 0,-45 M -25,45 L -5,25 L -5,5 L 35,5 M 10,45 L 25,30 L 25,-25" 
-          stroke="#ffffff" 
-          strokeWidth="4" 
-          strokeLinecap="round" 
-          strokeLinejoin="round" 
-          fill="none" 
-        />
-        {/* Circuit nodes */}
-        <Circle cx="-45" cy="-25" r="4" fill="#ffffff" />
-        <Circle cx="-45" cy="15" r="4" fill="#ffffff" />
-        <Circle cx="0" cy="-45" r="4" fill="#ffffff" />
-        <Circle cx="-25" cy="45" r="4" fill="#ffffff" />
-        <Circle cx="10" cy="45" r="4" fill="#ffffff" />
-        <Circle cx="35" cy="5" r="4" fill="#ffffff" />
-        <Circle cx="25" cy="-25" r="4" fill="#ffffff" />
+        <SvgText
+          x="210"
+          y="680"
+          fontSize="160"
+          fontWeight="bold"
+          fill="url(#blueGrad)"
+          textAnchor="start"
+          fontFamily="Times New Roman, Times, serif"
+        >
+          P
+        </SvgText>
+        
+        <G transform="translate(305, 625)">
+          <Circle cx="0" cy="0" r="75" fill="url(#blueGrad)" />
+          <Path 
+            d="M -45,-25 L -20,-25 L -5,-5 M -45,15 L -20,15 L 0,-5 L 0,-45 M -25,45 L -5,25 L -5,5 L 35,5 M 10,45 L 25,30 L 25,-25" 
+            stroke="#ffffff" 
+            strokeWidth="4" 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            fill="none" 
+          />
+          <Circle cx="-45" cy="-25" r="4" fill="#ffffff" />
+          <Circle cx="-45" cy="15" r="4" fill="#ffffff" />
+          <Circle cx="0" cy="-45" r="4" fill="#ffffff" />
+          <Circle cx="-25" cy="45" r="4" fill="#ffffff" />
+          <Circle cx="10" cy="45" r="4" fill="#ffffff" />
+          <Circle cx="35" cy="5" r="4" fill="#ffffff" />
+          <Circle cx="25" cy="-25" r="4" fill="#ffffff" />
+        </G>
+
+        <SvgText
+          x="420"
+          y="680"
+          fontSize="160"
+          fontWeight="bold"
+          fill="url(#blueGrad)"
+          textAnchor="start"
+          letterSpacing="8"
+          fontFamily="Times New Roman, Times, serif"
+        >
+          WER
+        </SvgText>
+
       </G>
-
-      {/* WER */}
-      <SvgText
-        x="420"
-        y="680"
-        fontSize="160"
-        fontWeight="bold"
-        fill="url(#blueGrad)"
-        textAnchor="start"
-        letterSpacing="8"
-        fontFamily="Times New Roman, Times, serif"
-      >
-        WER
-      </SvgText>
     </Svg>
   );
 };
