@@ -1,7 +1,7 @@
 import React from 'react';
 import Svg, { Circle, Defs, LinearGradient, Stop, Text as SvgText, G, Path } from 'react-native-svg';
 
-const MassPowerLogo = ({ width = 1000, height = 1000 }) => {
+const MassPowerLogo = ({ width = 100, height = 100 }) => {
   return (
     <Svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width={width} height={height}>
       <Defs>
