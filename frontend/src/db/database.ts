@@ -18,6 +18,26 @@ function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 10);
 }
 
+// ✅ UNIFIED DATE HELPERS
+// Single source of truth for "today" and "start of week" so every screen
+// and query agrees on when the week resets. Always resets Monday, and
+// uses local calendar date (not toISOString(), which converts to UTC
+// first and can roll the date over early/late depending on timezone).
+export function getLocalDateStr(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export function getWeekStartMonday(d: Date = new Date()): Date {
+  const dayOfWeek = d.getDay(); // 0 = Sunday
+  const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - diffToMonday);
+  return monday;
+}
+
 export interface Customer {
   id: string;
   name: string;
@@ -869,7 +889,7 @@ export interface OilReminderDue {
 
 export async function listDueOilReminders(): Promise<OilReminderDue[]> {
   const db = await getDb();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateStr();
 
   const rows = await db.getAllAsync<{
     service_id: string;
@@ -1205,11 +1225,11 @@ export async function getReport(
   const conditions: string[] = [];
   const params: any[] = [];
 
+  // ✅ UNIFIED: use the same Monday-start + local-date helpers as the
+  // rest of the app (see getWeekStartMonday / getLocalDateStr above),
+  // instead of a local, differently-rounded copy of this math.
   const today = new Date();
-  const dayOfWeek = today.getDay();
-  const diffToMonday = (dayOfWeek === 0 ? 0 : dayOfWeek - 1);
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - diffToMonday);
+  const monday = getWeekStartMonday(today);
 
   if (startDate) {
     conditions.push('DATE(s.service_date) >= DATE(?)');
@@ -1287,8 +1307,8 @@ export async function getReport(
   
   let net_cash_flow = total_cost - outsource_total;
   
-  const mondayStr = monday.toISOString().slice(0, 10);
-  const todayStr = today.toISOString().slice(0, 10);
+  const mondayStr = getLocalDateStr(monday);
+  const todayStr = getLocalDateStr(today);
 
   try {
     const wagesResult = await db.getFirstAsync<{ total: number }>(
@@ -1867,7 +1887,7 @@ export async function saveWeeklyWages(amount: number): Promise<void> {
   const db = await getDb();
   const now = new Date().toISOString();
   
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getLocalDateStr();
 
   // Delete ONLY today's entry
   await db.runAsync(
@@ -2077,14 +2097,12 @@ export async function getWeeklyCashSummary(): Promise<{
   netDrawer: number;
 }> {
   const db = await getDb();
-  
+
+  // ✅ UNIFIED: same Monday-start + local-date helpers used everywhere else.
   const today = new Date();
-  const dayOfWeek = today.getDay();
-  const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - diffToMonday);
-  const mondayStr = monday.toISOString().slice(0, 10);
-  const todayStr = today.toISOString().slice(0, 10);
+  const monday = getWeekStartMonday(today);
+  const mondayStr = getLocalDateStr(monday);
+  const todayStr = getLocalDateStr(today);
 
   const revenueResult = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(cost), 0) as total FROM services 
