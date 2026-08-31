@@ -23,8 +23,8 @@
   <text x="500" y="460" font-size="195" class="logo-text" letter-spacing="12">MASS</text>
 
   <!-- POWER Layout -->
-  <!-- P -->
-  <text x="155" y="680" font-size="160" class="logo-text" text-anchor="start">P</text>
+  <!-- P (Adjusted x from 155 to 210) -->
+  <text x="210" y="680" font-size="160" class="logo-text" text-anchor="start">P</text>
   
   <!-- O (Circuit Orb) -->
   <g transform="translate(305, 625)">
@@ -42,6 +42,6 @@
     <circle cx="25" cy="-25" r="4" fill="#ffffff" />
   </g>
 
-  <!-- WER -->
-  <text x="400" y="680" font-size="160" class="logo-text" text-anchor="start" letter-spacing="8">WER</text>
+  <!-- WER (Adjusted x from 400 to 420) -->
+  <text x="420" y="680" font-size="160" class="logo-text" text-anchor="start" letter-spacing="8">WER</text>
 </svg>
