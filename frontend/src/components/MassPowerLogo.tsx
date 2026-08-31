@@ -1,99 +1,47 @@
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import Svg, { Path, Text, Circle, G, Defs, LinearGradient, Stop } from 'react-native-svg';
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="100%" height="100%">
+  <defs>
+    <!-- Gradient for text and borders -->
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0066b2" />
+      <stop offset="100%" stop-color="#002d62" />
+    </linearGradient>
+  </defs>
 
-export default function MassPowerLogo({ size = 75 }: { size?: number }) {
-  return (
-    <View style={[styles.container, { width: size, height: size }]}>
-      <Svg viewBox="0 0 300 300" width={size} height={size}>
-        <Defs>
-          <LinearGradient id="blueGlow" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor="#00e5ff" />
-            <Stop offset="100%" stopColor="#0066ff" />
-          </LinearGradient>
-          <LinearGradient id="chromeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-            <Stop offset="0%" stopColor="#f8fafc" />
-            <Stop offset="100%" stopColor="#94a3b8" />
-          </LinearGradient>
-        </Defs>
+  <!-- Outside background is transparent by default. Inside circle is white. -->
+  <circle cx="500" cy="500" r="485" fill="#ffffff" stroke="url(#blueGrad)" stroke-width="14" />
+  
+  <style>
+    .logo-text {
+      font-family: 'Times New Roman', Times, serif, Georgia;
+      font-weight: bold;
+      fill: url(#blueGrad);
+      text-anchor: middle;
+    }
+  </style>
 
-        <Path
-          d="M 60,110 A 110,110 0 0,1 240,110"
-          fill="none"
-          stroke="url(#blueGlow)"
-          strokeWidth="12"
-          strokeLinecap="round"
-        />
-        <Path
-          d="M 85,95 A 110,110 0 0,1 215,95"
-          fill="none"
-          stroke="url(#chromeGrad)"
-          strokeWidth="6"
-          strokeLinecap="round"
-        />
+  <!-- MASS Text -->
+  <text x="500" y="460" font-size="195" class="logo-text" letter-spacing="12">MASS</text>
 
-        <Path
-          d="M 240,190 A 110,110 0 0,1 60,190"
-          fill="none"
-          stroke="url(#blueGlow)"
-          strokeWidth="12"
-          strokeLinecap="round"
-        />
-        <Path
-          d="M 215,205 A 110,110 0 0,1 85,205"
-          fill="none"
-          stroke="url(#chromeGrad)"
-          strokeWidth="6"
-          strokeLinecap="round"
-        />
+  <!-- POWER Layout -->
+  <!-- P -->
+  <text x="155" y="680" font-size="160" class="logo-text" text-anchor="start">P</text>
+  
+  <!-- O (Circuit Orb) -->
+  <g transform="translate(305, 625)">
+    <circle cx="0" cy="0" r="75" fill="url(#blueGrad)" />
+    <!-- Circuit traces inside O -->
+    <path d="M -45,-25 L -20,-25 L -5,-5 M -45,15 L -20,15 L 0,-5 L 0,-45 M -25,45 L -5,25 L -5,5 L 35,5 M 10,45 L 25,30 L 25,-25" 
+          stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+    <!-- Circuit nodes -->
+    <circle cx="-45" cy="-25" r="4" fill="#ffffff" />
+    <circle cx="-45" cy="15" r="4" fill="#ffffff" />
+    <circle cx="0" cy="-45" r="4" fill="#ffffff" />
+    <circle cx="-25" cy="45" r="4" fill="#ffffff" />
+    <circle cx="10" cy="45" r="4" fill="#ffffff" />
+    <circle cx="35" cy="5" r="4" fill="#ffffff" />
+    <circle cx="25" cy="-25" r="4" fill="#ffffff" />
+  </g>
 
-        <Text
-          x="150"
-          y="125"
-          textAnchor="middle"
-          fontFamily="System"
-          fontWeight="bold"
-          fontSize="34"
-          fill="#00e5ff"
-          letterSpacing="2"
-        >
-          MASS
-        </Text>
-
-        <G transform="translate(0, 0)">
-          <Text
-            x="150"
-            y="172"
-            textAnchor="middle"
-            fontFamily="System"
-            fontWeight="bold"
-            fontSize="32"
-            fill="#f8fafc"
-            letterSpacing="1"
-          >
-            P WER
-          </Text>
-
-          <Circle cx="132" cy="162" r="15" fill="#0052cc" />
-          <Path
-            d="M 132,147 A 15,15 0 0,1 147,162 L 132,162 Z"
-            fill="#00e5ff"
-            opacity="0.8"
-          />
-          <Path
-            d="M 132,177 A 15,15 0 0,1 117,162 L 132,162 Z"
-            fill="#f8fafc"
-            opacity="0.9"
-          />
-        </G>
-      </Svg>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+  <!-- WER -->
+  <text x="400" y="680" font-size="160" class="logo-text" text-anchor="start" letter-spacing="8">WER</text>
+</svg>
