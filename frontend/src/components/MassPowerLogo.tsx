@@ -15,7 +15,7 @@ const MassPowerLogo = ({ width = 75, height = 75 }) => {
       {/* >>>>>>>>>>>>>>  EDIT THIS PART TO SHIFT LEFT OR RIGHT  <<<<<<<<<<<<<<<<< */}
       {/* >>>>>>>>>>>>>>  Change '50' to '0' (center), or '-50' (left)  <<<<<<<<<< */}
       {/* >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> */}
-      <G transform="translate(50, 0)">
+      <G transform="translate(-50, 0)">
         
         <Circle cx="500" cy="500" r="485" fill="#ffffff" stroke="url(#blueGrad)" strokeWidth="14" />
         
