@@ -68,7 +68,7 @@ const MassPowerLogo = ({ width = 75, height = 75 }) => {
         fontWeight="bold"
         fill="url(#blueGrad)"
         textAnchor="start"
-        letterSpacing="8"
+        letterSpacing="10"
         fontFamily="Times New Roman, Times, serif"
       >
         WER
