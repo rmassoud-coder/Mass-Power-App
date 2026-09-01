@@ -154,7 +154,7 @@ export default function ManagementScreen() {
         <View style={styles.dashboardGrid}>
           <TouchableOpacity style={[styles.dashCard, styles.supplierDebtCard]} onPress={() => router.push('/supplier-debt')}>
             <Ionicons name="cash-outline" size={32} color="#fff" />
-            <Text style={styles.dashTitle}>Supplier Debts</Text>
+            <Text style={styles.dashTitle}>Cash Flow</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.dashCard, styles.reminderCard]} onPress={() => router.push('/reminders')}>
             <Ionicons name="notifications-outline" size={32} color="#fff" />
