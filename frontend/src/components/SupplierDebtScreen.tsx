@@ -176,7 +176,7 @@ export default function SupplierDebtScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#1e293b" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Supplier Debts</Text>
+        <Text style={styles.headerTitle}>Cash Flow Report</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -185,7 +185,7 @@ export default function SupplierDebtScreen() {
         <View style={styles.cashCard}>
           <View style={styles.cashHeaderRow}>
             <Ionicons name="cash-outline" size={22} color="#5b21b6" />
-            <Text style={styles.cashHeader}>WEEKLY CASH FLOW</Text>
+            <Text style={styles.cashHeader}>GENERAL CASH FLOW</Text>
             <TouchableOpacity style={styles.viewBtn} onPress={() => router.push('/report')}>
               <Text style={styles.viewBtnText}>Details</Text>
             </TouchableOpacity>
