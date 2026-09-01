@@ -27,7 +27,7 @@ const MassPowerLogo = ({ width = 75, height = 75 }) => {
       </SvgText>
 
       <SvgText
-        x="150"
+        x="170"
         y="680"
         fontSize="180"
         fontWeight="bold"
@@ -63,7 +63,7 @@ const MassPowerLogo = ({ width = 75, height = 75 }) => {
       </G>
 
       <SvgText
-        x="350"
+        x="370"
         y="680"
         fontSize="180"
         fontWeight="bold"
