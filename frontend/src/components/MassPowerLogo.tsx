@@ -36,7 +36,7 @@ const MassPowerLogo = ({ width = 75, height = 75 }) => {
         letterSpacing="12"
         fontFamily="Times New Roman, Times, serif"
       >
-        Po
+        P
       </SvgText>
       
       {/* >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> */}
@@ -72,7 +72,7 @@ const MassPowerLogo = ({ width = 75, height = 75 }) => {
         letterSpacing="12"
         fontFamily="Times New Roman, Times, serif"
       >
-        .WER
+        WER
       </SvgText>
 
     </Svg>
