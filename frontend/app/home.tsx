@@ -208,7 +208,7 @@ export default function HomeScreen() {
           <View style={styles.logoRow}>
             {/* REAL LOGO - RESTORED */}
             <MassPowerLogo size={75} />
-            <Text style={styles.headerSubtitle}>Auto Services</Text>
+            <Text style={styles.headerSubtitle}> Auto Services</Text>
           </View>
           <View style={{ marginTop: 6 }}>
             <SyncStatusPill />
