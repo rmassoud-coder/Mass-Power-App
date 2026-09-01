@@ -43,7 +43,7 @@ const MassPowerLogo = ({ width = 75, height = 75 }) => {
       {/* >>>>>>>>>>>>>>>>>>>>>>>>>>  EDIT THIS PART  <<<<<<<<<<<<<<<<<<<<<<<<<<<<< */}
       {/* >>>>>>>>>> Change '355' to '305' (center), or '255' (shift left)  <<<<<<< */}
       {/* >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> */}
-      <G transform="translate(365, 625)">
+      <G transform="translate(395, 625)">
         <Circle cx="0" cy="0" r="75" fill="url(#blueGrad)" />
         <Path 
           d="M -45,-25 L -20,-25 L -5,-5 M -45,15 L -20,15 L 0,-5 L 0,-45 M -25,45 L -5,25 L -5,5 L 35,5 M 10,45 L 25,30 L 25,-25" 
