@@ -79,24 +79,24 @@ export default function BatteryReplacementForm({ value, onChange }: Props) {
   const setToday = () => onChange({ ...value, installDate: todayIso() });
 
   const warrantyOptions: Array<{ months: number; label: string }> = [
-    { months: 6, label: '6 months' },
-    { months: 12, label: '1 year' },
+    { months: 6, label: '6 أشهر' },
+    { months: 12, label: 'سنة واحدة' },
   ];
 
   return (
     <View>
       <View style={styles.headerRow}>
         <MaterialCommunityIcons name="car-battery" size={20} color="#059669" />
-        <Text style={styles.headerText}>Battery Details</Text>
+        <Text style={styles.headerText}>تفاصيل البطارية</Text>
       </View>
       <Text style={styles.subtitle}>
-        Printed on the 55mm sticker so the customer & garage always know install date & warranty.
+        يتم طباعتها على الملصق مقاس 55 مم حتى يعرف العميل والورشة دائمًا تاريخ التركيب والضمان.
       </Text>
 
       {/* Amp Rate */}
       <View style={styles.fieldGroup}>
         <Text style={styles.label}>
-          Amp Rate <Text style={styles.required}>*</Text>
+          معدل الأمبير <Text style={styles.required}>*</Text>
         </Text>
         <View style={styles.inputRow}>
           <MaterialCommunityIcons name="flash" size={18} color="#64748b" style={styles.icon} />
@@ -104,7 +104,7 @@ export default function BatteryReplacementForm({ value, onChange }: Props) {
             style={styles.input}
             value={value.ampRate}
             onChangeText={(t) => onChange({ ...value, ampRate: t })}
-            placeholder="e.g. 700 CCA or 80 Ah"
+            placeholder="مثال: 700 CCA أو 80 Ah"
             placeholderTextColor="#94a3b8"
             autoCapitalize="characters"
             autoCorrect={false}
@@ -115,7 +115,7 @@ export default function BatteryReplacementForm({ value, onChange }: Props) {
 
       {/* Install Date */}
       <View style={styles.fieldGroup}>
-        <Text style={styles.label}>Installation Date</Text>
+        <Text style={styles.label}>تاريخ التركيب</Text>
         <View style={styles.inputRow}>
           <MaterialCommunityIcons name="calendar" size={18} color="#64748b" style={styles.icon} />
           <TextInput
@@ -132,14 +132,14 @@ export default function BatteryReplacementForm({ value, onChange }: Props) {
         </View>
         <View style={styles.presetRow}>
           <TouchableOpacity style={styles.presetBtn} onPress={setToday} testID="battery-date-today">
-            <Text style={styles.presetBtnText}>Today</Text>
+            <Text style={styles.presetBtnText}>اليوم</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Warranty */}
       <View style={styles.fieldGroup}>
-        <Text style={styles.label}>Warranty Length</Text>
+        <Text style={styles.label}>مدة الضمان</Text>
         <View style={styles.presetRow}>
           {warrantyOptions.map((opt) => (
             <TouchableOpacity
@@ -195,9 +195,9 @@ export default function BatteryReplacementForm({ value, onChange }: Props) {
             )}
           </View>
           <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={styles.parasiticLabel}>Parasitic Draw Tested</Text>
+            <Text style={styles.parasiticLabel}>تم اختبار السحب الطفيلي</Text>
             <Text style={styles.parasiticHint}>
-              Tick if the vehicle was tested for parasitic current draw during install.
+              حدد المربع إذا تم اختبار المركبة للكشف عن سحب تيار طفيلي أثناء التركيب.
             </Text>
           </View>
           <MaterialCommunityIcons
