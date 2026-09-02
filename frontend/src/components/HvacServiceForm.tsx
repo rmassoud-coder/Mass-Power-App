@@ -81,15 +81,15 @@ export default function HvacServiceForm({ value, onChange }: Props) {
     <View>
       <View style={styles.headerRow}>
         <MaterialCommunityIcons name="snowflake" size={20} color="#0284c7" />
-        <Text style={styles.headerText}>HVAC Service Details</Text>
+        <Text style={styles.headerText}>تفاصيل خدمة التكييف</Text>
       </View>
       <Text style={styles.subtitle}>
-        Whatever you type in "Additional Info" appears on the sticker (fits AC top-ups, heater core work, etc.).
+        أي نص تكتبه في "ملاحظات إضافية" سيظهر على الملصق (يناسب تعبئة الفريون، أعمال قلب المدفأة، إلخ).
       </Text>
 
       {/* Freon Added Date */}
       <View style={styles.fieldGroup}>
-        <Text style={styles.label}>Freon Added Date</Text>
+        <Text style={styles.label}>تاريخ إضافة الفريون</Text>
         <View style={styles.inputRow}>
           <MaterialCommunityIcons name="calendar" size={18} color="#64748b" style={styles.icon} />
           <TextInput
@@ -106,7 +106,7 @@ export default function HvacServiceForm({ value, onChange }: Props) {
         </View>
         <View style={styles.presetRow}>
           <TouchableOpacity style={styles.presetBtn} onPress={setToday} testID="hvac-date-today">
-            <Text style={styles.presetBtnText}>Today</Text>
+            <Text style={styles.presetBtnText}>اليوم</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -130,9 +130,9 @@ export default function HvacServiceForm({ value, onChange }: Props) {
             )}
           </View>
           <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={styles.leakLabel}>Tested for Freon Leaks</Text>
+            <Text style={styles.leakLabel}>تم اختبار تسريب الفريون</Text>
             <Text style={styles.leakHint}>
-              Tick if the AC circuit was pressure/dye-tested for freon leaks.
+              حدد المربع إذا تم اختبار دائرة التكييف بالضغط أو الصبغة للكشف عن تسريبات الفريون.
             </Text>
           </View>
           <MaterialCommunityIcons
