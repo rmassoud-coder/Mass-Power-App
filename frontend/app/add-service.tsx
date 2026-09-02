@@ -79,26 +79,26 @@ export default function AddServiceScreen() {
 
   const handleSubmit = async () => {
     if (!selectedVehicleId || !serviceCategory || !cost.trim()) {
-      Alert.alert('Error', 'Please fill in all required fields');
+      Alert.alert('خطأ', 'يرجى ملء جميع الحقول المطلوبة');
       return;
     }
 
     if (isOilService && !oilReminder.oilGrade.trim()) {
-      Alert.alert('Error', 'Oil grade is required for Oil Services (e.g. 5W-30)');
+      Alert.alert('خطأ', 'درجة الزيت مطلوبة لخدمات الزيت (مثال: 5W-30)');
       return;
     }
 
     if (isBatteryService && !batteryReplacement.ampRate.trim()) {
       Alert.alert(
-        'Error',
-        'Amp Rate is required for Battery Replacement (e.g. 700 CCA or 80 Ah)'
+        'خطأ',
+        'معدل الأمبير مطلوب لاستبدال البطارية (مثال: 700 CCA أو 80 Ah)'
       );
       return;
     }
 
     const laborNumber = parseFloat(cost);
     if (isNaN(laborNumber) || laborNumber < 0) {
-      Alert.alert('Error', 'Please enter a valid labor cost');
+      Alert.alert('خطأ', 'يرجى إدخال تكلفة عمل صالحة');
       return;
     }
     // Grand total = labor + parts retail
@@ -109,13 +109,13 @@ export default function AddServiceScreen() {
     if (isPending) {
       partialPaidNumber = parseFloat(partialAmount) || 0;
       if (partialPaidNumber < 0) {
-        Alert.alert('Error', 'Partial payment cannot be negative');
+        Alert.alert('خطأ', 'لا يمكن أن يكون الدفع الجزئي سالباً');
         return;
       }
       if (partialPaidNumber >= costNumber) {
         Alert.alert(
-          'Error',
-          'Partial payment must be less than total cost. Use "Paid" instead if fully paid.'
+          'خطأ',
+          'يجب أن يكون الدفع الجزئي أقل من التكلفة الإجمالية. استخدم "مدفوع" إذا كان مدفوعاً بالكامل.'
         );
         return;
       }
@@ -141,7 +141,7 @@ export default function AddServiceScreen() {
 
       router.back();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to add service');
+      Alert.alert('خطأ', error.message || 'فشل في إضافة الخدمة');
     } finally {
       setLoading(false);
     }
@@ -157,7 +157,7 @@ export default function AddServiceScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#1e293b" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add Service Record</Text>
+          <Text style={styles.headerTitle}>إضافة سجل خدمة</Text>
           <View style={{ width: 40 }} />
         </View>
 
@@ -169,7 +169,7 @@ export default function AddServiceScreen() {
 
             {/* Vehicle Selection */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Select Vehicle *</Text>
+              <Text style={styles.label}>اختر المركبة *</Text>
               <View style={styles.pickerContainer}>
                 <Ionicons name="car-sport-outline" size={20} color="#666" style={styles.pickerIcon} />
                 <Picker
@@ -190,7 +190,7 @@ export default function AddServiceScreen() {
 
             {/* Service Category (Dropdown) */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Service Type *</Text>
+              <Text style={styles.label}>نوع الخدمة *</Text>
               <View style={styles.pickerContainer}>
                 <Ionicons name="clipboard-outline" size={20} color="#666" style={styles.pickerIcon} />
                 <Picker
@@ -237,11 +237,11 @@ export default function AddServiceScreen() {
 
             {/* Additional Info / Description */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Notes / Description</Text>
+              <Text style={styles.label}>ملاحظات / وصف</Text>
               <View style={[styles.inputContainer, styles.textAreaContainer]}>
                 <TextInput
                   style={[styles.input, styles.textArea]}
-                  placeholder="e.g., oil filter replaced, brake pads worn..."
+                  placeholder="مثال: تم تغيير فلتر الزيت، تآكل فرامل..."
                   value={additionalInfo}
                   onChangeText={setAdditionalInfo}
                   multiline
@@ -261,7 +261,7 @@ export default function AddServiceScreen() {
 
             {/* Cost */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Labor / Service Fee *</Text>
+              <Text style={styles.label}>العمالة / رسوم الخدمة *</Text>
               <View style={styles.inputContainer}>
                 <Ionicons name="cash-outline" size={20} color="#666" style={styles.inputIcon} />
                 <Text style={styles.currencySymbol}>$</Text>
@@ -275,9 +275,9 @@ export default function AddServiceScreen() {
               </View>
               {productsSubtotal > 0 && (
                 <View style={styles.totalBreakdown}>
-                  <Text style={styles.totalLine}>Labor: ${laborCost.toFixed(2)}</Text>
-                  <Text style={styles.totalLine}>Parts (retail): ${productsSubtotal.toFixed(2)}</Text>
-                  <Text style={styles.totalGrand}>Grand Total: ${grandTotal.toFixed(2)}</Text>
+                  <Text style={styles.totalLine}>العمالة: ${laborCost.toFixed(2)}</Text>
+                  <Text style={styles.totalLine}>القطع (سعر التجزئة): ${productsSubtotal.toFixed(2)}</Text>
+                  <Text style={styles.totalGrand}>الإجمالي النهائي: ${grandTotal.toFixed(2)}</Text>
                 </View>
               )}
             </View>
@@ -286,11 +286,11 @@ export default function AddServiceScreen() {
             <View style={styles.outsourceCard}>
               <View style={styles.outsourceHeaderRow}>
                 <Ionicons name="lock-closed" size={14} color="#6b21a8" />
-                <Text style={styles.outsourceHeader}>Outsource Cost (Private)</Text>
+                <Text style={styles.outsourceHeader}>تكلفة المقاول (خاصة)</Text>
               </View>
               <Text style={styles.outsourceHint}>
-                Money paid to a 3rd party for this job. Subtracted from your cash-flow in
-                the Reports screen only — never shown on receipts, invoices or stickers.
+                المبلغ المدفوع لطرف ثالث مقابل هذه المهمة. يتم خصمه من التدفق النقدي في
+                شاشة التقارير فقط - ولا يظهر أبداً في الإيصالات أو الفواتير أو الملصقات.
               </Text>
               <View style={styles.inputContainer}>
                 <Ionicons name="cash-outline" size={20} color="#6b21a8" style={styles.inputIcon} />
@@ -323,9 +323,9 @@ export default function AddServiceScreen() {
                 {isPaid && <Ionicons name="checkmark" size={18} color="#fff" />}
               </View>
               <View style={styles.paidCheckboxLabel}>
-                <Text style={styles.paidCheckboxText}>Invoice Paid</Text>
+                <Text style={styles.paidCheckboxText}>الفاتورة مدفوعة</Text>
                 <Text style={styles.paidCheckboxSubtext}>
-                  {isPaid ? 'Marked as paid' : 'Will show as unpaid in red'}
+                  {isPaid ? 'تم وضع علامة مدفوعة' : 'ستظهر كغير مدفوعة باللون الأحمر'}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -351,9 +351,9 @@ export default function AddServiceScreen() {
                   {isPending && <Ionicons name="time" size={16} color="#fff" />}
                 </View>
                 <View style={styles.paidCheckboxLabel}>
-                  <Text style={styles.paidCheckboxText}>Pending Payment</Text>
+                  <Text style={styles.paidCheckboxText}>دفع معلق</Text>
                   <Text style={styles.paidCheckboxSubtext}>
-                    {isPending ? 'Will show as pending in yellow' : 'Partial or awaiting payment'}
+                    {isPending ? 'ستظهر كمعلق باللون الأصفر' : 'دفع جزئي أو في انتظار الدفع'}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -382,7 +382,7 @@ export default function AddServiceScreen() {
               ) : (
                 <>
                   <Ionicons name="checkmark-circle" size={24} color="#fff" />
-                  <Text style={styles.submitButtonText}>Add Service</Text>
+                  <Text style={styles.submitButtonText}>إضافة الخدمة</Text>
                 </>
               )}
             </TouchableOpacity>
