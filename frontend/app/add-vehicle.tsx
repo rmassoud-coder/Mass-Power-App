@@ -99,16 +99,16 @@ export default function AddVehicleScreen() {
         setVin(res.vin);
         if (res.candidates.length > 1) {
           Alert.alert(
-            'VIN Detected',
-            `Best match: ${res.vin}\n\nOther possibilities:\n${res.candidates
+            'تم اكتشاف VIN',
+            `أفضل تطابق: ${res.vin}\n\nاحتمالات أخرى:\n${res.candidates
               .slice(1, 5)
               .map((c) => `• ${c}`)
               .join('\n')}`,
-            [{ text: 'OK' }]
+            [{ text: 'حسناً' }]
           );
         } else {
-          Alert.alert('VIN Detected', `Captured: ${res.vin}`, [
-            { text: 'OK' },
+          Alert.alert('تم اكتشاف VIN', `تم التقاط: ${res.vin}`, [
+            { text: 'حسناً' },
           ]);
         }
         return;
@@ -121,23 +121,23 @@ export default function AddVehicleScreen() {
           .slice(0, 4);
         if (choices.length > 0) {
           Alert.alert(
-            'No exact VIN found',
-            'Pick the closest reading or try again:',
+            'لم يتم العثور على VIN دقيق',
+            'اختر القراءة الأقرب أو حاول مرة أخرى:',
             [
               ...choices.map((c) => ({
                 text: c,
                 onPress: () => setVin(c.slice(0, 17)),
               })),
-              { text: 'Retake', onPress: handleScanVIN },
-              { text: 'Cancel', style: 'cancel' as const },
+              { text: 'إعادة المحاولة', onPress: handleScanVIN },
+              { text: 'إلغاء', style: 'cancel' as const },
             ]
           );
           return;
         }
       }
-      Alert.alert('Scan Failed', res.message);
+      Alert.alert('فشل المسح', res.message);
     } catch (e: any) {
-      Alert.alert('Scan Error', e?.message || 'Unexpected error during scan.');
+      Alert.alert('خطأ في المسح', e?.message || 'حدث خطأ غير متوقع أثناء المسح.');
     } finally {
       setScanning(false);
     }
@@ -147,7 +147,7 @@ export default function AddVehicleScreen() {
     const vinInput = vin.trim();
     
     if (!vinInput) {
-      Alert.alert('Error', 'Please enter a VIN number');
+      Alert.alert('خطأ', 'يرجى إدخال رقم VIN');
       return;
     }
 
@@ -157,21 +157,21 @@ export default function AddVehicleScreen() {
       setVin(dummyVin);
       
       // Auto-fill with generic values for dummy VIN
-      setMake('GENERIC');
-      setModel('VEHICLE');
+      setMake('عام');
+      setModel('مركبة');
       setYear('2020');
       
       Alert.alert(
-        'Dummy VIN Generated',
-        `A unique VIN has been generated: ${dummyVin}\n\nMake and Model have been auto-filled as "GENERIC VEHICLE". You can edit them if needed.`,
-        [{ text: 'OK' }]
+        'تم إنشاء VIN وهمي',
+        `تم إنشاء VIN فريد: ${dummyVin}\n\nتم تعبئة الصانع والموديل تلقائياً كـ "عام مركبة". يمكنك تعديلهما إذا لزم الأمر.`,
+        [{ text: 'حسناً' }]
       );
       return;
     }
 
     // Normal VIN decoding
     if (vinInput.length < 11 || vinInput.length > 17) {
-      Alert.alert('Error', 'VIN must be between 11 and 17 characters');
+      Alert.alert('خطأ', 'يجب أن يكون VIN بين 11 و 17 حرفاً');
       return;
     }
 
@@ -184,17 +184,17 @@ export default function AddVehicleScreen() {
       const data = await decodeVin(vinInput);
       
       if (data.offline) {
-        Alert.alert('No Internet', 'VIN decoder requires internet. Please enter vehicle details manually.');
+        Alert.alert('لا يوجد اتصال بالإنترنت', 'يتطلب فك تشفير VIN اتصالاً بالإنترنت. يرجى إدخال تفاصيل المركبة يدوياً.');
       } else if (data.error) {
-        Alert.alert('VIN Decoder', data.error);
+        Alert.alert('فك تشفير VIN', data.error);
       } else {
         if (data.make) setMake(data.make);
         if (data.model) setModel(data.model);
         if (data.year) setYear(data.year);
-        Alert.alert('Success', 'VIN decoded successfully!');
+        Alert.alert('نجاح', 'تم فك تشفير VIN بنجاح!');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to decode VIN. Please enter details manually.');
+      Alert.alert('خطأ', 'فشل فك تشفير VIN. يرجى إدخال التفاصيل يدوياً.');
     } finally {
       setDecoding(false);
     }
@@ -210,8 +210,8 @@ export default function AddVehicleScreen() {
       setVin(dummyVin);
       
       // Auto-fill with generic values
-      if (!make.trim()) setMake('GENERIC');
-      if (!model.trim()) setModel('VEHICLE');
+      if (!make.trim()) setMake('عام');
+      if (!model.trim()) setModel('مركبة');
       if (!year.trim()) setYear('2020');
       
       // Continue with submission
@@ -223,13 +223,13 @@ export default function AddVehicleScreen() {
 
     // Validate required fields
     if (!vinInput || !make.trim() || !model.trim()) {
-      Alert.alert('Error', 'Please fill in all required fields');
+      Alert.alert('خطأ', 'يرجى ملء جميع الحقول المطلوبة');
       return;
     }
 
     // Validate VIN length if it's not a dummy
     if (!isDummyRequest(vinInput) && vinInput.length < 11) {
-      Alert.alert('Error', 'VIN must be at least 11 characters');
+      Alert.alert('خطأ', 'يجب أن يكون VIN على الأقل 11 حرفاً');
       return;
     }
 
@@ -250,7 +250,7 @@ export default function AddVehicleScreen() {
         params: { customerId: params.customerId as string },
       });
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to add vehicle');
+      Alert.alert('خطأ', error.message || 'فشل في إضافة المركبة');
     } finally {
       setLoading(false);
     }
@@ -266,7 +266,7 @@ export default function AddVehicleScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#1e293b" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add Vehicle</Text>
+          <Text style={styles.headerTitle}>إضافة مركبة</Text>
           <View style={{ width: 40 }} />
         </View>
 
@@ -278,13 +278,13 @@ export default function AddVehicleScreen() {
 
             {/* VIN Number with Scanner + Decoder */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>VIN Number *</Text>
+              <Text style={styles.label}>رقم VIN *</Text>
               <View style={styles.vinRow}>
                 <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
                   <Ionicons name="barcode-outline" size={20} color="#666" style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="Enter VIN or short code (e.g., 1234)"
+                    placeholder="أدخل VIN أو رمز قصير (مثال: 1234)"
                     value={vin}
                     onChangeText={setVin}
                     autoCapitalize="characters"
@@ -295,7 +295,7 @@ export default function AddVehicleScreen() {
                   style={[styles.scanButton, scanning && styles.decodeButtonDisabled]}
                   onPress={handleScanVIN}
                   disabled={scanning}
-                  accessibilityLabel="Scan VIN with camera"
+                  accessibilityLabel="مسح VIN بالكاميرا"
                 >
                   {scanning ? (
                     <ActivityIndicator size="small" color="#0f766e" />
@@ -307,7 +307,7 @@ export default function AddVehicleScreen() {
                   style={[styles.decodeButton, decoding && styles.decodeButtonDisabled]}
                   onPress={handleDecodeVIN}
                   disabled={decoding}
-                  accessibilityLabel="Decode VIN or generate dummy VIN"
+                  accessibilityLabel="فك تشفير VIN أو إنشاء VIN وهمي"
                 >
                   {decoding ? (
                     <ActivityIndicator size="small" color="#2563eb" />
@@ -317,19 +317,19 @@ export default function AddVehicleScreen() {
                 </TouchableOpacity>
               </View>
               <Text style={styles.hint}>
-                Tap the camera to scan the VIN, or the lightning icon to auto-fill from a typed VIN.
-                {'\n'}Type "1234" and tap the lightning icon to generate a dummy VIN.
+                اضغط على الكاميرا لمسح VIN، أو على أيقونة البرق للتعبئة التلقائية من VIN مكتوب.
+                {'\n'}اكتب "1234" واضغط على أيقونة البرق لإنشاء VIN وهمي.
               </Text>
             </View>
 
             {/* Plate Number */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Plate Number </Text>
+              <Text style={styles.label}>رقم اللوحة </Text>
               <View style={styles.inputContainer}>
                 <Ionicons name="reader-outline" size={20} color="#666" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter plate number"
+                  placeholder="أدخل رقم اللوحة"
                   value={plateNumber}
                   onChangeText={setPlateNumber}
                   autoCapitalize="characters"
@@ -339,12 +339,12 @@ export default function AddVehicleScreen() {
 
             {/* Make */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Make *</Text>
+              <Text style={styles.label}>الصانع *</Text>
               <View style={styles.inputContainer}>
                 <Ionicons name="business-outline" size={20} color="#666" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="e.g., Toyota, Honda"
+                  placeholder="مثال: تويوتا، هوندا"
                   value={make}
                   onChangeText={setMake}
                   autoCapitalize="words"
@@ -354,12 +354,12 @@ export default function AddVehicleScreen() {
 
             {/* Model */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Model *</Text>
+              <Text style={styles.label}>الموديل *</Text>
               <View style={styles.inputContainer}>
                 <Ionicons name="car-outline" size={20} color="#666" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="e.g., Camry, Civic"
+                  placeholder="مثال: كامري، سيفيك"
                   value={model}
                   onChangeText={setModel}
                   autoCapitalize="words"
@@ -369,12 +369,12 @@ export default function AddVehicleScreen() {
 
             {/* Year */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Year</Text>
+              <Text style={styles.label}>السنة</Text>
               <View style={styles.inputContainer}>
                 <Ionicons name="calendar-outline" size={20} color="#666" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="e.g., 2020"
+                  placeholder="مثال: 2020"
                   value={year}
                   onChangeText={setYear}
                   keyboardType="number-pad"
@@ -393,7 +393,7 @@ export default function AddVehicleScreen() {
               ) : (
                 <>
                   <Ionicons name="checkmark-circle" size={24} color="#fff" />
-                  <Text style={styles.submitButtonText}>Add Vehicle</Text>
+                  <Text style={styles.submitButtonText}>إضافة المركبة</Text>
                 </>
               )}
             </TouchableOpacity>
