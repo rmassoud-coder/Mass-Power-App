@@ -1,6 +1,15 @@
-// RpmLoader.tsx
+// RpmLoader.tsx - CORRECTED VERSION
+
+// ✅ Only ONE React import at the top
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Dimensions, Animated, Easing } from 'react-native';
+import { 
+  StyleSheet, 
+  View, 
+  Dimensions, 
+  Animated, 
+  Easing,
+  Text  // ← You were missing this!
+} from 'react-native';
 import Svg, { Circle, G, Path } from 'react-native-svg';
 import { BlurView } from 'expo-blur';
 
