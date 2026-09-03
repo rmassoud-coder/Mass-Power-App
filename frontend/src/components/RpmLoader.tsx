@@ -1,164 +1,353 @@
-// App.tsx
-import React, { useState } from 'react';
-import { StyleSheet, View, SafeAreaView, Text } from 'react-native';
-import M4HeadlightLoader from './src/components/M4HeadlightLoader';
+// RpmLoader.tsx
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, View, Dimensions, Animated, Easing } from 'react-native';
+import Svg, { Circle, G, Path } from 'react-native-svg';
+import { BlurView } from 'expo-blur';
 
-export default function App() {
-  const [isLoaded, setIsLoaded] = useState(false);
-
-  return (
-    <SafeAreaView style={styles.container}>
-      {!isLoaded ? (
-        <M4HeadlightLoader 
-          label="BMW M PERFORMANCE" 
-          onComplete={() => setIsLoaded(true)} 
-        />
-      ) : (
-        <View style={styles.mainAppContainer}>
-          <Text style={styles.welcomeText}>App Successfully Loaded</Text>
-        </View>
-      )}
-    </SafeAreaView>
-  );
+// Types
+interface RpmLoaderProps {
+  rpmValue?: number;
+  maxRpm?: number;
+  size?: number;
+  showNumeric?: boolean;
+  segmentCount?: number;
+  warningThreshold?: number;
+  criticalThreshold?: number;
+  colorScheme?: 'default' | 'sport' | 'eco' | 'custom';
+  customColors?: {
+    low?: string;
+    mid?: string;
+    high?: string;
+    critical?: string;
+  };
+  animated?: boolean;
+  glowIntensity?: number;
+  showGlow?: boolean;
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000000' },
-  mainAppContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111111' },
-  welcomeText: { color: '#FFFFFF', fontSize: 20, fontWeight: '600' },
-});
-// src/components/M4HeadlightLoader.tsx
-import React, { useEffect, useRef } from 'react';
-import { StyleSheet, View, Dimensions } from 'react-native';
-import HeadlightBackground from './HeadlightBackground';
-import HeadlightOverlays from './HeadlightOverlays';
-import HeadlightProgressBar from './HeadlightProgressBar';
+const RpmLoader: React.FC<RpmLoaderProps> = ({
+  rpmValue = 0,
+  maxRpm = 8000,
+  size = 200,
+  showNumeric = true,
+  segmentCount = 20,
+  warningThreshold = 6000,
+  criticalThreshold = 7000,
+  colorScheme = 'default',
+  customColors = {},
+  animated = true,
+  glowIntensity = 1,
+  showGlow = true,
+}) => {
+  const [currentRpm, setCurrentRpm] = useState(rpmValue);
+  const [progressAnim] = useState(new Animated.Value(0));
+  const [glowAnim] = useState(new Animated.Value(0));
 
-const { width, height } = Dimensions.get('window');
+  // Color schemes
+  const getColors = () => {
+    const schemes = {
+      default: {
+        low: '#00E5FF',
+        mid: '#FFD700',
+        high: '#FF6B00',
+        critical: '#FF0040'
+      },
+      sport: {
+        low: '#FF0040',
+        mid: '#FF6B00',
+        high: '#FFD700',
+        critical: '#00E5FF'
+      },
+      eco: {
+        low: '#00FF88',
+        mid: '#FFD700',
+        high: '#FF6B00',
+        critical: '#FF0040'
+      }
+    };
+    return { ...schemes[colorScheme as keyof typeof schemes], ...customColors };
+  };
 
-export default function M4HeadlightLoader({ label, onComplete }: any) {
-  const drlOpacity = useRef(new Animated.Value(0)).current;
-  const beamOpacity = useRef(new Animated.Value(0)).current;
-  const progressWidth = useRef(new Animated.Value(0)).current;
+  const colors = getColors();
 
+  // Get color based on RPM
+  const getRpmColor = (rpm: number) => {
+    const percentage = rpm / maxRpm;
+    if (percentage >= 0.875) return colors.critical;
+    if (percentage >= 0.75) return colors.high;
+    if (percentage >= 0.5) return colors.mid;
+    return colors.low;
+  };
+
+  // Animate RPM
   useEffect(() => {
-    // Coordinated sequence matching the real car unlock sequence
-    Animated.sequence([
-      Animated.delay(400), // Start in total darkness
-
-      // Step 1: DRL fiber-optic halos fade in smoothly
-      Animated.timing(drlOpacity, {
-        toValue: 0.7,
-        duration: 1000,
-        useNativeDriver: true,
-      }),
-      Animated.delay(500),
-
-      // Step 2: Main projector beams snap open instantly while progress bar finishes
+    if (animated) {
       Animated.parallel([
-        Animated.timing(beamOpacity, {
-          toValue: 1,
-          duration: 150, // Instant crisp pop
-          useNativeDriver: true,
+        Animated.timing(progressAnim, {
+          toValue: rpmValue / maxRpm,
+          duration: 800,
+          easing: Easing.bezier(0.4, 0, 0.2, 1),
+          useNativeDriver: false,
         }),
-        Animated.timing(drlOpacity, {
-          toValue: 1,
-          duration: 150,
-          useNativeDriver: true,
+        Animated.timing(glowAnim, {
+          toValue: rpmValue / maxRpm > 0.8 ? 1 : 0.3,
+          duration: 500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
         }),
-        Animated.timing(progressWidth, {
-          toValue: 1,
-          duration: 1400,
-          useNativeDriver: false, // Layout widths can't use native driver
-        }),
-      ]),
-      Animated.delay(600), // Hold the fully lit beast for a split second
-    ]).start(() => {
-      if (onComplete) onComplete();
+      ]).start();
+      setCurrentRpm(rpmValue);
+    } else {
+      setCurrentRpm(rpmValue);
+      progressAnim.setValue(rpmValue / maxRpm);
+    }
+  }, [rpmValue, animated, maxRpm]);
+
+  // Calculate segment colors
+  const getSegmentColor = (index: number) => {
+    const segmentRpm = (index / segmentCount) * maxRpm;
+    return getRpmColor(segmentRpm);
+  };
+
+  // Render RPM segments
+  const renderSegments = () => {
+    const segments = [];
+    const radius = size * 0.38;
+    const center = size / 2;
+    const startAngle = -Math.PI * 0.75;
+    const endAngle = Math.PI * 0.75;
+    const angleRange = endAngle - startAngle;
+
+    for (let i = 0; i < segmentCount; i++) {
+      const angle = startAngle + (i / segmentCount) * angleRange;
+      const nextAngle = startAngle + ((i + 1) / segmentCount) * angleRange;
+      
+      const x1 = center + radius * Math.cos(angle);
+      const y1 = center + radius * Math.sin(angle);
+      const x2 = center + radius * Math.cos(nextAngle);
+      const y2 = center + radius * Math.sin(nextAngle);
+
+      const progress = i / segmentCount;
+      const isActive = progress <= progressAnim._value || 
+                       (i === Math.floor(segmentCount * progressAnim._value));
+
+      segments.push(
+        <Path
+          key={i}
+          d={`M ${x1} ${y1} L ${x2} ${y2}`}
+          stroke={isActive ? getSegmentColor(i * (maxRpm / segmentCount)) : '#333333'}
+          strokeWidth={size * 0.035}
+          strokeLinecap="round"
+          opacity={isActive ? 1 : 0.3}
+        />
+      );
+    }
+    return segments;
+  };
+
+  // Render numeric display
+  const renderNumeric = () => {
+    if (!showNumeric) return null;
+    const displayRpm = Math.round(currentRpm);
+    const rpmColor = getRpmColor(currentRpm);
+    const scale = 1 + (currentRpm / maxRpm) * 0.2;
+
+    return (
+      <Animated.View style={[styles.numericContainer, { transform: [{ scale }] }]}>
+        <Animated.Text style={[styles.rpmValue, { color: rpmColor }]}>
+          {displayRpm}
+        </Animated.Text>
+        <Text style={styles.rpmLabel}>RPM</Text>
+      </Animated.View>
+    );
+  };
+
+  // Render glow effect
+  const renderGlow = () => {
+    if (!showGlow) return null;
+    const glowColor = getRpmColor(currentRpm);
+    const glowOpacity = glowAnim.interpolate({
+      inputRange: [0, 0.3, 0.8, 1],
+      outputRange: [0.1, 0.2, 0.6, 0.8]
     });
-  }, []);
+
+    return (
+      <Animated.View
+        style={[
+          styles.glowContainer,
+          {
+            opacity: glowOpacity,
+            transform: [{ scale: 1 + (currentRpm / maxRpm) * 0.3 }],
+          },
+        ]}
+      >
+        <BlurView intensity={20} tint="dark" style={styles.glowBlur}>
+          <View style={[styles.glow, { backgroundColor: glowColor }]} />
+        </BlurView>
+      </Animated.View>
+    );
+  };
+
+  // Render warning indicators
+  const renderWarnings = () => {
+    if (currentRpm < warningThreshold) return null;
+    const warningLevel = currentRpm >= criticalThreshold ? 'critical' : 'warning';
+    const pulseAnim = new Animated.Value(1);
+    
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.2,
+          duration: 500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    return (
+      <Animated.View style={[styles.warningContainer, { transform: [{ scale: pulseAnim }] }]}>
+        <View style={[
+          styles.warningDot,
+          { backgroundColor: warningLevel === 'critical' ? '#FF0040' : '#FFD700' }
+        ]} />
+        <Text style={[
+          styles.warningText,
+          { color: warningLevel === 'critical' ? '#FF0040' : '#FFD700' }
+        ]}>
+          {warningLevel === 'critical' ? '⚠ CRITICAL' : '⚠ WARNING'}
+        </Text>
+      </Animated.View>
+    );
+  };
 
   return (
-    <View style={styles.container}>
-      <HeadlightBackground width={width} height={height}>
-        
-        {/* Layered translucent drawing masks over the photo */}
-        <HeadlightOverlays 
-          drlOpacity={drlOpacity} 
-          beamOpacity={beamOpacity} 
-          width={width} 
-          height={height} 
-        />
+    <View style={[styles.container, { width: size, height: size }]}>
+      {renderGlow()}
+      
+      <View style={styles.svgContainer}>
+        <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+          <G rotation="-90" origin={`${size/2}, ${size/2}`}>
+            {renderSegments()}
+          </G>
+        </Svg>
+      </View>
 
-        {/* Lower interface layout bar */}
-        <HeadlightProgressBar 
-          label={label} 
-          progress={progressWidth} 
-          width={width} 
-        />
+      {renderNumeric()}
+      {renderWarnings()}
 
-      </HeadlightBackground>
+      {/* RPM Gauge Markers */}
+      <View style={styles.markersContainer}>
+        {[0, 25, 50, 75, 100].map((percent) => {
+          const angle = -135 + (percent / 100) * 270;
+          const radius = size * 0.45;
+          const x = size / 2 + radius * Math.cos((angle * Math.PI) / 180);
+          const y = size / 2 + radius * Math.sin((angle * Math.PI) / 180);
+          const value = Math.round((percent / 100) * maxRpm / 1000);
+          
+          return (
+            <Text
+              key={percent}
+              style={[
+                styles.markerLabel,
+                {
+                  left: x - size * 0.04,
+                  top: y - size * 0.04,
+                  fontSize: size * 0.035,
+                  color: percent >= 87.5 ? colors.critical : 
+                         percent >= 75 ? colors.high : '#888'
+                }
+              ]}
+            >
+              {value}
+            </Text>
+          );
+        })}
+      </View>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000000' },
-});
-// src/components/HeadlightBackground.tsx
-import React from 'react';
-import { StyleSheet, ImageBackground } from 'react-native';
-
-export default function HeadlightBackground({ width, height, children }: any) {
-  return (
-    <ImageBackground
-      source={require('../assets/m4_shadow_body.jpg')}
-      style={[styles.bgImage, { width, height }]}
-      resizeMode="cover"
-    >
-      {children}
-    </ImageBackground>
-  );
-}
-
-const styles = StyleSheet.create({
-  bgImage: {
-    flex: 1,
-    justifyContent: 'center',
+  container: {
     alignItems: 'center',
-    backgroundColor: '#000000',
+    justifyContent: 'center',
+    position: 'relative',
   },
-});
-// src/components/HeadlightOverlays.tsx
-import React from 'react';
-import { StyleSheet, Animated } from 'react-native';
-
-export default function HeadlightOverlays({ drlOpacity, beamOpacity, width, height }: any) {
-  return (
-    <>
-      {/* Glow Layer A: Sharp Daytime Running Light paths */}
-      <Animated.Image
-        source={require('../assets/vector_drl_glow.png')}
-        style={[styles.overlay, { width, height, opacity: drlOpacity }]}
-        resizeMode="cover"
-      />
-
-      {/* Glow Layer B: High intensity central lens flares */}
-      <Animated.Image
-        source={require('../assets/vector_projector_lens_flare.png')}
-        style={[styles.overlay, { width, height, opacity: beamOpacity }]}
-        resizeMode="cover"
-      />
-    </>
-  );
-}
-
-const styles = StyleSheet.create({
-  overlay: {
+  svgContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
+  },
+  numericContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rpmValue: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
+    includeFontPadding: false,
+  },
+  rpmLabel: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '600',
+    letterSpacing: 2,
+  },
+  glowContainer: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  glowBlur: {
+    width: '100%',
+    height: '100%',
+    overflow: 'hidden',
+    borderRadius: 100,
+  },
+  glow: {
+    width: '100%',
+    height: '100%',
+    opacity: 0.1,
+    borderRadius: 100,
+  },
+  warningContainer: {
+    position: 'absolute',
+    bottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  warningDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  warningText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+  markersContainer: {
+    position: 'absolute',
     width: '100%',
     height: '100%',
   },
+  markerLabel: {
+    position: 'absolute',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
 });
+
+export default RpmLoader;
