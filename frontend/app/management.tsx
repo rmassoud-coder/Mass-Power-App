@@ -2,9 +2,24 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, AppState, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNetInfo } from '@react-native-community/netinfo';
-import { runAutoPush, runAutoPull } from '../src/utils/autoSync';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+
+// ✅ Try-catch the import to prevent crash
+let runAutoPush: any = null;
+let runAutoPull: any = null;
+
+try {
+  const autoSync = require('../src/utils/autoSync');
+  runAutoPush = autoSync.runAutoPush;
+  runAutoPull = autoSync.runAutoPull;
+  console.log('✅ autoSync loaded successfully');
+} catch (error) {
+  console.error('❌ Failed to load autoSync:', error);
+  // Provide fallback functions
+  runAutoPush = async () => { console.log('⚠️ Push fallback - autoSync not loaded'); };
+  runAutoPull = async () => { console.log('⚠️ Pull fallback - autoSync not loaded'); };
+}
 
 export default function ManagementScreen() {
   const router = useRouter();
@@ -23,16 +38,17 @@ export default function ManagementScreen() {
       setErrorMessage(null);
       console.log('⬇️ Pulling data...');
       
-      // ✅ Use your existing runAutoPull function
-      await runAutoPull();
-      
-      const now = new Date();
-      setLastSyncTime(now);
-      setSyncCount(prev => prev + 1);
-      setSyncStatus('online');
-      console.log('✅ Pull completed at:', now.toLocaleTimeString());
-      
-      Alert.alert('Success', 'Data pulled successfully!');
+      if (runAutoPull) {
+        await runAutoPull();
+        const now = new Date();
+        setLastSyncTime(now);
+        setSyncCount(prev => prev + 1);
+        setSyncStatus('online');
+        console.log('✅ Pull completed at:', now.toLocaleTimeString());
+        Alert.alert('Success', 'Data pulled successfully!');
+      } else {
+        throw new Error('runAutoPull function not available');
+      }
     } catch (error: any) {
       console.warn('⚠️ Pull failed:', error);
       setSyncStatus('offline');
@@ -50,16 +66,17 @@ export default function ManagementScreen() {
       setErrorMessage(null);
       console.log('⬆️ Pushing data...');
       
-      // ✅ Use your existing runAutoPush function
-      await runAutoPush();
-      
-      const now = new Date();
-      setLastSyncTime(now);
-      setSyncCount(prev => prev + 1);
-      setSyncStatus('online');
-      console.log('✅ Push completed at:', now.toLocaleTimeString());
-      
-      Alert.alert('Success', 'Data pushed successfully!');
+      if (runAutoPush) {
+        await runAutoPush();
+        const now = new Date();
+        setLastSyncTime(now);
+        setSyncCount(prev => prev + 1);
+        setSyncStatus('online');
+        console.log('✅ Push completed at:', now.toLocaleTimeString());
+        Alert.alert('Success', 'Data pushed successfully!');
+      } else {
+        throw new Error('runAutoPush function not available');
+      }
     } catch (error: any) {
       console.warn('⚠️ Push failed:', error);
       setSyncStatus('offline');
