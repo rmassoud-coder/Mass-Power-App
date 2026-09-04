@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, AppState, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNetInfo } from '@react-native-community/netinfo';
-import { runAutoPush, runAutoPull } from '../utils/autoSync';
+import { runAutoPush, runAutoPull } from '../src/utils/autoSync';
 import { useRouter } from 'expo-router';
 
 export default function ManagementScreen() {
