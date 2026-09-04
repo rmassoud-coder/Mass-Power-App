@@ -1,8 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, AppState, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNetInfo } from '@react-native-community/netinfo';
-// import { runAutoPush, runAutoPull } from '../src/utils/autoSync'; // REMOVED
+// import { useNetInfo } from '@react-native-community/netinfo'; // REMOVED
 import { useRouter } from 'expo-router';
 
 export default function ManagementScreen() {
@@ -13,7 +12,10 @@ export default function ManagementScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [syncCount, setSyncCount] = useState(0);
-  const netInfo = useNetInfo();
+  // const netInfo = useNetInfo(); // REMOVED
+
+  // Simulate network as always connected
+  const netInfo = { isConnected: true };
 
   // ============================================================
   // SYNC CONFIGURATION
@@ -30,8 +32,6 @@ export default function ManagementScreen() {
       setSyncStatus('syncing');
       setErrorMessage(null);
       console.log('⬇️ Pulling data...');
-      
-      // await runAutoPull(); // REMOVED
       
       // Simulate sync for testing
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -56,8 +56,6 @@ export default function ManagementScreen() {
       setSyncStatus('syncing');
       setErrorMessage(null);
       console.log('⬆️ Pushing data...');
-      
-      // await runAutoPush(); // REMOVED
       
       // Simulate sync for testing
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -219,9 +217,9 @@ export default function ManagementScreen() {
           <View style={styles.networkContainer}>
             <Text style={styles.networkLabel}>Network</Text>
             <View style={styles.networkRow}>
-              <Ionicons name={netInfo.isConnected ? 'wifi' : 'wifi-outline'} size={16} color={netInfo.isConnected ? '#22c55e' : '#ef4444'} />
-              <Text style={[styles.networkText, { color: netInfo.isConnected ? '#22c55e' : '#ef4444' }]}>
-                {netInfo.isConnected ? 'Connected' : 'Disconnected'}
+              <Ionicons name="wifi" size={16} color="#22c55e" />
+              <Text style={[styles.networkText, { color: '#22c55e' }]}>
+                Connected
               </Text>
             </View>
           </View>
