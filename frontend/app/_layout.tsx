@@ -28,7 +28,7 @@ export default function RootLayout() {
           const iconAssets = [
             require('../assets/images/icon.png'),
             require('../assets/images/adaptive-icon.png'),
-            require('../assets/images/mass-power-logo.png'),
+            require('../assets/images/mp-logo.png'),
           ];
 
           const cacheImages = iconAssets.map((icon) => {
