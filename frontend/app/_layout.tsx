@@ -62,16 +62,67 @@ export default function RootLayout() {
     setShowLoader(false);
   };
 
+  // ============================================================
+  // SYNC CONFIGURATION
+  // ============================================================
+  // ⭐ CHANGE THIS VALUE TO ADJUST SYNC INTERVAL
+  // Value is in milliseconds:
+  // 1 minute  = 60000
+  // 5 minutes = 300000
+  // 10 minutes = 600000
+  // 15 minutes = 900000
+  // 20 minutes = 1200000  <-- CURRENT VALUE
+  // 30 minutes = 1800000
+  // 1 hour    = 3600000
+  // ============================================================
+  const SYNC_INTERVAL_MS = 1200000; // 20 minutes
+  // ============================================================
+
   // Safe auto-pull: merges cloud changes in
   useEffect(() => {
-    runAutoPull().catch(() => { /* swallowed intentionally */ });
+    let lastSyncTime = Date.now();
 
+    const performSync = async () => {
+      try {
+        console.log('🔄 Syncing database...');
+        await runAutoPull();
+        lastSyncTime = Date.now();
+        console.log('✅ Sync completed at:', new Date().toLocaleTimeString());
+      } catch (error) {
+        console.warn('⚠️ Sync failed:', error);
+      }
+    };
+
+    // Initial sync when app loads
+    performSync();
+
+    // ============================================================
+    // PERIODIC SYNC EVERY SYNC_INTERVAL_MS
+    // ============================================================
+    const intervalId = setInterval(() => {
+      const timeSinceLastSync = Date.now() - lastSyncTime;
+      
+      // Only sync if enough time has passed
+      if (timeSinceLastSync >= SYNC_INTERVAL_MS) {
+        console.log(`⏰ ${SYNC_INTERVAL_MS / 60000} minutes elapsed, syncing...`);
+        performSync();
+      }
+    }, 60000); // Check every minute if sync is needed
+    // ============================================================
+
+    // Sync when app comes back to foreground
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
-        runAutoPull().catch(() => { /* swallowed intentionally */ });
+        console.log('📱 App came to foreground, syncing...');
+        performSync();
       }
     });
-    return () => sub.remove();
+
+    // Cleanup on unmount
+    return () => {
+      clearInterval(intervalId);
+      sub.remove();
+    };
   }, []);
 
   // Show loader while app is preparing or loader is visible
