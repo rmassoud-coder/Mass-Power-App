@@ -81,12 +81,9 @@ export default function ManagementScreen() {
     }
   };
 
-  // Periodic sync setup
+  // Periodic sync setup - NO initial sync on load
   useEffect(() => {
     isMounted.current = true;
-
-    // Initial sync when component mounts
-    performPull();
 
     // ============================================================
     // PERIODIC SYNC EVERY SYNC_INTERVAL_MS
