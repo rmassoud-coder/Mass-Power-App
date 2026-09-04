@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, AppState, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNetInfo } from '@react-native-community/netinfo';
-import { runAutoPush, runAutoPull } from '../utils/autoSync'; // ✅ Fixed: combined import
+// ✅ CORRECTED: File is at frontend/src/utils/autoSync.ts
+import { runAutoPush, runAutoPull } from '../src/utils/autoSync';
 
 export default function ManagementScreen() {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'online' | 'offline'>('idle');
