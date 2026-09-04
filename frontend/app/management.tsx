@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, AppState, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNetInfo } from '@react-native-community/netinfo';
-import { runAutoPush, runAutoPull } from '../src/utils/autoSync';
+// import { runAutoPush, runAutoPull } from '../src/utils/autoSync'; // REMOVED
 import { useRouter } from 'expo-router';
 
 export default function ManagementScreen() {
@@ -18,7 +18,6 @@ export default function ManagementScreen() {
   // ============================================================
   // SYNC CONFIGURATION
   // ============================================================
-  // ⭐ CHANGE THIS VALUE TO ADJUST SYNC INTERVAL
   const SYNC_INTERVAL_MS = 1500000; // 25 minutes
   // ============================================================
 
@@ -32,7 +31,10 @@ export default function ManagementScreen() {
       setErrorMessage(null);
       console.log('⬇️ Pulling data...');
       
-      await runAutoPull();
+      // await runAutoPull(); // REMOVED
+      
+      // Simulate sync for testing
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       const now = new Date();
       setLastSyncTime(now);
@@ -55,7 +57,10 @@ export default function ManagementScreen() {
       setErrorMessage(null);
       console.log('⬆️ Pushing data...');
       
-      await runAutoPush();
+      // await runAutoPush(); // REMOVED
+      
+      // Simulate sync for testing
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       const now = new Date();
       setLastSyncTime(now);
@@ -75,15 +80,11 @@ export default function ManagementScreen() {
   useEffect(() => {
     isMounted.current = true;
 
-    // ============================================================
-    // PERIODIC SYNC EVERY SYNC_INTERVAL_MS
-    // ============================================================
     intervalRef.current = setInterval(() => {
       if (isMounted.current && netInfo.isConnected) {
         performPull();
       }
     }, SYNC_INTERVAL_MS);
-    // ============================================================
 
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active' && isMounted.current && netInfo.isConnected) {
@@ -101,7 +102,6 @@ export default function ManagementScreen() {
     };
   }, []);
 
-  // Format last sync time for display
   const getLastSyncDisplay = () => {
     if (!lastSyncTime) return 'Never';
     const now = new Date();
@@ -109,7 +109,7 @@ export default function ManagementScreen() {
     const diffMins = Math.floor(diffMs / 60000);
     
     if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} minutes ago`;
+    if (diffMins < 60) return `${diffMins}m ago`;
     const hours = Math.floor(diffMins / 60);
     const mins = diffMins % 60;
     if (hours < 24) {
@@ -118,7 +118,6 @@ export default function ManagementScreen() {
     return lastSyncTime.toLocaleDateString();
   };
 
-  // Get status color
   const getStatusColor = () => {
     if (!netInfo.isConnected) return '#ef4444';
     switch (syncStatus) {
