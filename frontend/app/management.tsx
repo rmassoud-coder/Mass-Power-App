@@ -1,62 +1,29 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, AppState, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNetInfo } from '@react-native-community/netinfo';
-import { runAutoPull } from '../utils/autoSync';
-import { runAutoPush } from '../utils/autoSync'; // Assuming you have a push function
+import { runAutoPush, runAutoPull } from '../utils/autoSync'; // ✅ Fixed: combined import
 
-interface SyncStatusPillProps {
-  showLabel?: boolean;
-  onSyncPress?: () => void;
-}
-
-export default function SyncStatusPill({ showLabel = true, onSyncPress }: SyncStatusPillProps) {
+export default function ManagementScreen() {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'online' | 'offline'>('idle');
-  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
-  const [syncCount, setSyncCount] = useState(0);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPushing, setIsPushing] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const netInfo = useNetInfo();
-  
-  // ============================================================
-  // SYNC CONFIGURATION
-  // ============================================================
-  // ⭐ CHANGE THIS VALUE TO ADJUST SYNC INTERVAL
-  // Value is in milliseconds:
-  // 1 minute  = 60000
-  // 5 minutes = 300000
-  // 10 minutes = 600000
-  // 15 minutes = 900000
-  // 20 minutes = 1200000
-  // 25 minutes = 1500000  <-- CURRENT VALUE
-  // 30 minutes = 1800000
-  // 1 hour    = 3600000
-  // ============================================================
-  const SYNC_INTERVAL_MS = 1500000; // 25 minutes
-  // ============================================================
 
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const isMounted = useRef(true);
-
-  const performPull = async (trigger: 'initial' | 'periodic' | 'foreground' | 'manual') => {
+  const performPull = async () => {
     try {
       setIsPulling(true);
       setSyncStatus('syncing');
       setErrorMessage(null);
-      console.log(`⬇️ [${trigger}] Pulling data...`);
+      console.log('⬇️ Pulling data...');
       
-      // Call your pull function
       await runAutoPull();
       
-      const now = new Date();
-      setLastSyncTime(now);
-      setSyncCount(prev => prev + 1);
       setSyncStatus('online');
-      
-      console.log(`✅ [${trigger}] Pull completed at:`, now.toLocaleTimeString());
+      console.log('✅ Pull completed');
     } catch (error: any) {
-      console.warn(`⚠️ [${trigger}] Pull failed:`, error);
+      console.warn('⚠️ Pull failed:', error);
       setSyncStatus('offline');
       setErrorMessage(error?.message || 'Pull failed');
     } finally {
@@ -64,24 +31,19 @@ export default function SyncStatusPill({ showLabel = true, onSyncPress }: SyncSt
     }
   };
 
-  const performPush = async (trigger: 'manual' | 'periodic') => {
+  const performPush = async () => {
     try {
       setIsPushing(true);
       setSyncStatus('syncing');
       setErrorMessage(null);
-      console.log(`⬆️ [${trigger}] Pushing data...`);
+      console.log('⬆️ Pushing data...');
       
-      // Call your push function
       await runAutoPush();
       
-      const now = new Date();
-      setLastSyncTime(now);
-      setSyncCount(prev => prev + 1);
       setSyncStatus('online');
-      
-      console.log(`✅ [${trigger}] Push completed at:`, now.toLocaleTimeString());
+      console.log('✅ Push completed');
     } catch (error: any) {
-      console.warn(`⚠️ [${trigger}] Push failed:`, error);
+      console.warn('⚠️ Push failed:', error);
       setSyncStatus('offline');
       setErrorMessage(error?.message || 'Push failed');
     } finally {
@@ -89,33 +51,7 @@ export default function SyncStatusPill({ showLabel = true, onSyncPress }: SyncSt
     }
   };
 
-  const performSync = async (trigger: 'initial' | 'periodic' | 'foreground' | 'manual') => {
-    // For periodic sync, do both pull and push
-    if (trigger === 'periodic' || trigger === 'initial' || trigger === 'foreground') {
-      try {
-        setSyncStatus('syncing');
-        setErrorMessage(null);
-        console.log(`🔄 [${trigger}] Syncing (pull + push)...`);
-        
-        // Do both operations
-        await runAutoPull();
-        await runAutoPush();
-        
-        const now = new Date();
-        setLastSyncTime(now);
-        setSyncCount(prev => prev + 1);
-        setSyncStatus('online');
-        
-        console.log(`✅ [${trigger}] Sync completed at:`, now.toLocaleTimeString());
-      } catch (error: any) {
-        console.warn(`⚠️ [${trigger}] Sync failed:`, error);
-        setSyncStatus('offline');
-        setErrorMessage(error?.message || 'Sync failed');
-      }
-    }
-  };
-
-  // Check network status and update pill
+  // Update status based on network
   useEffect(() => {
     if (netInfo.isConnected === false) {
       setSyncStatus('offline');
@@ -124,255 +60,112 @@ export default function SyncStatusPill({ showLabel = true, onSyncPress }: SyncSt
     }
   }, [netInfo.isConnected]);
 
-  // Setup periodic sync
-  useEffect(() => {
-    isMounted.current = true;
-
-    // Initial sync when component mounts
-    performSync('initial');
-
-    // ============================================================
-    // PERIODIC SYNC EVERY SYNC_INTERVAL_MS
-    // ============================================================
-    intervalRef.current = setInterval(() => {
-      if (isMounted.current && netInfo.isConnected) {
-        performSync('periodic');
-      } else if (!netInfo.isConnected) {
-        console.log('📡 Skipping sync - device offline');
-      }
-    }, SYNC_INTERVAL_MS);
-    // ============================================================
-
-    // Sync when app comes back to foreground
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active' && isMounted.current && netInfo.isConnected) {
-        performSync('foreground');
-      }
-    });
-
-    // Cleanup
-    return () => {
-      isMounted.current = false;
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      subscription.remove();
-    };
-  }, []);
-
-  // Determine pill appearance
-  const getStatusConfig = () => {
-    // Offline takes priority
-    if (!netInfo.isConnected) {
-      return {
-        icon: 'cloud-offline-outline',
-        backgroundColor: '#ef4444',
-        text: 'Offline',
-        textColor: '#ffffff',
-        dotColor: '#ef4444',
-      };
-    }
-
-    switch (syncStatus) {
-      case 'syncing':
-        return {
-          icon: 'sync-outline',
-          backgroundColor: '#f59e0b',
-          text: isPushing ? 'Pushing...' : isPulling ? 'Pulling...' : 'Syncing...',
-          textColor: '#ffffff',
-          dotColor: '#f59e0b',
-        };
-      case 'online':
-        return {
-          icon: 'cloud-outline',
-          backgroundColor: '#22c55e',
-          text: 'Online',
-          textColor: '#ffffff',
-          dotColor: '#22c55e',
-        };
-      case 'offline':
-        return {
-          icon: 'cloud-offline-outline',
-          backgroundColor: '#ef4444',
-          text: 'Offline',
-          textColor: '#ffffff',
-          dotColor: '#ef4444',
-        };
-      case 'idle':
-      default:
-        return {
-          icon: 'cloud-outline',
-          backgroundColor: '#64748b',
-          text: 'Loading...',
-          textColor: '#ffffff',
-          dotColor: '#64748b',
-        };
-    }
-  };
-
-  const config = getStatusConfig();
-
-  // Format last sync time for display
-  const getLastSyncDisplay = () => {
-    if (!lastSyncTime) return '';
-    const now = new Date();
-    const diffMs = now.getTime() - lastSyncTime.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    const hours = Math.floor(diffMins / 60);
-    const mins = diffMins % 60;
-    if (hours < 24) {
-      return mins > 0 ? `${hours}h ${mins}m ago` : `${hours}h ago`;
-    }
-    return lastSyncTime.toLocaleDateString();
-  };
-
   return (
     <View style={styles.container}>
-      <View style={[styles.pill, { backgroundColor: config.backgroundColor }]}>
-        <View style={[styles.dot, { backgroundColor: config.dotColor }]} />
-        
-        <Ionicons name={config.icon as any} size={14} color="#fff" />
-        
-        {showLabel && (
-          <Text style={[styles.statusText, { color: config.textColor }]}>
-            {config.text}
-          </Text>
-        )}
-        
-        {lastSyncTime && syncStatus !== 'syncing' && syncStatus !== 'idle' && (
-          <Text style={[styles.syncTime, { color: config.textColor }]}>
-            • {getLastSyncDisplay()}
-          </Text>
-        )}
-        
-        {syncCount > 0 && (
-          <View style={styles.syncCountBadge}>
-            <Text style={styles.syncCountText}>{syncCount}</Text>
-          </View>
-        )}
-        
-        {errorMessage && (
-          <Ionicons name="alert-circle-outline" size={14} color="#fff" />
-        )}
-      </View>
+      <Text style={styles.title}>Management</Text>
       
-      {/* Push and Pull Buttons */}
+      <View style={styles.statusContainer}>
+        <Text style={styles.statusLabel}>Status:</Text>
+        <View style={[styles.statusBadge, { backgroundColor: syncStatus === 'online' ? '#22c55e' : syncStatus === 'syncing' ? '#f59e0b' : '#ef4444' }]}>
+          <Text style={styles.statusText}>
+            {syncStatus === 'online' ? '✅ Online' : syncStatus === 'syncing' ? '🔄 Syncing...' : '❌ Offline'}
+          </Text>
+        </View>
+      </View>
+
+      {errorMessage && (
+        <Text style={styles.errorText}>{errorMessage}</Text>
+      )}
+
       <View style={styles.buttonRow}>
         <TouchableOpacity 
           style={[styles.actionButton, styles.pullButton, (isPulling || !netInfo.isConnected) && styles.buttonDisabled]}
-          onPress={() => performPull('manual')}
+          onPress={performPull}
           disabled={isPulling || !netInfo.isConnected}
-          activeOpacity={0.7}
         >
-          <Ionicons name="download-outline" size={16} color="#fff" />
+          <Ionicons name="download-outline" size={20} color="#fff" />
           <Text style={styles.buttonText}>Pull</Text>
         </TouchableOpacity>
         
         <TouchableOpacity 
           style={[styles.actionButton, styles.pushButton, (isPushing || !netInfo.isConnected) && styles.buttonDisabled]}
-          onPress={() => performPush('manual')}
+          onPress={performPush}
           disabled={isPushing || !netInfo.isConnected}
-          activeOpacity={0.7}
         >
-          <Ionicons name="upload-outline" size={16} color="#fff" />
+          <Ionicons name="upload-outline" size={20} color="#fff" />
           <Text style={styles.buttonText}>Push</Text>
         </TouchableOpacity>
       </View>
-      
-      {errorMessage && (
-        <Text style={styles.errorText}>{errorMessage}</Text>
-      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    alignItems: 'center',
+    flex: 1,
+    backgroundColor: '#0f172a',
+    padding: 20,
     justifyContent: 'center',
-    gap: 8,
+    alignItems: 'center',
   },
-  pill: {
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 30,
+  },
+  statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 20,
+  },
+  statusLabel: {
+    fontSize: 16,
+    color: '#94a3b8',
+    marginRight: 10,
+  },
+  statusBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    gap: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    minHeight: 32,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 2,
   },
   statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-  syncTime: {
-    fontSize: 10,
-    fontWeight: '400',
-    opacity: 0.8,
-  },
-  syncCountBadge: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderRadius: 10,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    marginLeft: 2,
-  },
-  syncCountText: {
-    fontSize: 8,
-    fontWeight: '700',
     color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   errorText: {
-    fontSize: 10,
     color: '#ef4444',
-    marginTop: 2,
+    fontSize: 12,
+    marginBottom: 20,
     textAlign: 'center',
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 4,
+    gap: 12,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    minWidth: 70,
+    gap: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    minWidth: 120,
     justifyContent: 'center',
   },
   pullButton: {
-    backgroundColor: '#3b82f6', // Blue
+    backgroundColor: '#3b82f6',
   },
   pushButton: {
-    backgroundColor: '#8b5cf6', // Purple
+    backgroundColor: '#8b5cf6',
   },
   buttonDisabled: {
     opacity: 0.5,
   },
   buttonText: {
     color: '#ffffff',
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: '600',
   },
 });
