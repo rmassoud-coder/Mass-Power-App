@@ -23,6 +23,7 @@ export default function ManagementScreen() {
       setErrorMessage(null);
       console.log('⬇️ Pulling data...');
       
+      // ✅ Use your existing runAutoPull function
       await runAutoPull();
       
       const now = new Date();
@@ -49,6 +50,7 @@ export default function ManagementScreen() {
       setErrorMessage(null);
       console.log('⬆️ Pushing data...');
       
+      // ✅ Use your existing runAutoPush function
       await runAutoPush();
       
       const now = new Date();
