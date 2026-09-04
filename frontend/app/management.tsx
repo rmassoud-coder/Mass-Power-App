@@ -1,487 +1,565 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+  ScrollView,
+  useWindowDimensions,
+  Modal,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import * as Updates from 'expo-updates';
+import {
+  searchCustomers,
+  searchVehiclesByVin,
+  searchVehiclesByPlate,
+  listInventory,
+  listDueOilReminders,
+} from '@/src/db/database';
+import SyncStatusPill from '@/src/components/SyncStatusPill';
+import MassPowerLogo from '@/src/components/MassPowerLogo';
 
-// Try to load the netinfo package safely
-let useNetInfo: any = null;
-try {
-  const netinfo = require('@react-native-community/netinfo');
-  useNetInfo = netinfo.useNetInfo;
-  console.log('✅ NetInfo loaded successfully');
-} catch (error) {
-  console.warn('⚠️ NetInfo not available, using fallback');
-  // Fallback: always return connected
-  useNetInfo = () => ({ isConnected: true, details: null, type: 'wifi' });
-}
+// Module-level flags
+let outOfStockReminderShown = false;
+let oilReminderShown = false;
 
-// Try to load autoSync safely
-let runAutoPush: any = null;
-let runAutoPull: any = null;
-try {
-  const autoSync = require('../src/utils/autoSync');
-  runAutoPush = autoSync.runAutoPush;
-  runAutoPull = autoSync.runAutoPull;
-  console.log('✅ autoSync loaded successfully');
-} catch (error) {
-  console.warn('⚠️ autoSync not available, using fallback');
-  runAutoPush = async () => { console.log('⚠️ Push fallback'); await new Promise(r => setTimeout(r, 500)); };
-  runAutoPull = async () => { console.log('⚠️ Pull fallback'); await new Promise(r => setTimeout(r, 500)); };
-}
-
-export default function ManagementScreen() {
-  const router = useRouter();
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'online' | 'offline'>('idle');
-  const [isPushing, setIsPushing] = useState(false);
-  const [isPulling, setIsPulling] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
-  const [syncCount, setSyncCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+export default function HomeScreen() {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(false);
   
-  // Safely use netInfo
-  let netInfo: any = { isConnected: true, details: null, type: 'wifi' };
-  try {
-    const netinfoHook = useNetInfo();
-    if (netinfoHook) {
-      netInfo = netinfoHook;
-    }
-  } catch (error) {
-    console.warn('⚠️ useNetInfo hook failed, using fallback');
-  }
+  const router = useRouter();
+  const { height } = useWindowDimensions();
 
+  const isSmallScreen = height < 700;
+  const cardPadding = isSmallScreen ? 12 : 16;
+  const cardMargin = isSmallScreen ? 8 : 12;
+  const buttonPadding = isSmallScreen ? 8 : 12;
+
+  const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const SECRET_PIN = '3945';
+
+  // Out-of-stock reminder
   useEffect(() => {
-    setLoading(false);
-  }, []);
+    if (outOfStockReminderShown) return;
+    outOfStockReminderShown = true;
 
-  const performPull = async () => {
-    try {
-      setIsPulling(true);
-      setSyncStatus('syncing');
-      setErrorMessage(null);
-      console.log('⬇️ Pulling data...');
-      
-      if (runAutoPull) {
-        await runAutoPull();
-        const now = new Date();
-        setLastSyncTime(now);
-        setSyncCount(prev => prev + 1);
-        setSyncStatus('online');
-        console.log('✅ Pull completed at:', now.toLocaleTimeString());
-        Alert.alert('Success', 'Data pulled successfully!');
-      } else {
-        // Simulate pull for demo
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        const now = new Date();
-        setLastSyncTime(now);
-        setSyncCount(prev => prev + 1);
-        setSyncStatus('online');
-        Alert.alert('Success', 'Data pulled successfully!');
+    const checkOutOfStock = async () => {
+      try {
+        const items = await listInventory();
+        const outOfStock = items.filter((it) => Number(it.item_quantity) === 0);
+        if (outOfStock.length === 0) return;
+
+        const preview = outOfStock
+          .slice(0, 8)
+          .map((it) => `• ${it.item_number} — ${it.item_type}`)
+          .join('\n');
+        const extra =
+          outOfStock.length > 8 ? `\n…and ${outOfStock.length - 8} more` : '';
+
+        setTimeout(() => {
+          Alert.alert(
+            `Out of Stock (${outOfStock.length})`,
+            `The following inventory item${outOfStock.length === 1 ? '' : 's'} ` +
+              `${outOfStock.length === 1 ? 'is' : 'are'} at zero quantity:\n\n${preview}${extra}`,
+            [
+              { text: 'Dismiss', style: 'cancel' },
+              {
+                text: 'View Inventory',
+                onPress: () => router.push('/inventory'),
+              },
+            ],
+            { cancelable: true }
+          );
+        }, 350);
+      } catch (e) {
+        console.warn('Out-of-stock check failed:', e);
       }
-    } catch (error: any) {
-      console.warn('⚠️ Pull failed:', error);
-      setSyncStatus('offline');
-      setErrorMessage(error?.message || 'Pull failed');
-      Alert.alert('Error', 'Pull failed: ' + (error?.message || 'Unknown error'));
-    } finally {
-      setIsPulling(false);
-    }
-  };
+    };
 
-  const performPush = async () => {
-    try {
-      setIsPushing(true);
-      setSyncStatus('syncing');
-      setErrorMessage(null);
-      console.log('⬆️ Pushing data...');
-      
-      if (runAutoPush) {
-        await runAutoPush();
-        const now = new Date();
-        setLastSyncTime(now);
-        setSyncCount(prev => prev + 1);
-        setSyncStatus('online');
-        console.log('✅ Push completed at:', now.toLocaleTimeString());
-        Alert.alert('Success', 'Data pushed successfully!');
-      } else {
-        // Simulate push for demo
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        const now = new Date();
-        setLastSyncTime(now);
-        setSyncCount(prev => prev + 1);
-        setSyncStatus('online');
-        Alert.alert('Success', 'Data pushed successfully!');
-      }
-    } catch (error: any) {
-      console.warn('⚠️ Push failed:', error);
-      setSyncStatus('offline');
-      setErrorMessage(error?.message || 'Push failed');
-      Alert.alert('Error', 'Push failed: ' + (error?.message || 'Unknown error'));
-    } finally {
-      setIsPushing(false);
-    }
-  };
+    checkOutOfStock();
+  }, [router]);
 
-  // Update status based on network
+  // Oil-change reminders
   useEffect(() => {
-    if (netInfo.isConnected === false) {
-      setSyncStatus('offline');
-    } else if (syncStatus !== 'syncing' && syncStatus !== 'idle') {
-      setSyncStatus('online');
-    }
-  }, [netInfo.isConnected]);
-
-  // Format last sync time for display
-  const getLastSyncDisplay = () => {
-    if (!lastSyncTime) return 'Never';
-    const now = new Date();
-    const diffMs = now.getTime() - lastSyncTime.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
+    if (oilReminderShown) return;
     
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    const hours = Math.floor(diffMins / 60);
-    const mins = diffMins % 60;
-    if (hours < 24) {
-      return mins > 0 ? `${hours}h ${mins}m ago` : `${hours}h ago`;
+    const checkDueReminders = async () => {
+      try {
+        const due = await listDueOilReminders();
+        
+        if (due.length === 0) {
+          oilReminderShown = true;
+          return;
+        }
+
+        const preview = due
+          .slice(0, 6)
+          .map(
+            (r) =>
+              `• ${r.customer_name} — ${[r.vehicle_make, r.vehicle_model]
+                .filter(Boolean)
+                .join(' ') || 'vehicle'}`
+          )
+          .join('\n');
+        const extra = due.length > 6 ? `\n…and ${due.length - 6} more` : '';
+
+        setTimeout(() => {
+          Alert.alert(
+            `Oil Change Reminders (${due.length})`,
+            `${due.length} customer${due.length === 1 ? ' is' : 's are'} due for an oil change:\n\n${preview}${extra}`,
+            [
+              { text: 'Later', style: 'cancel' },
+              {
+                text: 'Open Reminders',
+                onPress: () => router.push('/reminders'),
+              },
+            ],
+            { cancelable: true }
+          );
+          oilReminderShown = true;
+        }, 900);
+      } catch (e) {
+        console.warn('Oil reminder check failed:', e);
+        oilReminderShown = true; 
+      }
+    };
+
+    checkDueReminders();
+  }, [router]);
+
+  const handleSearch = async () => {
+    const query = searchQuery.trim();
+    if (!query) {
+      Alert.alert('خطأ', 'الرجاء إدخال كلمة للبحث');
+      return;
     }
-    return lastSyncTime.toLocaleDateString();
+
+    setLoading(true);
+    try {
+      let results: any[] = [];
+
+      const mobileResults = await searchCustomers(query);
+      if (mobileResults.length > 0) {
+        results = mobileResults;
+      } else {
+        const vinResults = await searchVehiclesByVin(query);
+        if (vinResults.length > 0) {
+          results = vinResults;
+        } else {
+          const plateResults = await searchVehiclesByPlate(query);
+          if (plateResults.length > 0) {
+            results = plateResults;
+          }
+        }
+      }
+
+      if (results.length === 0) {
+        Alert.alert(
+          'لا توجد نتائج',
+          'هل تريد إنشاء عميل جديد؟',
+          [
+            { text: 'إلغاء', style: 'cancel' },
+            { text: 'إنشاء', onPress: () => router.push('/add-customer') },
+          ]
+        );
+      } else {
+        router.push({
+          pathname: '/search-results',
+          params: { results: JSON.stringify(results) },
+        });
+      }
+    } catch (error: any) {
+      Alert.alert('خطأ', error?.message || 'فشل البحث. الرجاء المحاولة مرة أخرى.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Get status color
-  const getStatusColor = () => {
-    if (!netInfo.isConnected) return '#ef4444';
-    switch (syncStatus) {
-      case 'syncing': return '#f59e0b';
-      case 'online': return '#22c55e';
-      case 'offline': return '#ef4444';
-      default: return '#64748b';
-    }
+  const handleBackendPress = () => {
+    setPinModalVisible(true);
   };
 
-  // Get status icon
-  const getStatusIcon = () => {
-    if (!netInfo.isConnected) return 'wifi-outline';
-    switch (syncStatus) {
-      case 'syncing': return 'sync-outline';
-      case 'online': return 'cloud-outline';
-      case 'offline': return 'cloud-offline-outline';
-      default: return 'cloud-outline';
+  const handlePinAuth = () => {
+    if (pinInput === SECRET_PIN) {
+      setPinModalVisible(false);
+      setPinInput('');
+      router.push('/management');
+    } else {
+      Alert.alert('خطأ', 'رمز PIN غير صحيح. الرجاء المحاولة مرة أخرى.');
+      setPinInput('');
     }
   };
-
-  // Get status text
-  const getStatusText = () => {
-    if (!netInfo.isConnected) return 'Offline';
-    switch (syncStatus) {
-      case 'syncing': return isPushing ? 'Pushing...' : isPulling ? 'Pulling...' : 'Syncing...';
-      case 'online': return 'Online';
-      case 'offline': return 'Offline';
-      default: return 'Loading...';
-    }
-  };
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3b82f6" />
-        <Text style={styles.loadingText}>Loading Management...</Text>
-      </View>
-    );
-  }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#ffffff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Management</Text>
-        <View style={styles.headerRight} />
-      </View>
-
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-        {/* Status Card */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Sync Status</Text>
-          
-          <View style={styles.statusRow}>
-            <View style={[styles.statusIconContainer, { backgroundColor: getStatusColor() + '20' }]}>
-              <Ionicons name={getStatusIcon()} size={24} color={getStatusColor()} />
-            </View>
-            <View style={styles.statusInfo}>
-              <Text style={[styles.statusText, { color: getStatusColor() }]}>
-                {getStatusText()}
-              </Text>
-              <Text style={styles.statusSubtext}>
-                Last sync: {getLastSyncDisplay()}
-              </Text>
-              {syncCount > 0 && (
-                <Text style={styles.statusSubtext}>
-                  Total syncs: {syncCount}
-                </Text>
-              )}
-            </View>
-            {/* Small dot indicator */}
-            <View style={[styles.dotIndicator, { backgroundColor: getStatusColor() }]} />
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
+      >
+        <View style={styles.header}>
+          <View style={styles.logoRow}>
+            {/* REAL LOGO - RESTORED */}
+            <MassPowerLogo size={75} />
+            <Text style={styles.headerSubtitle}>   Auto Services</Text>
           </View>
-
-          {errorMessage && (
-            <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle" size={16} color="#ef4444" />
-              <Text style={styles.errorText}>{errorMessage}</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Sync Buttons */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Manual Sync</Text>
-          
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.pullButton, (isPulling || !netInfo.isConnected) && styles.buttonDisabled]}
-              onPress={performPull}
-              disabled={isPulling || !netInfo.isConnected}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="download-outline" size={24} color="#fff" />
-              <View style={styles.buttonTextContainer}>
-                <Text style={styles.buttonText}>Pull Data</Text>
-                <Text style={styles.buttonSubtext}>Download from cloud</Text>
-              </View>
-              {isPulling && (
-                <View style={styles.spinner}>
-                  <Ionicons name="sync-outline" size={20} color="#fff" />
-                </View>
-              )}
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.pushButton, (isPushing || !netInfo.isConnected) && styles.buttonDisabled]}
-              onPress={performPush}
-              disabled={isPushing || !netInfo.isConnected}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="upload-outline" size={24} color="#fff" />
-              <View style={styles.buttonTextContainer}>
-                <Text style={styles.buttonText}>Push Data</Text>
-                <Text style={styles.buttonSubtext}>Upload to cloud</Text>
-              </View>
-              {isPushing && (
-                <View style={styles.spinner}>
-                  <Ionicons name="sync-outline" size={20} color="#fff" />
-                </View>
-              )}
-            </TouchableOpacity>
+          <View style={{ marginTop: 6 }}>
+            <SyncStatusPill />
           </View>
         </View>
 
-        {/* Network Info */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Network Information</Text>
-          
-          <View style={styles.networkRow}>
-            <Ionicons name={netInfo.isConnected ? 'wifi' : 'wifi-outline'} size={20} color={netInfo.isConnected ? '#22c55e' : '#ef4444'} />
-            <Text style={[styles.networkText, { color: netInfo.isConnected ? '#22c55e' : '#ef4444' }]}>
-              {netInfo.isConnected ? 'Connected' : 'Disconnected'}
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[styles.searchCard, { padding: cardPadding, marginBottom: cardMargin }]}>
+            <View style={styles.searchHeader}>
+              <Ionicons name="search-outline" size={isSmallScreen ? 18 : 22} color="#00d4ff" />
+              <Text style={styles.searchTitle}>ابحث عن عميل</Text>
+            </View>
+            <Text style={styles.searchHint}>
+              أدخل رقم الموبايل، رقم الهيكل، أو رقم اللوحة
             </Text>
-          </View>
-          
-          {netInfo.isConnected && netInfo.details && (
-            <View style={styles.networkDetails}>
-              <Text style={styles.networkDetailText}>
-                Type: {netInfo.details?.cellularGeneration || netInfo.type || 'Unknown'}
-              </Text>
-              {netInfo.details?.ipAddress && (
-                <Text style={styles.networkDetailText}>
-                  IP: {netInfo.details.ipAddress}
-                </Text>
-              )}
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="موبايل • هيكل • لوحة"
+                placeholderTextColor="#94a3b8"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCapitalize="characters"
+                keyboardType="phone-pad"
+                testID="unified-search-input"
+              />
             </View>
-          )}
-        </View>
+            <TouchableOpacity
+              style={[styles.searchButton, loading && styles.searchButtonDisabled]}
+              onPress={handleSearch}
+              disabled={loading}
+              testID="unified-search-button"
+            >
+              <Ionicons name="search" size={isSmallScreen ? 14 : 18} color="#fff" />
+              <Text style={styles.searchButtonText}>بحث</Text>
+            </TouchableOpacity>
+          </View>
 
-        {/* Info Text */}
-        <View style={styles.infoContainer}>
-          <Ionicons name="information-circle-outline" size={16} color="#64748b" />
-          <Text style={styles.infoText}>
-            Data is automatically synced every 25 minutes. Use manual sync for immediate updates.
+          <TouchableOpacity
+            style={[styles.addCustomerButton, { paddingVertical: buttonPadding }]}
+            onPress={() => router.push('/add-customer')}
+            testID="add-customer-button"
+          >
+            <Ionicons name="person-add-outline" size={isSmallScreen ? 14 : 18} color="#39ff14" />
+            <Text style={styles.addCustomerButtonText}>إضافة عميل جديد</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.walkinButton, { paddingVertical: buttonPadding }]}
+            onPress={() => router.push('/quick-walkin')}
+            testID="quick-walkin-button"
+          >
+            <Ionicons name="walk-outline" size={isSmallScreen ? 14 : 18} color="#ffff00" />
+            <Text style={styles.walkinButtonText}>بيع سريع</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.orderButton, { paddingVertical: buttonPadding }]}
+            onPress={() => router.push('/order-list')}
+          >
+            <Ionicons name="list-outline" size={isSmallScreen ? 14 : 18} color="#ff00ff" />
+            <Text style={styles.orderButtonText}>قائمة مشتريات</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.managementButton, { paddingVertical: buttonPadding }]}
+            onPress={handleBackendPress}
+            testID="management-button"
+          >
+            <Ionicons name="construct-outline" size={isSmallScreen ? 14 : 18} color="#ff1493" />
+            <Text style={styles.managementButtonText}>الإدارة و الاعدادات</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.buildStamp} testID="build-timestamp">
+            {Updates.createdAt
+              ? `آخر تحديث: ${new Date(Updates.createdAt).toLocaleString()}`
+              : 'وضع التطوير المحلي'}
           </Text>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={pinModalVisible}
+        onRequestClose={() => setPinModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>أدخل رمز PIN</Text>
+            <Text style={styles.modalSubtitle}>أدخل رمز الأمان المكوّن من 4 أرقام</Text>
+
+            <TextInput
+              style={styles.pinInput}
+              placeholder="****"
+              placeholderTextColor="#94a3b8"
+              keyboardType="number-pad"
+              maxLength={4}
+              secureTextEntry={true}
+              value={pinInput}
+              onChangeText={setPinInput}
+              autoFocus={true}
+            />
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setPinModalVisible(false)}>
+                <Text style={styles.modalCancelText}>إلغاء</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalConfirmBtn} onPress={handlePinAuth}>
+                <Text style={styles.modalConfirmText}>فتح</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
-      </ScrollView>
+      </Modal>
+
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#0f172a',
-  },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: '#0f172a',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: '#94a3b8',
-    marginTop: 12,
-    fontSize: 14,
-  },
+  container: { flex: 1, backgroundColor: '#f1f5f9' },
+  keyboardView: { flex: 1 },
+  
   header: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 16,
     backgroundColor: '#0f172a',
     borderBottomWidth: 1,
     borderBottomColor: '#1e293b',
   },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  headerRight: {
-    width: 32,
-  },
-  container: {
-    flex: 1,
-    padding: 16,
-  },
-  card: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#ffffff',
-    marginBottom: 16,
-  },
-  statusRow: {
+  logoRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  statusIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  headerSubtitle: {
+    fontSize: 18,
+    color: '#ffffff',
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  
+  content: { flex: 1 },
+  contentContainer: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24 },
+  
+  searchCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#94a3b8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  searchHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 4,
+  },
+  searchTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginLeft: 10,
+  },
+  searchHint: {
+    fontSize: 11,
+    color: '#64748b',
+    marginBottom: 12,
+    marginLeft: 32,
+  },
+  inputContainer: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  input: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#1e293b',
+    textAlign: 'right',
+  },
+  searchButton: {
+    backgroundColor: '#0052cc',
+    borderRadius: 10,
+    paddingVertical: 11,
+    flexDirection: 'row',
     justifyContent: 'center',
-    marginRight: 12,
-  },
-  statusInfo: {
-    flex: 1,
-  },
-  statusText: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  statusSubtext: {
-    fontSize: 12,
-    color: '#94a3b8',
-    marginTop: 2,
-  },
-  dotIndicator: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginLeft: 8,
-  },
-  errorContainer: {
-    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
-    padding: 8,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderRadius: 8,
   },
-  errorText: {
-    fontSize: 12,
-    color: '#ef4444',
-    marginLeft: 8,
-    flex: 1,
-  },
-  buttonContainer: {
-    gap: 12,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  pullButton: {
-    backgroundColor: '#3b82f6',
-  },
-  pushButton: {
-    backgroundColor: '#8b5cf6',
-  },
-  buttonDisabled: {
+  searchButtonDisabled: {
     opacity: 0.5,
   },
-  buttonTextContainer: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  buttonText: {
+  searchButtonText: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 6,
+  },
+  
+  addCustomerButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#00e5ff',
+    backgroundColor: '#ffffff',
+    marginTop: 10,
+  },
+  addCustomerButtonText: {
+    color: '#1e293b',
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 6,
+  },
+  walkinButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#ff5722',
+    marginTop: 10,
+  },
+  walkinButtonText: {
+    color: '#1e293b',
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 6,
+  },
+  orderButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#00e676',
+    marginTop: 10,
+  },
+  orderButtonText: {
+    color: '#1e293b',
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 6,
+  },
+  managementButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1.5,
+    borderColor: '#94a3b8',
+    marginTop: 10,
+  },
+  managementButtonText: {
+    color: '#1e293b',
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 6,
+  },
+  
+  buildStamp: {
+    marginTop: 20,
+    marginBottom: 6,
+    textAlign: 'center',
+    fontSize: 11,
+    color: '#94a3b8',
+    fontWeight: '500',
+  },
+  
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '85%',
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 22,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: '#64748b',
+    marginBottom: 18,
+  },
+  pinInput: {
+    width: '100%',
+    borderWidth: 2,
+    borderColor: '#00e5ff',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    fontSize: 24,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: 8,
+    color: '#1e293b',
+    marginBottom: 20,
+    backgroundColor: '#f8fafc',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    color: '#64748b',
+    fontSize: 14,
     fontWeight: '600',
   },
-  buttonSubtext: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  spinner: {
-    marginLeft: 8,
-  },
-  networkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  networkText: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginLeft: 8,
-  },
-  networkDetails: {
-    marginTop: 8,
-    paddingLeft: 28,
-  },
-  networkDetailText: {
-    fontSize: 12,
-    color: '#94a3b8',
-    marginTop: 2,
-  },
-  infoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: 'rgba(100, 116, 139, 0.1)',
-    borderRadius: 8,
-    marginBottom: 20,
-  },
-  infoText: {
-    fontSize: 12,
-    color: '#94a3b8',
-    marginLeft: 8,
+  modalConfirmBtn: {
     flex: 1,
-    lineHeight: 18,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#0052cc',
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
