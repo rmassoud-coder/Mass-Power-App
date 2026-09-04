@@ -1,18 +1,22 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, AppState } from 'react-native';
+import { View, Text, StyleSheet, AppState, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { runAutoPull } from '../utils/autoSync';
+import { runAutoPush } from '../utils/autoSync'; // Assuming you have a push function
 
 interface SyncStatusPillProps {
   showLabel?: boolean;
+  onSyncPress?: () => void;
 }
 
-export default function SyncStatusPill({ showLabel = true }: SyncStatusPillProps) {
+export default function SyncStatusPill({ showLabel = true, onSyncPress }: SyncStatusPillProps) {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'online' | 'offline'>('idle');
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [syncCount, setSyncCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isPushing, setIsPushing] = useState(false);
+  const [isPulling, setIsPulling] = useState(false);
   const netInfo = useNetInfo();
   
   // ============================================================
@@ -35,13 +39,14 @@ export default function SyncStatusPill({ showLabel = true }: SyncStatusPillProps
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMounted = useRef(true);
 
-  const performSync = async (trigger: 'initial' | 'periodic' | 'foreground' | 'manual') => {
+  const performPull = async (trigger: 'initial' | 'periodic' | 'foreground' | 'manual') => {
     try {
+      setIsPulling(true);
       setSyncStatus('syncing');
       setErrorMessage(null);
-      console.log(`🔄 [${trigger}] Syncing data...`);
+      console.log(`⬇️ [${trigger}] Pulling data...`);
       
-      // Call your sync function - this pulls data from cloud
+      // Call your pull function
       await runAutoPull();
       
       const now = new Date();
@@ -49,11 +54,64 @@ export default function SyncStatusPill({ showLabel = true }: SyncStatusPillProps
       setSyncCount(prev => prev + 1);
       setSyncStatus('online');
       
-      console.log(`✅ [${trigger}] Sync completed at:`, now.toLocaleTimeString());
+      console.log(`✅ [${trigger}] Pull completed at:`, now.toLocaleTimeString());
     } catch (error: any) {
-      console.warn(`⚠️ [${trigger}] Sync failed:`, error);
+      console.warn(`⚠️ [${trigger}] Pull failed:`, error);
       setSyncStatus('offline');
-      setErrorMessage(error?.message || 'Sync failed');
+      setErrorMessage(error?.message || 'Pull failed');
+    } finally {
+      setIsPulling(false);
+    }
+  };
+
+  const performPush = async (trigger: 'manual' | 'periodic') => {
+    try {
+      setIsPushing(true);
+      setSyncStatus('syncing');
+      setErrorMessage(null);
+      console.log(`⬆️ [${trigger}] Pushing data...`);
+      
+      // Call your push function
+      await runAutoPush();
+      
+      const now = new Date();
+      setLastSyncTime(now);
+      setSyncCount(prev => prev + 1);
+      setSyncStatus('online');
+      
+      console.log(`✅ [${trigger}] Push completed at:`, now.toLocaleTimeString());
+    } catch (error: any) {
+      console.warn(`⚠️ [${trigger}] Push failed:`, error);
+      setSyncStatus('offline');
+      setErrorMessage(error?.message || 'Push failed');
+    } finally {
+      setIsPushing(false);
+    }
+  };
+
+  const performSync = async (trigger: 'initial' | 'periodic' | 'foreground' | 'manual') => {
+    // For periodic sync, do both pull and push
+    if (trigger === 'periodic' || trigger === 'initial' || trigger === 'foreground') {
+      try {
+        setSyncStatus('syncing');
+        setErrorMessage(null);
+        console.log(`🔄 [${trigger}] Syncing (pull + push)...`);
+        
+        // Do both operations
+        await runAutoPull();
+        await runAutoPush();
+        
+        const now = new Date();
+        setLastSyncTime(now);
+        setSyncCount(prev => prev + 1);
+        setSyncStatus('online');
+        
+        console.log(`✅ [${trigger}] Sync completed at:`, now.toLocaleTimeString());
+      } catch (error: any) {
+        console.warn(`⚠️ [${trigger}] Sync failed:`, error);
+        setSyncStatus('offline');
+        setErrorMessage(error?.message || 'Sync failed');
+      }
     }
   };
 
@@ -121,7 +179,7 @@ export default function SyncStatusPill({ showLabel = true }: SyncStatusPillProps
         return {
           icon: 'sync-outline',
           backgroundColor: '#f59e0b',
-          text: 'Syncing...',
+          text: isPushing ? 'Pushing...' : isPulling ? 'Pulling...' : 'Syncing...',
           textColor: '#ffffff',
           dotColor: '#f59e0b',
         };
@@ -202,6 +260,29 @@ export default function SyncStatusPill({ showLabel = true }: SyncStatusPillProps
         )}
       </View>
       
+      {/* Push and Pull Buttons */}
+      <View style={styles.buttonRow}>
+        <TouchableOpacity 
+          style={[styles.actionButton, styles.pullButton, (isPulling || !netInfo.isConnected) && styles.buttonDisabled]}
+          onPress={() => performPull('manual')}
+          disabled={isPulling || !netInfo.isConnected}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="download-outline" size={16} color="#fff" />
+          <Text style={styles.buttonText}>Pull</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[styles.actionButton, styles.pushButton, (isPushing || !netInfo.isConnected) && styles.buttonDisabled]}
+          onPress={() => performPush('manual')}
+          disabled={isPushing || !netInfo.isConnected}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="upload-outline" size={16} color="#fff" />
+          <Text style={styles.buttonText}>Push</Text>
+        </TouchableOpacity>
+      </View>
+      
       {errorMessage && (
         <Text style={styles.errorText}>{errorMessage}</Text>
       )}
@@ -213,6 +294,7 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
   },
   pill: {
     flexDirection: 'row',
@@ -261,5 +343,36 @@ const styles = StyleSheet.create({
     color: '#ef4444',
     marginTop: 2,
     textAlign: 'center',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    minWidth: 70,
+    justifyContent: 'center',
+  },
+  pullButton: {
+    backgroundColor: '#3b82f6', // Blue
+  },
+  pushButton: {
+    backgroundColor: '#8b5cf6', // Purple
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  buttonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
