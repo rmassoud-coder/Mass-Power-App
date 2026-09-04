@@ -19,16 +19,6 @@ export default function ManagementScreen() {
   // SYNC CONFIGURATION
   // ============================================================
   // ⭐ CHANGE THIS VALUE TO ADJUST SYNC INTERVAL
-  // Value is in milliseconds:
-  // 1 minute  = 60000
-  // 5 minutes = 300000
-  // 10 minutes = 600000
-  // 15 minutes = 900000
-  // 20 minutes = 1200000
-  // 25 minutes = 1500000  <-- CURRENT VALUE
-  // 30 minutes = 1800000
-  // 1 hour    = 3600000
-  // ============================================================
   const SYNC_INTERVAL_MS = 1500000; // 25 minutes
   // ============================================================
 
@@ -81,7 +71,7 @@ export default function ManagementScreen() {
     }
   };
 
-  // Periodic sync setup - NO initial sync on load
+  // Periodic sync setup - NO initial sync
   useEffect(() => {
     isMounted.current = true;
 
@@ -91,20 +81,16 @@ export default function ManagementScreen() {
     intervalRef.current = setInterval(() => {
       if (isMounted.current && netInfo.isConnected) {
         performPull();
-      } else if (!netInfo.isConnected) {
-        console.log('📡 Skipping sync - device offline');
       }
     }, SYNC_INTERVAL_MS);
     // ============================================================
 
-    // Sync when app comes back to foreground
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active' && isMounted.current && netInfo.isConnected) {
         performPull();
       }
     });
 
-    // Cleanup
     return () => {
       isMounted.current = false;
       if (intervalRef.current) {
@@ -114,15 +100,6 @@ export default function ManagementScreen() {
       subscription.remove();
     };
   }, []);
-
-  // Update status based on network
-  useEffect(() => {
-    if (netInfo.isConnected === false) {
-      setSyncStatus('offline');
-    } else if (syncStatus !== 'syncing' && syncStatus !== 'idle') {
-      setSyncStatus('online');
-    }
-  }, [netInfo.isConnected]);
 
   // Format last sync time for display
   const getLastSyncDisplay = () => {
@@ -152,7 +129,6 @@ export default function ManagementScreen() {
     }
   };
 
-  // Get status icon
   const getStatusIcon = () => {
     if (!netInfo.isConnected) return 'wifi-outline';
     switch (syncStatus) {
@@ -163,7 +139,6 @@ export default function ManagementScreen() {
     }
   };
 
-  // Get status text
   const getStatusText = () => {
     if (!netInfo.isConnected) return 'Offline';
     switch (syncStatus) {
@@ -176,7 +151,6 @@ export default function ManagementScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header with Back Button */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#ffffff" />
@@ -187,7 +161,6 @@ export default function ManagementScreen() {
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
-          {/* Sync Status */}
           <View style={styles.statusContainer}>
             <View style={[styles.statusIconContainer, { backgroundColor: getStatusColor() + '20' }]}>
               <Ionicons name={getStatusIcon()} size={24} color={getStatusColor()} />
@@ -214,7 +187,6 @@ export default function ManagementScreen() {
             </View>
           )}
 
-          {/* Push/Pull Buttons */}
           <View style={styles.buttonRow}>
             <TouchableOpacity 
               style={[styles.actionButton, styles.pullButton, (isPulling || !netInfo.isConnected) && styles.buttonDisabled]}
@@ -245,7 +217,6 @@ export default function ManagementScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Network Info */}
           <View style={styles.networkContainer}>
             <Text style={styles.networkLabel}>Network</Text>
             <View style={styles.networkRow}>
@@ -256,7 +227,6 @@ export default function ManagementScreen() {
             </View>
           </View>
 
-          {/* Auto Sync Info */}
           <View style={styles.infoContainer}>
             <Ionicons name="information-circle-outline" size={16} color="#64748b" />
             <Text style={styles.infoText}>
