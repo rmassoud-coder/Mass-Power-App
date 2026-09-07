@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  Modal,
+  ScrollView,
+  TouchableOpacity,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   subscribeAutoSyncStatus,
@@ -8,22 +16,8 @@ import {
 } from '../utils/autoSync';
 import * as dbSync from '../utils/dbSync';
 import { loadSettings, isGithubConfigured } from '../utils/settings';
+import { getDebugLogs, clearDebugLogs, type DebugLogEntry } from '../utils/debugLog';
 
-/**
- * Tiny pill that renders auto-sync status in the app chrome. Silently hides
- * itself when GitHub isn't configured so the offline-only user isn't
- * confused. Otherwise shows:
- *   • spinner + "Syncing…" while an upload is in flight
- *   • cloud check + "Synced 3 min ago" once done
- *   • red warning when the last sync failed
- *
- * NOTE: formatSyncedAt/getLastSyncAt are called defensively below because
- * a missing or renamed export from dbSync.ts previously crashed the whole
- * app at render time ("undefined is not a function"). This component must
- * never take the app down — worst case it just shows a blank timestamp.
- */
-
-// Local fallback formatter — used only if dbSync.formatSyncedAt is missing.
 function fallbackFormatSyncedAt(iso: string | null): string {
   if (!iso) return 'Not synced yet';
   const then = new Date(iso).getTime();
@@ -45,8 +39,6 @@ function safeFormatSyncedAt(iso: string | null): string {
     } catch (e) {
       console.warn('SyncStatusPill: formatSyncedAt threw', e);
     }
-  } else {
-    console.warn('SyncStatusPill: dbSync.formatSyncedAt is not a function — check exports in dbSync.ts');
   }
   return fallbackFormatSyncedAt(iso);
 }
@@ -60,7 +52,6 @@ async function safeGetLastSyncAt(): Promise<string | null> {
       return null;
     }
   }
-  console.warn('SyncStatusPill: dbSync.getLastSyncAt is not a function — check exports in dbSync.ts');
   return null;
 }
 
@@ -68,6 +59,10 @@ export default function SyncStatusPill(): React.ReactElement | null {
   const [state, setState] = useState<AutoSyncState>(getAutoSyncState());
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [lastSyncFallback, setLastSyncFallback] = useState<string | null>(null);
+
+  // Debug log modal state
+  const [logsVisible, setLogsVisible] = useState(false);
+  const [logs, setLogs] = useState<DebugLogEntry[]>([]);
 
   useEffect(() => {
     let alive = true;
@@ -89,7 +84,16 @@ export default function SyncStatusPill(): React.ReactElement | null {
     };
   }, []);
 
-  if (enabled !== true) return null;
+  const openLogs = async () => {
+    const entries = await getDebugLogs();
+    setLogs(entries);
+    setLogsVisible(true);
+  };
+
+  const handleClearLogs = async () => {
+    await clearDebugLogs();
+    setLogs([]);
+  };
 
   const isSyncing = state.status === 'syncing';
   const isError = state.status === 'error';
@@ -100,33 +104,103 @@ export default function SyncStatusPill(): React.ReactElement | null {
       ? 'Sync failed'
       : safeFormatSyncedAt(shownIso);
 
+  // Pill is only hidden from normal view when GitHub isn't configured, but
+  // the "View Sync Logs" debug button always renders regardless — bigger,
+  // single-tap (not long-press), and unmissable, so we're never blocked
+  // by the pill's visibility/mounting again.
   return (
-    <View
-      style={[
-        styles.pill,
-        isError && styles.pillError,
-        isSyncing && styles.pillSyncing,
-      ]}
-      testID="sync-status-pill"
-    >
-      {isSyncing ? (
-        <ActivityIndicator size="small" color="#1e40af" />
-      ) : isError ? (
-        <Ionicons name="alert-circle" size={13} color="#b91c1c" />
-      ) : (
-        <Ionicons name="cloud-done-outline" size={13} color="#047857" />
+    <View>
+      {enabled === true && (
+        <View
+          style={[
+            styles.pill,
+            isError && styles.pillError,
+            isSyncing && styles.pillSyncing,
+          ]}
+          testID="sync-status-pill"
+        >
+          {isSyncing ? (
+            <ActivityIndicator size="small" color="#1e40af" />
+          ) : isError ? (
+            <Ionicons name="alert-circle" size={13} color="#b91c1c" />
+          ) : (
+            <Ionicons name="cloud-done-outline" size={13} color="#047857" />
+          )}
+          <Text
+            style={[
+              styles.pillText,
+              isError && styles.pillTextError,
+              isSyncing && styles.pillTextSyncing,
+            ]}
+            numberOfLines={1}
+          >
+            {label}
+          </Text>
+        </View>
       )}
-      <Text
-        style={[
-          styles.pillText,
-          isError && styles.pillTextError,
-          isSyncing && styles.pillTextSyncing,
-        ]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
+
+      <TouchableOpacity onPress={openLogs} style={styles.debugButton} activeOpacity={0.7}>
+        <Ionicons name="bug-outline" size={14} color="#fff" />
+        <Text style={styles.debugButtonText}>View Sync Logs</Text>
+      </TouchableOpacity>
+
+      <LogsModal
+        visible={logsVisible}
+        logs={logs}
+        onClose={() => setLogsVisible(false)}
+        onClear={handleClearLogs}
+        onRefresh={openLogs}
+      />
     </View>
+  );
+}
+
+function LogsModal({
+  visible,
+  logs,
+  onClose,
+  onClear,
+  onRefresh,
+}: {
+  visible: boolean;
+  logs: DebugLogEntry[];
+  onClose: () => void;
+  onClear: () => void;
+  onRefresh: () => void;
+}) {
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Sync Debug Log</Text>
+            <TouchableOpacity onPress={onRefresh} style={styles.modalBtn}>
+              <Text style={styles.modalBtnText}>Refresh</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onClear} style={styles.modalBtn}>
+              <Text style={styles.modalBtnText}>Clear</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onClose} style={styles.modalBtn}>
+              <Text style={styles.modalBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={{ maxHeight: 500 }}>
+            {logs.length === 0 ? (
+              <Text style={styles.logEmpty}>No log entries yet.</Text>
+            ) : (
+              logs.map((entry, i) => (
+                <View key={i} style={styles.logRow}>
+                  <Text style={styles.logMeta}>
+                    {entry.time} · {entry.tag}
+                  </Text>
+                  <Text style={styles.logMessage}>{entry.message}</Text>
+                </View>
+              ))
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -142,6 +216,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 999,
     alignSelf: 'flex-start',
+    marginBottom: 6,
   },
   pillSyncing: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
   pillError: { backgroundColor: '#fef2f2', borderColor: '#fecaca' },
@@ -153,4 +228,33 @@ const styles = StyleSheet.create({
   },
   pillTextSyncing: { color: '#1e40af' },
   pillTextError: { color: '#b91c1c' },
+
+  debugButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#334155',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  debugButtonText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  modalContent: {
+    backgroundColor: '#0f172a',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 16,
+    maxHeight: '85%',
+  },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 },
+  modalTitle: { color: '#fff', fontWeight: 'bold', fontSize: 16, flex: 1 },
+  modalBtn: { paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#1e293b', borderRadius: 6 },
+  modalBtnText: { color: '#93c5fd', fontSize: 12, fontWeight: '600' },
+  logEmpty: { color: '#64748b', textAlign: 'center', marginVertical: 20 },
+  logRow: { marginBottom: 10, borderBottomWidth: 1, borderBottomColor: '#1e293b', paddingBottom: 8 },
+  logMeta: { color: '#64748b', fontSize: 10, marginBottom: 2 },
+  logMessage: { color: '#e2e8f0', fontSize: 12 },
 });
