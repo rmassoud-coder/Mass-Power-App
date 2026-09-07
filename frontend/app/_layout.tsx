@@ -8,6 +8,7 @@ import { Image, Platform, View, Text, AppState } from 'react-native';
 import { initDatabase } from '../src/db/database';
 import RpmLoader from '../src/components/RpmLoader';
 import HtmlRasterizerHost from '../src/components/HtmlRasterizerHost';
+import { runAutoPull } from '../src/utils/autoSync';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -64,46 +65,36 @@ export default function RootLayout() {
   // ============================================================
   // SYNC CONFIGURATION
   // ============================================================
+  // ⭐ CHANGE THIS VALUE TO ADJUST SYNC INTERVAL
+  // Value is in milliseconds:
+  // 1 minute  = 60000
+  // 5 minutes = 300000
+  // 10 minutes = 600000
+  // 15 minutes = 900000
+  // 20 minutes = 1200000  <-- CURRENT VALUE
+  // 30 minutes = 1800000
+  // 1 hour    = 3600000
+  // ============================================================
   const SYNC_INTERVAL_MS = 1200000; // 20 minutes
   // ============================================================
 
-  // Auto sync: push + pull
+  // Safe auto-pull: merges cloud changes in
   useEffect(() => {
-    let isMounted = true;
     let lastSyncTime = Date.now();
 
     const performSync = async () => {
       try {
         console.log('🔄 Syncing database...');
-        
-        // Dynamically import to avoid crash at module load
-        const { pushToCloud, pullFromCloud } = require('../src/utils/dbSync');
-        
-        // Push local data to cloud
-        console.log('📤 Pushing to cloud...');
-        const pushResult = await pushToCloud();
-        console.log('📤 Push completed at:', new Date().toLocaleTimeString(), pushResult ? 'OK' : 'FAILED');
-        
-        // Pull cloud data to local
-        console.log('📥 Pulling from cloud...');
-        const pullResult = await pullFromCloud();
-        console.log('📥 Pull completed at:', new Date().toLocaleTimeString(), pullResult ? 'OK' : 'FAILED');
-        
+        await runAutoPull();
         lastSyncTime = Date.now();
-        console.log('✅ Full sync completed at:', new Date().toLocaleTimeString());
-      } catch (error: any) {
-        console.warn('⚠️ Sync failed:', error?.message || error);
-        console.warn('⚠️ Error stack:', error?.stack || 'No stack');
+        console.log('✅ Sync completed at:', new Date().toLocaleTimeString());
+      } catch (error) {
+        console.warn('⚠️ Sync failed:', error);
       }
     };
 
-    // Initial sync after app loads (3 second delay)
-    const initialTimeout = setTimeout(() => {
-      if (isMounted) {
-        console.log('⏰ Initial sync starting...');
-        performSync();
-      }
-    }, 3000);
+    // Initial sync when app loads
+    performSync();
 
     // ============================================================
     // PERIODIC SYNC EVERY SYNC_INTERVAL_MS
@@ -111,25 +102,24 @@ export default function RootLayout() {
     const intervalId = setInterval(() => {
       const timeSinceLastSync = Date.now() - lastSyncTime;
       
+      // Only sync if enough time has passed
       if (timeSinceLastSync >= SYNC_INTERVAL_MS) {
         console.log(`⏰ ${SYNC_INTERVAL_MS / 60000} minutes elapsed, syncing...`);
         performSync();
       }
-    }, 60000);
+    }, 60000); // Check every minute if sync is needed
     // ============================================================
 
     // Sync when app comes back to foreground
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active' && isMounted) {
+      if (state === 'active') {
         console.log('📱 App came to foreground, syncing...');
         performSync();
       }
     });
 
-    // Cleanup
+    // Cleanup on unmount
     return () => {
-      isMounted = false;
-      clearTimeout(initialTimeout);
       clearInterval(intervalId);
       sub.remove();
     };
@@ -141,7 +131,7 @@ export default function RootLayout() {
       <View
         style={{
           flex: 1,
-          backgroundColor: '#000000',
+          backgroundColor: '#000000', // Pure black background
           alignItems: 'center',
           justifyContent: 'center',
         }}
