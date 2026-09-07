@@ -8,7 +8,6 @@ import { Image, Platform, View, Text, AppState } from 'react-native';
 import { initDatabase } from '../src/db/database';
 import RpmLoader from '../src/components/RpmLoader';
 import HtmlRasterizerHost from '../src/components/HtmlRasterizerHost';
-import { pushToCloud, pullFromCloud } from '../src/utils/dbSync';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -65,16 +64,6 @@ export default function RootLayout() {
   // ============================================================
   // SYNC CONFIGURATION
   // ============================================================
-  // ⭐ CHANGE THIS VALUE TO ADJUST SYNC INTERVAL
-  // Value is in milliseconds:
-  // 1 minute  = 60000
-  // 5 minutes = 300000
-  // 10 minutes = 600000
-  // 15 minutes = 900000
-  // 20 minutes = 1200000
-  // 30 minutes = 1800000
-  // 1 hour    = 3600000
-  // ============================================================
   const SYNC_INTERVAL_MS = 60000; // 1 minute (TESTING)
   // ============================================================
 
@@ -85,6 +74,9 @@ export default function RootLayout() {
     const performSync = async () => {
       try {
         console.log('🔄 Auto-sync started...');
+        
+        // Dynamically import to avoid crashes
+        const { pushToCloud, pullFromCloud } = require('../src/utils/dbSync');
         
         // Push local data to cloud
         console.log('📤 Pushing to cloud...');
@@ -102,12 +94,12 @@ export default function RootLayout() {
       }
     };
 
-    // Initial sync after app loads (2 second delay)
+    // Initial sync after app loads (5 second delay)
     const initialTimeout = setTimeout(() => {
       if (isMounted) {
         performSync();
       }
-    }, 2000);
+    }, 5000);
 
     // Periodic sync every 1 minute
     const intervalId = setInterval(() => {
@@ -140,7 +132,7 @@ export default function RootLayout() {
       <View
         style={{
           flex: 1,
-          backgroundColor: '#000000', // Pure black background
+          backgroundColor: '#000000',
           alignItems: 'center',
           justifyContent: 'center',
         }}
