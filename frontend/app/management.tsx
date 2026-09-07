@@ -43,9 +43,9 @@ export default function ManagementScreen() {
     loadFinances();
   }, []);
 
-  // NOTE: Auto-sync (push + pull, every 20 min, on foreground) now runs
-  // globally in app/_layout.tsx so it's active regardless of which screen
-  // is open. Manual Push/Pull buttons below still work as an override.
+  // NOTE: Auto-sync (debounced push + throttled pull, every 20 min, on
+  // foreground) now runs globally in app/_layout.tsx. Manual Push/Pull
+  // buttons below still work as an override.
 
   const handlePush = async () => {
     try {
