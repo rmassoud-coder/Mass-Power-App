@@ -6,7 +6,7 @@ import {
   type AutoSyncState,
   getAutoSyncState,
 } from '../utils/autoSync';
-import { getLastSyncAt, formatSyncedAt } from '../utils/dbSync';
+import * as dbSync from '../utils/dbSync';
 import { loadSettings, isGithubConfigured } from '../utils/settings';
 
 /**
@@ -16,7 +16,54 @@ import { loadSettings, isGithubConfigured } from '../utils/settings';
  *   • spinner + "Syncing…" while an upload is in flight
  *   • cloud check + "Synced 3 min ago" once done
  *   • red warning when the last sync failed
+ *
+ * NOTE: formatSyncedAt/getLastSyncAt are called defensively below because
+ * a missing or renamed export from dbSync.ts previously crashed the whole
+ * app at render time ("undefined is not a function"). This component must
+ * never take the app down — worst case it just shows a blank timestamp.
  */
+
+// Local fallback formatter — used only if dbSync.formatSyncedAt is missing.
+function fallbackFormatSyncedAt(iso: string | null): string {
+  if (!iso) return 'Not synced yet';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return 'Not synced yet';
+  const diffMs = Date.now() - then;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'Synced just now';
+  if (diffMin < 60) return `Synced ${diffMin} min ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `Synced ${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  return `Synced ${diffDay}d ago`;
+}
+
+function safeFormatSyncedAt(iso: string | null): string {
+  if (typeof dbSync.formatSyncedAt === 'function') {
+    try {
+      return dbSync.formatSyncedAt(iso);
+    } catch (e) {
+      console.warn('SyncStatusPill: formatSyncedAt threw', e);
+    }
+  } else {
+    console.warn('SyncStatusPill: dbSync.formatSyncedAt is not a function — check exports in dbSync.ts');
+  }
+  return fallbackFormatSyncedAt(iso);
+}
+
+async function safeGetLastSyncAt(): Promise<string | null> {
+  if (typeof dbSync.getLastSyncAt === 'function') {
+    try {
+      return await dbSync.getLastSyncAt();
+    } catch (e) {
+      console.warn('SyncStatusPill: getLastSyncAt threw', e);
+      return null;
+    }
+  }
+  console.warn('SyncStatusPill: dbSync.getLastSyncAt is not a function — check exports in dbSync.ts');
+  return null;
+}
+
 export default function SyncStatusPill(): React.ReactElement | null {
   const [state, setState] = useState<AutoSyncState>(getAutoSyncState());
   const [enabled, setEnabled] = useState<boolean | null>(null);
@@ -25,9 +72,14 @@ export default function SyncStatusPill(): React.ReactElement | null {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const s = await loadSettings();
-      if (alive) setEnabled(isGithubConfigured(s));
-      const last = await getLastSyncAt();
+      try {
+        const s = await loadSettings();
+        if (alive) setEnabled(isGithubConfigured(s));
+      } catch (e) {
+        console.warn('SyncStatusPill: loadSettings/isGithubConfigured failed', e);
+        if (alive) setEnabled(false);
+      }
+      const last = await safeGetLastSyncAt();
       if (alive) setLastSyncFallback(last);
     })();
     const unsub = subscribeAutoSyncStatus((s) => setState(s));
@@ -46,7 +98,7 @@ export default function SyncStatusPill(): React.ReactElement | null {
     ? 'Syncing…'
     : isError
       ? 'Sync failed'
-      : formatSyncedAt(shownIso);
+      : safeFormatSyncedAt(shownIso);
 
   return (
     <View
