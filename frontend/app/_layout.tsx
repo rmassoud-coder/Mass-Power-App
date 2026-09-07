@@ -4,33 +4,56 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { Asset } from 'expo-asset';
-import { Image, Platform, View, Text, AppState } from 'react-native';
+import { Image, Platform, View, Text, AppState, ScrollView } from 'react-native';
 import { initDatabase } from '../src/db/database';
 import RpmLoader from '../src/components/RpmLoader';
 import HtmlRasterizerHost from '../src/components/HtmlRasterizerHost';
 import { pushToCloud, pullFromCloud } from '../src/utils/dbSync';
 import { loadSettings, isGithubConfigured } from '../src/utils/settings';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 SplashScreen.preventAutoHideAsync();
+
+// Debug log storage
+const DEBUG_LOG_KEY = 'mp_debug_logs';
+let debugLogs: string[] = [];
+
+async function addDebugLog(message: string) {
+  const timestamp = new Date().toLocaleTimeString();
+  const logEntry = `[${timestamp}] ${message}`;
+  console.log(logEntry);
+  
+  debugLogs.push(logEntry);
+  if (debugLogs.length > 100) {
+    debugLogs = debugLogs.slice(-100);
+  }
+  
+  try {
+    await AsyncStorage.setItem(DEBUG_LOG_KEY, JSON.stringify(debugLogs));
+  } catch (e) {
+    // ignore
+  }
+}
 
 export default function RootLayout() {
   const [appIsReady, setAppIsReady] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
   const [showLoader, setShowLoader] = useState(true);
+  const [debugScreen, setDebugScreen] = useState<string | null>(null);
 
   useEffect(() => {
     async function prepare() {
       try {
-        console.log('📦 [1] Starting app initialization...');
+        addDebugLog('📦 [1] Starting app initialization...');
         
         // Initialize local SQLite database
-        console.log('📦 [2] Initializing database...');
+        addDebugLog('📦 [2] Initializing database...');
         await initDatabase();
-        console.log('📦 [3] Database initialized successfully');
+        addDebugLog('📦 [3] Database initialized successfully');
 
         // Prewarm icon assets only on native (skip on web)
         if (Platform.OS !== 'web') {
-          console.log('📦 [4] Prewarming icon assets...');
+          addDebugLog('📦 [4] Prewarming icon assets...');
           const iconAssets = [
             require('../assets/images/icon.png'),
             require('../assets/images/adaptive-icon.png'),
@@ -49,17 +72,16 @@ export default function RootLayout() {
               Image.prefetch(source.uri);
             }
           });
-          console.log('📦 [5] Icon assets prewarmed');
+          addDebugLog('📦 [5] Icon assets prewarmed');
         }
       } catch (e: any) {
-        console.warn('📦 [ERROR] Initialization failed:', e);
+        addDebugLog('📦 [ERROR] Initialization failed: ' + (e?.message || e));
         setInitError(e?.message || 'Failed to initialize database');
       } finally {
-        // Hide the native splash
-        console.log('📦 [6] Hiding splash screen...');
+        addDebugLog('📦 [6] Hiding splash screen...');
         await SplashScreen.hideAsync();
         setAppIsReady(true);
-        console.log('📦 [7] App is ready');
+        addDebugLog('📦 [7] App is ready');
       }
     }
 
@@ -68,7 +90,7 @@ export default function RootLayout() {
 
   // Handle RpmLoader completion
   const handleLoaderComplete = () => {
-    console.log('🔄 [8] Loader complete, hiding loader');
+    addDebugLog('🔄 [8] Loader complete');
     setShowLoader(false);
   };
 
@@ -80,73 +102,69 @@ export default function RootLayout() {
 
   // Auto sync: push + pull on launch and every 1 minute
   useEffect(() => {
-    console.log('🔄 [9] Auto-sync effect mounted');
+    addDebugLog('🔄 [9] Auto-sync effect mounted');
     let isMounted = true;
 
     const performSync = async () => {
-      console.log('🔄 [10] performSync called');
+      addDebugLog('🔄 [10] performSync called');
       try {
-        // Check if GitHub is configured first
-        console.log('🔄 [11] Loading settings...');
+        addDebugLog('🔄 [11] Loading settings...');
         const settings = await loadSettings();
-        console.log('🔄 [12] Settings loaded:', settings ? 'yes' : 'no');
+        addDebugLog('🔄 [12] Settings loaded: ' + (settings ? 'yes' : 'no'));
         
         if (!isGithubConfigured(settings)) {
-          console.log('🔄 [13] GitHub not configured, skipping sync');
+          addDebugLog('🔄 [13] GitHub not configured, skipping sync');
           return;
         }
-        console.log('🔄 [14] GitHub is configured, continuing...');
+        addDebugLog('🔄 [14] GitHub is configured, continuing...');
 
-        console.log('🔄 [15] Auto-sync started...');
-        
-        // Push local data to cloud
-        console.log('🔄 [16] Pushing to cloud...');
+        addDebugLog('🔄 [15] Pushing to cloud...');
         await pushToCloud(settings);
-        console.log('🔄 [17] Push completed at:', new Date().toLocaleTimeString());
+        addDebugLog('🔄 [16] Push completed');
         
-        // Pull cloud data to local
-        console.log('🔄 [18] Pulling from cloud...');
+        addDebugLog('🔄 [17] Pulling from cloud...');
         await pullFromCloud(settings);
-        console.log('🔄 [19] Pull completed at:', new Date().toLocaleTimeString());
+        addDebugLog('🔄 [18] Pull completed');
         
-        console.log('🔄 [20] Full sync completed at:', new Date().toLocaleTimeString());
+        addDebugLog('🔄 [19] Full sync completed successfully');
       } catch (e: any) {
-        console.warn('🔄 [21] Sync failed:', e?.message || e);
-        console.warn('🔄 [22] Error stack:', e?.stack || 'No stack');
+        addDebugLog('🔄 [ERROR] Sync failed: ' + (e?.message || e));
+        addDebugLog('🔄 [ERROR] Stack: ' + (e?.stack || 'No stack available'));
+        setDebugScreen('Sync Error: ' + (e?.message || e));
       }
     };
 
     // Initial sync after app loads (2 second delay)
-    console.log('🔄 [23] Setting initial sync timeout...');
+    addDebugLog('🔄 [20] Setting initial sync timeout...');
     const initialTimeout = setTimeout(() => {
-      console.log('🔄 [24] Initial sync timeout fired');
+      addDebugLog('🔄 [21] Initial sync timeout fired');
       if (isMounted) {
         performSync();
       }
     }, 2000);
 
     // Periodic sync every 1 minute
-    console.log('🔄 [25] Setting interval...');
+    addDebugLog('🔄 [22] Setting interval...');
     const intervalId = setInterval(() => {
-      console.log('🔄 [26] Interval fired');
+      addDebugLog('🔄 [23] Interval fired');
       if (isMounted) {
         performSync();
       }
     }, SYNC_INTERVAL_MS);
 
     // Sync when app comes back to foreground
-    console.log('🔄 [27] Setting AppState listener...');
+    addDebugLog('🔄 [24] Setting AppState listener...');
     const sub = AppState.addEventListener('change', (state) => {
-      console.log('🔄 [28] AppState changed to:', state);
+      addDebugLog('🔄 [25] AppState changed to: ' + state);
       if (state === 'active' && isMounted) {
-        console.log('🔄 [29] App came to foreground, syncing...');
+        addDebugLog('🔄 [26] App came to foreground, syncing...');
         performSync();
       }
     });
 
     // Cleanup
     return () => {
-      console.log('🔄 [30] Cleanup called');
+      addDebugLog('🔄 [27] Cleanup called');
       isMounted = false;
       clearTimeout(initialTimeout);
       clearInterval(intervalId);
@@ -154,14 +172,33 @@ export default function RootLayout() {
     };
   }, []);
 
+  // Show debug screen if error occurred
+  if (debugScreen) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#000', padding: 20, justifyContent: 'center' }}>
+        <Text style={{ color: '#ff4444', fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>
+          DEBUG ERROR:
+        </Text>
+        <Text style={{ color: '#fff', fontSize: 14, marginBottom: 20 }}>
+          {debugScreen}
+        </Text>
+        <TouchableOpacity
+          onPress={() => setDebugScreen(null)}
+          style={{ backgroundColor: '#444', padding: 10, borderRadius: 8 }}
+        >
+          <Text style={{ color: '#fff', textAlign: 'center' }}>Continue Anyway</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   // Show loader while app is preparing or loader is visible
   if (!appIsReady || showLoader) {
-    console.log('🔄 [31] Showing loader (appIsReady:', appIsReady, ', showLoader:', showLoader, ')');
     return (
       <View
         style={{
           flex: 1,
-          backgroundColor: '#000000', // Pure black background
+          backgroundColor: '#000000',
           alignItems: 'center',
           justifyContent: 'center',
         }}
@@ -172,7 +209,6 @@ export default function RootLayout() {
   }
 
   if (initError) {
-    console.log('🔄 [32] Showing error screen:', initError);
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: '#000' }}>
         <Text style={{ fontSize: 18, color: '#ef4444', textAlign: 'center' }}>
@@ -182,7 +218,6 @@ export default function RootLayout() {
     );
   }
 
-  console.log('🔄 [33] Rendering main app');
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
