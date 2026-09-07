@@ -8,7 +8,8 @@ import { Image, Platform, View, Text, AppState } from 'react-native';
 import { initDatabase } from '../src/db/database';
 import RpmLoader from '../src/components/RpmLoader';
 import HtmlRasterizerHost from '../src/components/HtmlRasterizerHost';
-import { runAutoPull, flushAutoPush } from '../src/utils/autoSync';
+import { runAutoPull } from '../src/utils/autoSync';
+import { pushToCloud } from '../src/utils/dbSync';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -80,24 +81,23 @@ export default function RootLayout() {
 
   // Safe auto-sync: pushes local changes then pulls cloud changes
   useEffect(() => {
-    let lastSyncTime = Date.now();
-
     const performSync = async () => {
       try {
         console.log('🔄 Auto-sync started...');
         
-        // First flush any pending push (upload local changes)
-        await flushAutoPush();
+        // Step 1: Push local changes to cloud
+        console.log('📤 Pushing local data to cloud...');
+        await pushToCloud();
         console.log('✅ Push completed at:', new Date().toLocaleTimeString());
         
-        // Then pull cloud changes to local (safe merge)
+        // Step 2: Pull cloud changes to local (safe merge)
+        console.log('📥 Pulling cloud data to local...');
         await runAutoPull();
         console.log('✅ Pull completed at:', new Date().toLocaleTimeString());
         
-        lastSyncTime = Date.now();
         console.log('✅ Full sync completed at:', new Date().toLocaleTimeString());
       } catch (error) {
-        console.warn('⚠️ Sync failed:', error);
+        console.error('❌ Sync failed with error:', error);
       }
     };
 
@@ -108,14 +108,9 @@ export default function RootLayout() {
     // PERIODIC SYNC EVERY SYNC_INTERVAL_MS
     // ============================================================
     const intervalId = setInterval(() => {
-      const timeSinceLastSync = Date.now() - lastSyncTime;
-      
-      // Only sync if enough time has passed
-      if (timeSinceLastSync >= SYNC_INTERVAL_MS) {
-        console.log(`⏰ ${SYNC_INTERVAL_MS / 60000} minutes elapsed, syncing...`);
-        performSync();
-      }
-    }, 60000); // Check every minute if sync is needed
+      console.log(`⏰ ${SYNC_INTERVAL_MS / 60000} minutes elapsed, syncing...`);
+      performSync();
+    }, SYNC_INTERVAL_MS);
     // ============================================================
 
     // Sync when app comes back to foreground
