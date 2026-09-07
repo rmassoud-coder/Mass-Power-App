@@ -9,6 +9,7 @@ import { initDatabase } from '../src/db/database';
 import RpmLoader from '../src/components/RpmLoader';
 import HtmlRasterizerHost from '../src/components/HtmlRasterizerHost';
 import { runAutoPull } from '../src/utils/autoSync';
+import { pushToCloud, pullFromCloud } from '../src/utils/dbSync';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -78,14 +79,22 @@ export default function RootLayout() {
   const SYNC_INTERVAL_MS = 1200000; // 20 minutes
   // ============================================================
 
-  // Safe auto-pull: merges cloud changes in
+  // Auto push-pull: pushes local changes then pulls cloud changes
   useEffect(() => {
     let lastSyncTime = Date.now();
 
     const performSync = async () => {
       try {
         console.log('🔄 Syncing database...');
-        await runAutoPull();
+        
+        // Push local data to cloud (same as Management's Push button)
+        await pushToCloud();
+        console.log('📤 Push completed at:', new Date().toLocaleTimeString());
+        
+        // Pull cloud data to local (same as Management's Pull button)
+        await pullFromCloud();
+        console.log('📥 Pull completed at:', new Date().toLocaleTimeString());
+        
         lastSyncTime = Date.now();
         console.log('✅ Sync completed at:', new Date().toLocaleTimeString());
       } catch (error) {
@@ -93,7 +102,7 @@ export default function RootLayout() {
       }
     };
 
-    // Initial sync when app loads
+    // Initial sync when app loads (auto-click the Push & Pull buttons)
     performSync();
 
     // ============================================================
