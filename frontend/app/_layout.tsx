@@ -9,17 +9,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initDatabase } from '../src/db/database';
 import RpmLoader from '../src/components/RpmLoader';
 import HtmlRasterizerHost from '../src/components/HtmlRasterizerHost';
-import { runAutoPull, triggerAutoPush } from '../src/utils/autoSync';
+import { runAutoPush, runAutoPull, getAutoSyncState } from '../src/utils/autoSync';
 
 declare const ErrorUtils: any;
 
 SplashScreen.preventAutoHideAsync();
 
 // ============================================================
-// CRASH LOGGER — catches otherwise-invisible white-screen crashes
-// and writes them to AsyncStorage so they survive the crash/reload.
-// Check by running: AsyncStorage.getItem('__last_crash__') from any
-// screen, or watch the console log on next launch.
+// CRASH LOGGER — kept as a safety net even though the crash is fixed.
 // ============================================================
 function logCrash(error: any, extra?: Record<string, any>) {
   const payload = {
@@ -71,8 +68,6 @@ export default function RootLayout() {
   const [initError, setInitError] = useState<string | null>(null);
   const [showLoader, setShowLoader] = useState(true);
 
-  // Install a global JS error handler as early as possible so any
-  // uncaught error anywhere (not just inside React render) gets logged.
   useEffect(() => {
     if (typeof ErrorUtils !== 'undefined' && ErrorUtils?.setGlobalHandler) {
       const prevHandler = ErrorUtils.getGlobalHandler?.();
@@ -81,7 +76,6 @@ export default function RootLayout() {
         if (prevHandler) prevHandler(error, isFatal);
       });
     }
-    // Surface any crash log from a previous session in the console.
     AsyncStorage.getItem('__last_crash__')
       .then((val) => {
         if (val) console.log('📋 Previous session crash log:', val);
@@ -92,10 +86,8 @@ export default function RootLayout() {
   useEffect(() => {
     async function prepare() {
       try {
-        // Initialize local SQLite database
         await initDatabase();
 
-        // Prewarm icon assets only on native (skip on web)
         if (Platform.OS !== 'web') {
           const iconAssets = [
             require('../assets/images/icon.png'),
@@ -121,7 +113,6 @@ export default function RootLayout() {
         setInitError(e?.message || 'Failed to initialize database');
         logCrash(e, { source: 'prepare()' });
       } finally {
-        // Hide the native splash
         await SplashScreen.hideAsync();
         setAppIsReady(true);
       }
@@ -130,7 +121,6 @@ export default function RootLayout() {
     prepare();
   }, []);
 
-  // Handle RpmLoader completion
   const handleLoaderComplete = () => {
     setShowLoader(false);
   };
@@ -138,28 +128,14 @@ export default function RootLayout() {
   // ============================================================
   // SYNC CONFIGURATION
   // ============================================================
-  // ⭐ CHANGE THIS VALUE TO ADJUST SYNC INTERVAL
-  // Value is in milliseconds:
-  // 1 minute  = 60000
-  // 5 minutes = 300000
-  // 10 minutes = 600000
-  // 15 minutes = 900000
-  // 20 minutes = 1200000  <-- CURRENT VALUE
-  // 30 minutes = 1800000
-  // 1 hour    = 3600000
-  // ============================================================
   const SYNC_INTERVAL_MS = 1200000; // 20 minutes
   // ============================================================
 
-  // Global auto-sync. Only uses the two primitives confirmed safe to
-  // call from here: triggerAutoPush() (debounced push) and runAutoPull()
-  // (throttled pull). Does NOT call pushToCloud/pullFromCloud/runAutoPush/
-  // flushAutoPush directly — those crash when invoked this early, likely
-  // because they touch local tables before initDatabase() has finished
-  // (it runs in the separate effect above, unsequenced).
-  //
-  // This effect only starts once appIsReady is true, and waits a further
-  // 3s before the first sync, so initDatabase() has fully settled first.
+  // Global auto-sync. Now uses runAutoPush() (awaited, non-debounced)
+  // instead of triggerAutoPush() (fire-and-forget) so we can actually
+  // see the result — both pushToCloud/pullFromCloud silently no-op if
+  // isGithubConfigured() returns false, with no error thrown. Logging
+  // getAutoSyncState() after every attempt exposes that.
   useEffect(() => {
     if (!appIsReady) return;
 
@@ -169,12 +145,24 @@ export default function RootLayout() {
     const performSync = async () => {
       try {
         console.log('🔄 Syncing database...');
-        triggerAutoPush(); // debounced, non-blocking — safe per testing
-        await runAutoPull(); // throttled internally — safe per testing
+        await runAutoPush();
+        console.log('📤 Push attempt finished at:', new Date().toLocaleTimeString());
+        await runAutoPull();
+        console.log('📥 Pull attempt finished at:', new Date().toLocaleTimeString());
         lastSyncTime = Date.now();
-        console.log('✅ Sync completed at:', new Date().toLocaleTimeString());
+
+        // ★ This is the key diagnostic line — check it in your logs.
+        const state = getAutoSyncState();
+        console.log('📊 Sync state:', state);
+        if (state.status === 'idle') {
+          console.warn('⚠️ Sync ran but did nothing — GitHub sync is likely not configured (isGithubConfigured returned false). Check Settings on this device.');
+        } else if (state.status === 'error') {
+          console.warn('⚠️ Sync ran and FAILED:', state.lastError);
+        } else if (state.status === 'ok') {
+          console.log('✅ Sync actually completed. Last synced at:', state.lastSyncedAt);
+        }
       } catch (error) {
-        console.warn('⚠️ Sync failed:', error);
+        console.warn('⚠️ Sync threw an error:', error);
         logCrash(error, { source: 'performSync' });
       }
     };
@@ -206,14 +194,13 @@ export default function RootLayout() {
     };
   }, [appIsReady]);
 
-  // Show loader while app is preparing or loader is visible
   if (!appIsReady || showLoader) {
     return (
       <ErrorBoundary>
         <View
           style={{
             flex: 1,
-            backgroundColor: '#000000', // Pure black background
+            backgroundColor: '#000000',
             alignItems: 'center',
             justifyContent: 'center',
           }}
