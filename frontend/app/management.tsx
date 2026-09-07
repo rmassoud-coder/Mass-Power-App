@@ -17,7 +17,6 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getReport, getWeeklyCashSummary } from '../src/db/database';
 import { pushToCloud, pullFromCloud } from '../src/utils/dbSync';
-import { flushAutoPush } from '../src/utils/autoSync';
 import { getBroadcastContacts, openWhatsAppBroadcast } from '../src/utils/whatsappHelper';
 
 export default function ManagementScreen() {
@@ -71,14 +70,17 @@ export default function ManagementScreen() {
   useEffect(() => {
     isMounted.current = true;
 
+    // Initial sync when component mounts (optional - remove if you don't want auto-sync on load)
+    // You can uncomment this if you want initial sync
+    // handlePull();
+
     // ============================================================
     // PERIODIC SYNC EVERY SYNC_INTERVAL_MS
     // ============================================================
     intervalRef.current = setInterval(() => {
       if (isMounted.current) {
         console.log('🔄 Periodic sync running...');
-        // First flush push, then pull
-        flushAutoPush().catch(() => {});
+        // Silently sync in background
         pullFromCloud().catch(() => {});
       }
     }, SYNC_INTERVAL_MS);
@@ -88,7 +90,6 @@ export default function ManagementScreen() {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active' && isMounted.current) {
         console.log('📱 App came to foreground, syncing...');
-        flushAutoPush().catch(() => {});
         pullFromCloud().catch(() => {});
       }
     });
