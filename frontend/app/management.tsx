@@ -33,18 +33,7 @@ export default function ManagementScreen() {
   // ============================================================
   // SYNC CONFIGURATION
   // ============================================================
-  // ⭐ CHANGE THIS VALUE TO ADJUST SYNC INTERVAL
-  // Value is in milliseconds:
-  // 1 minute  = 60000
-  // 5 minutes = 300000
-  // 10 minutes = 600000
-  // 15 minutes = 900000
-  // 20 minutes = 1200000
-  // 25 minutes = 1500000
-  // 30 minutes = 1800000
-  // 1 hour    = 3600000
-  // ============================================================
-  const SYNC_INTERVAL_MS = 60000; // 1 minute (TESTING - change later)
+  const SYNC_INTERVAL_MS = 60000; // 1 minute (TESTING)
   // ============================================================
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -73,41 +62,30 @@ export default function ManagementScreen() {
     const performAutoSync = async () => {
       try {
         console.log('🔄 Auto-sync started...');
-        
-        // Push local data to cloud
         await pushToCloud();
         console.log('📤 Push completed at:', new Date().toLocaleTimeString());
-        
-        // Pull cloud data to local
         await pullFromCloud();
         console.log('📥 Pull completed at:', new Date().toLocaleTimeString());
-        
         console.log('✅ Sync completed at:', new Date().toLocaleTimeString());
-        
-        // Show confirmation (REMOVE THIS LATER)
-        Alert.alert('Sync Complete', 'Data pushed and pulled successfully!');
       } catch (e: any) {
         console.warn('⚠️ Auto-sync failed:', e);
-        // Show confirmation (REMOVE THIS LATER)
-        Alert.alert('Sync Failed', e?.message || 'Sync failed. Check connection.');
       }
     };
 
-    // Auto sync on component mount (app launch)
+    // Auto sync on component mount
     setTimeout(() => {
-      performAutoSync();
-    }, 1000); // 1 second delay to let screen load
+      if (isMounted.current) {
+        performAutoSync();
+      }
+    }, 1000);
 
-    // ============================================================
-    // PERIODIC SYNC EVERY SYNC_INTERVAL_MS (1 minute for testing)
-    // ============================================================
+    // Periodic sync every 1 minute
     intervalRef.current = setInterval(() => {
       if (isMounted.current) {
         console.log('⏰ Auto-sync interval running...');
         performAutoSync();
       }
     }, SYNC_INTERVAL_MS);
-    // ============================================================
 
     // Sync when app comes back to foreground
     const subscription = AppState.addEventListener('change', (state) => {
@@ -127,7 +105,6 @@ export default function ManagementScreen() {
       subscription.remove();
     };
   }, []);
-  // ============================================================
 
   const handlePush = async () => {
     try {
@@ -363,15 +340,14 @@ const styles = StyleSheet.create({
   },
   dashTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginTop: 8, textAlign: 'center' },
 
-  // New varied colors (all different)
   reportCard: { backgroundColor: '#10b981' },
   settingsCard: { backgroundColor: '#2563eb' },
   supplierDebtCard: { backgroundColor: '#8b5cf6' },
-  reminderCard: { backgroundColor: '#f97316' },  // Orange
-  warrantyCard: { backgroundColor: '#06b6d4' },  // Cyan
+  reminderCard: { backgroundColor: '#f97316' },
+  warrantyCard: { backgroundColor: '#06b6d4' },
   catPrinterCard: { backgroundColor: '#8b5cf6' },
   inventoryCard: { backgroundColor: '#059669' },
-  stickerCard: { backgroundColor: '#db2777' },   // Pink
+  stickerCard: { backgroundColor: '#db2777' },
 
   modalOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end',
