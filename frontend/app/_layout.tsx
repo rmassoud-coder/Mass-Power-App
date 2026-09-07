@@ -8,7 +8,7 @@ import { Image, Platform, View, Text, AppState } from 'react-native';
 import { initDatabase } from '../src/db/database';
 import RpmLoader from '../src/components/RpmLoader';
 import HtmlRasterizerHost from '../src/components/HtmlRasterizerHost';
-import { pushToCloud, pullFromCloud } from '../src/utils/dbSync';
+import { runAutoPush, runAutoPull } from '../src/utils/autoSync';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -80,17 +80,17 @@ export default function RootLayout() {
 
   // Global auto-sync: PUSH local changes, then PULL cloud changes in.
   // This is the single source of truth for background sync — no other
-  // screen should run its own sync loop, or changes made outside that
-  // screen never leave the device until a manual Push.
+  // screen runs its own sync loop, so changes made anywhere in the app
+  // still leave the device without needing that screen to be open.
   useEffect(() => {
     let lastSyncTime = Date.now();
 
     const performSync = async () => {
       try {
         console.log('🔄 Syncing database...');
-        await pushToCloud();
+        await runAutoPush();
         console.log('📤 Push completed at:', new Date().toLocaleTimeString());
-        await pullFromCloud();
+        await runAutoPull();
         console.log('📥 Pull completed at:', new Date().toLocaleTimeString());
         lastSyncTime = Date.now();
         console.log('✅ Sync completed at:', new Date().toLocaleTimeString());
