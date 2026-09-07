@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,6 @@ import {
   Alert,
   Modal,
   FlatList,
-  AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -30,15 +29,6 @@ export default function ManagementScreen() {
   const [contacts, setContacts] = useState<{ name: string; phone: string }[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
 
-  // ============================================================
-  // SYNC CONFIGURATION
-  // ============================================================
-  const SYNC_INTERVAL_MS = 60000; // 1 minute (TESTING)
-  // ============================================================
-
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const isMounted = useRef(true);
-
   useEffect(() => {
     const loadFinances = async () => {
       try {
@@ -53,58 +43,9 @@ export default function ManagementScreen() {
     loadFinances();
   }, []);
 
-  // ============================================================
-  // AUTO SYNC ON LAUNCH + EVERY 1 MINUTE
-  // ============================================================
-  useEffect(() => {
-    isMounted.current = true;
-
-    const performAutoSync = async () => {
-      try {
-        console.log('🔄 Auto-sync started...');
-        await pushToCloud();
-        console.log('📤 Push completed at:', new Date().toLocaleTimeString());
-        await pullFromCloud();
-        console.log('📥 Pull completed at:', new Date().toLocaleTimeString());
-        console.log('✅ Sync completed at:', new Date().toLocaleTimeString());
-      } catch (e: any) {
-        console.warn('⚠️ Auto-sync failed:', e);
-      }
-    };
-
-    // Auto sync on component mount
-    setTimeout(() => {
-      if (isMounted.current) {
-        performAutoSync();
-      }
-    }, 1000);
-
-    // Periodic sync every 1 minute
-    intervalRef.current = setInterval(() => {
-      if (isMounted.current) {
-        console.log('⏰ Auto-sync interval running...');
-        performAutoSync();
-      }
-    }, SYNC_INTERVAL_MS);
-
-    // Sync when app comes back to foreground
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active' && isMounted.current) {
-        console.log('📱 App came to foreground, syncing...');
-        performAutoSync();
-      }
-    });
-
-    // Cleanup
-    return () => {
-      isMounted.current = false;
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      subscription.remove();
-    };
-  }, []);
+  // NOTE: Auto-sync (push + pull, every 20 min, on foreground) now runs
+  // globally in app/_layout.tsx so it's active regardless of which screen
+  // is open. Manual Push/Pull buttons below still work as an override.
 
   const handlePush = async () => {
     try {
@@ -187,9 +128,7 @@ export default function ManagementScreen() {
             </TouchableOpacity>
           </View>
           <Text style={styles.syncHint}>Push uploads data. Pull merges cloud copy.</Text>
-          <Text style={styles.syncHint}>
-            Auto-sync every {SYNC_INTERVAL_MS / 60000} minutes
-          </Text>
+          <Text style={styles.syncHint}>Auto-sync runs in the background every 20 minutes.</Text>
         </View>
 
         {loading && (
