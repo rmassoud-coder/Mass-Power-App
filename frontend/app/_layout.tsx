@@ -8,7 +8,7 @@ import { Image, Platform, View, Text, AppState } from 'react-native';
 import { initDatabase } from '../src/db/database';
 import RpmLoader from '../src/components/RpmLoader';
 import HtmlRasterizerHost from '../src/components/HtmlRasterizerHost';
-import { runAutoPull, runAutoPush } from '../src/utils/autoSync';
+import { runAutoPull, flushAutoPush } from '../src/utils/autoSync';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -86,11 +86,11 @@ export default function RootLayout() {
       try {
         console.log('🔄 Auto-sync started...');
         
-        // First push local changes to cloud (no confirmation)
-        await runAutoPush();
+        // First flush any pending push (upload local changes)
+        await flushAutoPush();
         console.log('✅ Push completed at:', new Date().toLocaleTimeString());
         
-        // Then pull cloud changes to local
+        // Then pull cloud changes to local (safe merge)
         await runAutoPull();
         console.log('✅ Pull completed at:', new Date().toLocaleTimeString());
         
