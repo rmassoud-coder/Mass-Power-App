@@ -8,7 +8,7 @@ import { Image, Platform, View, Text, AppState } from 'react-native';
 import { initDatabase } from '../src/db/database';
 import RpmLoader from '../src/components/RpmLoader';
 import HtmlRasterizerHost from '../src/components/HtmlRasterizerHost';
-import { runAutoPull, triggerAutoPush } from '../src/utils/autoSync';
+import { runAutoPull, flushAutoPush } from '../src/utils/autoSync';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -78,7 +78,7 @@ export default function RootLayout() {
   const SYNC_INTERVAL_MS = 1200000; // 20 minutes
   // ============================================================
 
-  // Safe auto-sync: push + pull
+  // Safe auto-sync: flush push + pull
   useEffect(() => {
     let lastSyncTime = Date.now();
 
@@ -86,11 +86,13 @@ export default function RootLayout() {
       try {
         console.log('🔄 Syncing database...');
         
-        // Trigger auto push (safe - handles errors internally)
-        triggerAutoPush();
-        console.log('📤 Push triggered at:', new Date().toLocaleTimeString());
+        // Flush any pending push (waits for it to complete)
+        console.log('📤 Flushing push...');
+        await flushAutoPush();
+        console.log('📤 Push completed at:', new Date().toLocaleTimeString());
         
         // Pull cloud changes
+        console.log('📥 Pulling from cloud...');
         await runAutoPull();
         console.log('📥 Pull completed at:', new Date().toLocaleTimeString());
         
