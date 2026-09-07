@@ -4,56 +4,27 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { Asset } from 'expo-asset';
-import { Image, Platform, View, Text, AppState, ScrollView } from 'react-native';
+import { Image, Platform, View, Text, AppState } from 'react-native';
 import { initDatabase } from '../src/db/database';
 import RpmLoader from '../src/components/RpmLoader';
 import HtmlRasterizerHost from '../src/components/HtmlRasterizerHost';
-import { pushToCloud, pullFromCloud } from '../src/utils/dbSync';
-import { loadSettings, isGithubConfigured } from '../src/utils/settings';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { runAutoPull } from '../src/utils/autoSync';
 
 SplashScreen.preventAutoHideAsync();
-
-// Debug log storage
-const DEBUG_LOG_KEY = 'mp_debug_logs';
-let debugLogs: string[] = [];
-
-async function addDebugLog(message: string) {
-  const timestamp = new Date().toLocaleTimeString();
-  const logEntry = `[${timestamp}] ${message}`;
-  console.log(logEntry);
-  
-  debugLogs.push(logEntry);
-  if (debugLogs.length > 100) {
-    debugLogs = debugLogs.slice(-100);
-  }
-  
-  try {
-    await AsyncStorage.setItem(DEBUG_LOG_KEY, JSON.stringify(debugLogs));
-  } catch (e) {
-    // ignore
-  }
-}
 
 export default function RootLayout() {
   const [appIsReady, setAppIsReady] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
   const [showLoader, setShowLoader] = useState(true);
-  const [debugScreen, setDebugScreen] = useState<string | null>(null);
 
   useEffect(() => {
     async function prepare() {
       try {
-        addDebugLog('📦 [1] Starting app initialization...');
-        
         // Initialize local SQLite database
-        addDebugLog('📦 [2] Initializing database...');
         await initDatabase();
-        addDebugLog('📦 [3] Database initialized successfully');
 
         // Prewarm icon assets only on native (skip on web)
         if (Platform.OS !== 'web') {
-          addDebugLog('📦 [4] Prewarming icon assets...');
           const iconAssets = [
             require('../assets/images/icon.png'),
             require('../assets/images/adaptive-icon.png'),
@@ -72,16 +43,14 @@ export default function RootLayout() {
               Image.prefetch(source.uri);
             }
           });
-          addDebugLog('📦 [5] Icon assets prewarmed');
         }
       } catch (e: any) {
-        addDebugLog('📦 [ERROR] Initialization failed: ' + (e?.message || e));
+        console.warn(e);
         setInitError(e?.message || 'Failed to initialize database');
       } finally {
-        addDebugLog('📦 [6] Hiding splash screen...');
+        // Hide the native splash
         await SplashScreen.hideAsync();
         setAppIsReady(true);
-        addDebugLog('📦 [7] App is ready');
       }
     }
 
@@ -90,107 +59,71 @@ export default function RootLayout() {
 
   // Handle RpmLoader completion
   const handleLoaderComplete = () => {
-    addDebugLog('🔄 [8] Loader complete');
     setShowLoader(false);
   };
 
   // ============================================================
   // SYNC CONFIGURATION
   // ============================================================
-  const SYNC_INTERVAL_MS = 60000; // 1 minute (TESTING)
+  // ⭐ CHANGE THIS VALUE TO ADJUST SYNC INTERVAL
+  // Value is in milliseconds:
+  // 1 minute  = 60000
+  // 5 minutes = 300000
+  // 10 minutes = 600000
+  // 15 minutes = 900000
+  // 20 minutes = 1200000  <-- CURRENT VALUE
+  // 30 minutes = 1800000
+  // 1 hour    = 3600000
+  // ============================================================
+  const SYNC_INTERVAL_MS = 1200000; // 20 minutes
   // ============================================================
 
-  // Auto sync: push + pull on launch and every 1 minute
+  // Safe auto-pull: merges cloud changes in
   useEffect(() => {
-    addDebugLog('🔄 [9] Auto-sync effect mounted');
-    let isMounted = true;
+    let lastSyncTime = Date.now();
 
     const performSync = async () => {
-      addDebugLog('🔄 [10] performSync called');
       try {
-        addDebugLog('🔄 [11] Loading settings...');
-        const settings = await loadSettings();
-        addDebugLog('🔄 [12] Settings loaded: ' + (settings ? 'yes' : 'no'));
-        
-        if (!isGithubConfigured(settings)) {
-          addDebugLog('🔄 [13] GitHub not configured, skipping sync');
-          return;
-        }
-        addDebugLog('🔄 [14] GitHub is configured, continuing...');
-
-        addDebugLog('🔄 [15] Pushing to cloud...');
-        await pushToCloud(settings);
-        addDebugLog('🔄 [16] Push completed');
-        
-        addDebugLog('🔄 [17] Pulling from cloud...');
-        await pullFromCloud(settings);
-        addDebugLog('🔄 [18] Pull completed');
-        
-        addDebugLog('🔄 [19] Full sync completed successfully');
-      } catch (e: any) {
-        addDebugLog('🔄 [ERROR] Sync failed: ' + (e?.message || e));
-        addDebugLog('🔄 [ERROR] Stack: ' + (e?.stack || 'No stack available'));
-        setDebugScreen('Sync Error: ' + (e?.message || e));
+        console.log('🔄 Syncing database...');
+        await runAutoPull();
+        lastSyncTime = Date.now();
+        console.log('✅ Sync completed at:', new Date().toLocaleTimeString());
+      } catch (error) {
+        console.warn('⚠️ Sync failed:', error);
       }
     };
 
-    // Initial sync after app loads (2 second delay)
-    addDebugLog('🔄 [20] Setting initial sync timeout...');
-    const initialTimeout = setTimeout(() => {
-      addDebugLog('🔄 [21] Initial sync timeout fired');
-      if (isMounted) {
-        performSync();
-      }
-    }, 2000);
+    // Initial sync when app loads
+    performSync();
 
-    // Periodic sync every 1 minute
-    addDebugLog('🔄 [22] Setting interval...');
+    // ============================================================
+    // PERIODIC SYNC EVERY SYNC_INTERVAL_MS
+    // ============================================================
     const intervalId = setInterval(() => {
-      addDebugLog('🔄 [23] Interval fired');
-      if (isMounted) {
+      const timeSinceLastSync = Date.now() - lastSyncTime;
+      
+      // Only sync if enough time has passed
+      if (timeSinceLastSync >= SYNC_INTERVAL_MS) {
+        console.log(`⏰ ${SYNC_INTERVAL_MS / 60000} minutes elapsed, syncing...`);
         performSync();
       }
-    }, SYNC_INTERVAL_MS);
+    }, 60000); // Check every minute if sync is needed
+    // ============================================================
 
     // Sync when app comes back to foreground
-    addDebugLog('🔄 [24] Setting AppState listener...');
     const sub = AppState.addEventListener('change', (state) => {
-      addDebugLog('🔄 [25] AppState changed to: ' + state);
-      if (state === 'active' && isMounted) {
-        addDebugLog('🔄 [26] App came to foreground, syncing...');
+      if (state === 'active') {
+        console.log('📱 App came to foreground, syncing...');
         performSync();
       }
     });
 
-    // Cleanup
+    // Cleanup on unmount
     return () => {
-      addDebugLog('🔄 [27] Cleanup called');
-      isMounted = false;
-      clearTimeout(initialTimeout);
       clearInterval(intervalId);
       sub.remove();
     };
   }, []);
-
-  // Show debug screen if error occurred
-  if (debugScreen) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#000', padding: 20, justifyContent: 'center' }}>
-        <Text style={{ color: '#ff4444', fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>
-          DEBUG ERROR:
-        </Text>
-        <Text style={{ color: '#fff', fontSize: 14, marginBottom: 20 }}>
-          {debugScreen}
-        </Text>
-        <TouchableOpacity
-          onPress={() => setDebugScreen(null)}
-          style={{ backgroundColor: '#444', padding: 10, borderRadius: 8 }}
-        >
-          <Text style={{ color: '#fff', textAlign: 'center' }}>Continue Anyway</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
 
   // Show loader while app is preparing or loader is visible
   if (!appIsReady || showLoader) {
@@ -198,7 +131,7 @@ export default function RootLayout() {
       <View
         style={{
           flex: 1,
-          backgroundColor: '#000000',
+          backgroundColor: '#000000', // Pure black background
           alignItems: 'center',
           justifyContent: 'center',
         }}
