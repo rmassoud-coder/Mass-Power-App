@@ -8,7 +8,7 @@ import { Image, Platform, View, Text, AppState } from 'react-native';
 import { initDatabase } from '../src/db/database';
 import RpmLoader from '../src/components/RpmLoader';
 import HtmlRasterizerHost from '../src/components/HtmlRasterizerHost';
-import { runAutoPull } from '../src/utils/autoSync';
+import { pushToCloud, pullFromCloud } from '../src/utils/dbSync';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -71,55 +71,64 @@ export default function RootLayout() {
   // 5 minutes = 300000
   // 10 minutes = 600000
   // 15 minutes = 900000
-  // 20 minutes = 1200000  <-- CURRENT VALUE
+  // 20 minutes = 1200000
   // 30 minutes = 1800000
   // 1 hour    = 3600000
   // ============================================================
-  const SYNC_INTERVAL_MS = 1200000; // 20 minutes
+  const SYNC_INTERVAL_MS = 60000; // 1 minute (TESTING)
   // ============================================================
 
-  // Safe auto-pull: merges cloud changes in
+  // Auto sync: push + pull on launch and every 1 minute
   useEffect(() => {
-    let lastSyncTime = Date.now();
+    let isMounted = true;
 
     const performSync = async () => {
       try {
-        console.log('🔄 Syncing database...');
-        await runAutoPull();
-        lastSyncTime = Date.now();
-        console.log('✅ Sync completed at:', new Date().toLocaleTimeString());
-      } catch (error) {
-        console.warn('⚠️ Sync failed:', error);
+        console.log('🔄 Auto-sync started...');
+        
+        // Push local data to cloud
+        console.log('📤 Pushing to cloud...');
+        await pushToCloud();
+        console.log('📤 Push completed at:', new Date().toLocaleTimeString());
+        
+        // Pull cloud data to local
+        console.log('📥 Pulling from cloud...');
+        await pullFromCloud();
+        console.log('📥 Pull completed at:', new Date().toLocaleTimeString());
+        
+        console.log('✅ Full sync completed at:', new Date().toLocaleTimeString());
+      } catch (e: any) {
+        console.warn('⚠️ Sync failed:', e?.message || e);
       }
     };
 
-    // Initial sync when app loads
-    performSync();
-
-    // ============================================================
-    // PERIODIC SYNC EVERY SYNC_INTERVAL_MS
-    // ============================================================
-    const intervalId = setInterval(() => {
-      const timeSinceLastSync = Date.now() - lastSyncTime;
-      
-      // Only sync if enough time has passed
-      if (timeSinceLastSync >= SYNC_INTERVAL_MS) {
-        console.log(`⏰ ${SYNC_INTERVAL_MS / 60000} minutes elapsed, syncing...`);
+    // Initial sync after app loads (2 second delay)
+    const initialTimeout = setTimeout(() => {
+      if (isMounted) {
         performSync();
       }
-    }, 60000); // Check every minute if sync is needed
-    // ============================================================
+    }, 2000);
+
+    // Periodic sync every 1 minute
+    const intervalId = setInterval(() => {
+      if (isMounted) {
+        console.log('⏰ Auto-sync interval running...');
+        performSync();
+      }
+    }, SYNC_INTERVAL_MS);
 
     // Sync when app comes back to foreground
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') {
+      if (state === 'active' && isMounted) {
         console.log('📱 App came to foreground, syncing...');
         performSync();
       }
     });
 
-    // Cleanup on unmount
+    // Cleanup
     return () => {
+      isMounted = false;
+      clearTimeout(initialTimeout);
       clearInterval(intervalId);
       sub.remove();
     };
