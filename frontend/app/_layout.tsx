@@ -8,7 +8,7 @@ import { Image, Platform, View, Text, AppState } from 'react-native';
 import { initDatabase } from '../src/db/database';
 import RpmLoader from '../src/components/RpmLoader';
 import HtmlRasterizerHost from '../src/components/HtmlRasterizerHost';
-import { runAutoPull } from '../src/utils/autoSync';
+import { pushToCloud, pullFromCloud } from '../src/utils/dbSync';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -78,14 +78,20 @@ export default function RootLayout() {
   const SYNC_INTERVAL_MS = 1200000; // 20 minutes
   // ============================================================
 
-  // Safe auto-pull: merges cloud changes in
+  // Global auto-sync: PUSH local changes, then PULL cloud changes in.
+  // This is the single source of truth for background sync — no other
+  // screen should run its own sync loop, or changes made outside that
+  // screen never leave the device until a manual Push.
   useEffect(() => {
     let lastSyncTime = Date.now();
 
     const performSync = async () => {
       try {
         console.log('🔄 Syncing database...');
-        await runAutoPull();
+        await pushToCloud();
+        console.log('📤 Push completed at:', new Date().toLocaleTimeString());
+        await pullFromCloud();
+        console.log('📥 Pull completed at:', new Date().toLocaleTimeString());
         lastSyncTime = Date.now();
         console.log('✅ Sync completed at:', new Date().toLocaleTimeString());
       } catch (error) {
@@ -101,7 +107,7 @@ export default function RootLayout() {
     // ============================================================
     const intervalId = setInterval(() => {
       const timeSinceLastSync = Date.now() - lastSyncTime;
-      
+
       // Only sync if enough time has passed
       if (timeSinceLastSync >= SYNC_INTERVAL_MS) {
         console.log(`⏰ ${SYNC_INTERVAL_MS / 60000} minutes elapsed, syncing...`);
