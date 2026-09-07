@@ -8,7 +8,7 @@ import { Image, Platform, View, Text, AppState } from 'react-native';
 import { initDatabase } from '../src/db/database';
 import RpmLoader from '../src/components/RpmLoader';
 import HtmlRasterizerHost from '../src/components/HtmlRasterizerHost';
-import { runAutoPull } from '../src/utils/autoSync';
+import { runAutoPull, runAutoPush } from '../src/utils/autoSync';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -78,22 +78,30 @@ export default function RootLayout() {
   const SYNC_INTERVAL_MS = 1200000; // 20 minutes
   // ============================================================
 
-  // Safe auto-pull: merges cloud changes in
+  // Safe auto-sync: pushes local changes then pulls cloud changes
   useEffect(() => {
     let lastSyncTime = Date.now();
 
     const performSync = async () => {
       try {
-        console.log('🔄 Syncing database...');
+        console.log('🔄 Auto-sync started...');
+        
+        // First push local changes to cloud (no confirmation)
+        await runAutoPush();
+        console.log('✅ Push completed at:', new Date().toLocaleTimeString());
+        
+        // Then pull cloud changes to local
         await runAutoPull();
+        console.log('✅ Pull completed at:', new Date().toLocaleTimeString());
+        
         lastSyncTime = Date.now();
-        console.log('✅ Sync completed at:', new Date().toLocaleTimeString());
+        console.log('✅ Full sync completed at:', new Date().toLocaleTimeString());
       } catch (error) {
         console.warn('⚠️ Sync failed:', error);
       }
     };
 
-    // Initial sync when app loads
+    // Initial sync when app loads (silent, no alerts)
     performSync();
 
     // ============================================================
