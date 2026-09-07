@@ -40,11 +40,11 @@ export default function ManagementScreen() {
   // 10 minutes = 600000
   // 15 minutes = 900000
   // 20 minutes = 1200000
-  // 25 minutes = 1500000  <-- CURRENT VALUE
+  // 25 minutes = 1500000
   // 30 minutes = 1800000
   // 1 hour    = 3600000
   // ============================================================
-  const SYNC_INTERVAL_MS = 1500000; // 25 minutes
+  const SYNC_INTERVAL_MS = 60000; // 1 minute (TESTING - change later)
   // ============================================================
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -65,23 +65,46 @@ export default function ManagementScreen() {
   }, []);
 
   // ============================================================
-  // PERIODIC SYNC SETUP
+  // AUTO SYNC ON LAUNCH + EVERY 1 MINUTE
   // ============================================================
   useEffect(() => {
     isMounted.current = true;
 
-    // Initial sync when component mounts (optional - remove if you don't want auto-sync on load)
-    // You can uncomment this if you want initial sync
-    // handlePull();
+    const performAutoSync = async () => {
+      try {
+        console.log('🔄 Auto-sync started...');
+        
+        // Push local data to cloud
+        await pushToCloud();
+        console.log('📤 Push completed at:', new Date().toLocaleTimeString());
+        
+        // Pull cloud data to local
+        await pullFromCloud();
+        console.log('📥 Pull completed at:', new Date().toLocaleTimeString());
+        
+        console.log('✅ Sync completed at:', new Date().toLocaleTimeString());
+        
+        // Show confirmation (REMOVE THIS LATER)
+        Alert.alert('Sync Complete', 'Data pushed and pulled successfully!');
+      } catch (e: any) {
+        console.warn('⚠️ Auto-sync failed:', e);
+        // Show confirmation (REMOVE THIS LATER)
+        Alert.alert('Sync Failed', e?.message || 'Sync failed. Check connection.');
+      }
+    };
+
+    // Auto sync on component mount (app launch)
+    setTimeout(() => {
+      performAutoSync();
+    }, 1000); // 1 second delay to let screen load
 
     // ============================================================
-    // PERIODIC SYNC EVERY SYNC_INTERVAL_MS
+    // PERIODIC SYNC EVERY SYNC_INTERVAL_MS (1 minute for testing)
     // ============================================================
     intervalRef.current = setInterval(() => {
       if (isMounted.current) {
-        console.log('🔄 Periodic sync running...');
-        // Silently sync in background
-        pullFromCloud().catch(() => {});
+        console.log('⏰ Auto-sync interval running...');
+        performAutoSync();
       }
     }, SYNC_INTERVAL_MS);
     // ============================================================
@@ -90,7 +113,7 @@ export default function ManagementScreen() {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active' && isMounted.current) {
         console.log('📱 App came to foreground, syncing...');
-        pullFromCloud().catch(() => {});
+        performAutoSync();
       }
     });
 
