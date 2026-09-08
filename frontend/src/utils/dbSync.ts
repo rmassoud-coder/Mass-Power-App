@@ -263,7 +263,7 @@ export async function restoreLocalSafetySnapshot(): Promise<void> {
 }
 
 /* -------------------------------------------------------------------------- */
-/*         Versioned cloud backups — DISABLED (Solution 1)                    */
+/*         Versioned cloud backups — written on every Push, never pruned      */
 /* -------------------------------------------------------------------------- */
 
 /** Timestamped copy filename, safe for use as a path segment (no colons). */
@@ -271,18 +271,15 @@ function backupFileName(iso: string): string {
   return `backups/mass-power-db-${iso.replace(/[:.]/g, '-')}.json`;
 }
 
-/** 
- * DISABLED - No longer uploads versioned backups to GitHub.
- * This prevents backup files from triggering unnecessary workflow runs.
- * Local safety snapshot is still saved (see saveLocalSafetySnapshot()).
- */
+/** Uploads a dated copy of the snapshot to vehicle profiles/backups/.
+ *  Failures here are logged but never block the main push — the primary
+ *  mass-power-db.json upload is what matters most and must still succeed
+ *  even if this secondary copy fails for some reason (e.g. rare rate limit). */
 async function uploadVersionedBackup(
   settings: AppSettings,
   json: string,
   startedAt: string
 ): Promise<void> {
-  // ===== SOLUTION 1: Commented out completely =====
-  /*
   try {
     await uploadFileToGithub(
       settings,
@@ -293,10 +290,6 @@ async function uploadVersionedBackup(
   } catch (e: any) {
     console.warn('Versioned backup upload failed (main push still succeeded):', e?.message);
   }
-  */
-  
-  // Optional: Log locally only
-  console.log(`📦 Backup skipped (Solution 1): ${startedAt}`);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -330,7 +323,7 @@ export async function pushToCloud(settings?: AppSettings): Promise<SyncResult> {
     await uploadFileToGithub(settings, SYNC_FILE_NAME, json, `Mass Power push ${startedAt}`);
   });
   
-  // Backup upload (DISABLED - Solution 1)
+  // Backup upload (non-critical, don't retry)
   await uploadVersionedBackup(settings, json, startedAt);
   
   await setLastSyncAt(startedAt);
