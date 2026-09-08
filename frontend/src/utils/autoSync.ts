@@ -1,25 +1,9 @@
 /**
  * autoSync — automatic push + automatic MERGE-pull.
- *
- * *** History note (2026-08-08) ***
- * An earlier version silently pulled on every app open using a destructive
- * REPLACE — that overwrote real local data with a stale cloud snapshot and
- * caused real data loss. It was disabled entirely afterward.
- *
- * Auto-pull is reintroduced here, but it is now safe by construction:
- * dbSync.ts's pullFromCloud() uses mergeCloudIntoLocal(), which only ever
- * ADDS or UPDATES records (newer updated_at wins) and NEVER deletes local
- * rows or wipes a table missing from the cloud payload. A local safety
- * snapshot is also saved automatically before every merge (see dbSync.ts),
- * so even an unwanted merge can be undone on-device.
- *
- * Limitation to know: vehicles/services/suppliers have no updated_at
- * column, so an EDIT to an already-synced record on one device will not
- * auto-propagate to the other — only brand-new records sync automatically.
- * Use the manual Push/Pull buttons in Backend Management for edits.
  */
 import { pushToCloud, pullFromCloud } from './dbSync';
 import { loadSettings, isGithubConfigured } from './settings';
+import { logDebug } from './debugLog';
 
 export type AutoSyncStatus = 'idle' | 'syncing' | 'ok' | 'error';
 
@@ -69,28 +53,41 @@ let _autoPullInFlight: Promise<void> | null = null;
 
 /**
  * Safe to call as often as you like — throttled internally, and merges
- * only ever add/update, never delete. Call on app launch and on every
- * foreground transition for near-real-time visibility across devices.
+ * only ever add/update, never delete.
  */
 export async function runAutoPull(): Promise<void> {
-  if (_autoPullInFlight) return _autoPullInFlight;
+  logDebug('runAutoPull', 'ENTERED runAutoPull()');
+  if (_autoPullInFlight) {
+    logDebug('runAutoPull', 'Skipped — already in flight');
+    return _autoPullInFlight;
+  }
   const now = Date.now();
-  if (now - _lastAutoPullAt < AUTO_PULL_MIN_INTERVAL_MS) return;
+  if (now - _lastAutoPullAt < AUTO_PULL_MIN_INTERVAL_MS) {
+    logDebug('runAutoPull', `Skipped — throttled (${Math.round((now - _lastAutoPullAt) / 1000)}s since last, needs ${AUTO_PULL_MIN_INTERVAL_MS / 1000}s)`);
+    return;
+  }
   _lastAutoPullAt = now;
 
   _autoPullInFlight = (async () => {
     try {
       const settings = await loadSettings();
-      if (!isGithubConfigured(settings)) return;
+      logDebug('runAutoPull', `loadSettings() -> ${JSON.stringify(settings)}`);
+      if (!isGithubConfigured(settings)) {
+        logDebug('runAutoPull', 'isGithubConfigured() returned false — skipping pull');
+        return;
+      }
       _setState({ status: 'syncing', lastError: null });
+      logDebug('runAutoPull', 'Calling pullFromCloud()...');
       const res = await pullFromCloud(settings);
+      logDebug('runAutoPull', `pullFromCloud() succeeded -> ${JSON.stringify(res)}`);
       _setState({ status: 'ok', lastSyncedAt: res.syncedAt, lastError: null });
     } catch (e: any) {
-      // "No cloud snapshot found yet" just means nothing to pull — not an error.
-      if (String(e?.message || '').includes('No cloud snapshot')) {
+      const msg = e?.message || String(e);
+      logDebug('runAutoPull', `FAILED: ${msg}`);
+      if (msg.includes('No cloud snapshot')) {
         _setState({ status: 'idle' });
       } else {
-        _setState({ status: 'error', lastError: e?.message || 'Auto-pull failed' });
+        _setState({ status: 'error', lastError: msg || 'Auto-pull failed' });
       }
     } finally {
       _autoPullInFlight = null;
@@ -109,11 +106,12 @@ let _pendingWhileRunning = false;
 
 const PUSH_DEBOUNCE_MS = 1200;
 
-/** Call this after every add/edit/delete so changes reach the cloud
- *  (and from there, the other device's next auto-pull) automatically. */
+/** Call this after every add/edit/delete so changes reach the cloud */
 export function triggerAutoPush(): void {
+  logDebug('triggerAutoPush', 'ENTERED triggerAutoPush()');
   if (_pushInFlight) {
     _pendingWhileRunning = true;
+    logDebug('triggerAutoPush', 'Push in flight — queued for after it finishes');
     return;
   }
   if (_pushTimer) clearTimeout(_pushTimer);
@@ -130,18 +128,28 @@ export function triggerAutoPush(): void {
 }
 
 async function _runPushNow(): Promise<void> {
+  logDebug('_runPushNow', 'ENTERED _runPushNow()');
   try {
     const settings = await loadSettings();
-    if (!isGithubConfigured(settings)) return;
+    logDebug('_runPushNow', `loadSettings() -> ${JSON.stringify(settings)}`);
+    if (!isGithubConfigured(settings)) {
+      logDebug('_runPushNow', 'isGithubConfigured() returned false — skipping push');
+      return;
+    }
     _setState({ status: 'syncing', lastError: null });
+    logDebug('_runPushNow', 'Calling pushToCloud()...');
     const res = await pushToCloud(settings);
+    logDebug('_runPushNow', `pushToCloud() succeeded -> ${JSON.stringify(res)}`);
     _setState({ status: 'ok', lastSyncedAt: res.syncedAt, lastError: null });
   } catch (e: any) {
-    _setState({ status: 'error', lastError: e?.message || 'Auto-push failed' });
+    const msg = e?.message || String(e);
+    logDebug('_runPushNow', `FAILED: ${msg}`);
+    _setState({ status: 'error', lastError: msg || 'Auto-push failed' });
   }
 }
 
 export async function flushAutoPush(): Promise<void> {
+  logDebug('flushAutoPush', 'ENTERED flushAutoPush()');
   if (_pushTimer) {
     clearTimeout(_pushTimer);
     _pushTimer = null;
@@ -150,5 +158,27 @@ export async function flushAutoPush(): Promise<void> {
     await _pushInFlight;
   } else {
     await _runPushNow();
+  }
+}
+
+// ===== runAutoPush: direct push without debounce =====
+export async function runAutoPush(): Promise<void> {
+  logDebug('runAutoPush', 'ENTERED runAutoPush()');
+  try {
+    const settings = await loadSettings();
+    logDebug('runAutoPush', `loadSettings() -> ${JSON.stringify(settings)}`);
+    if (!isGithubConfigured(settings)) {
+      logDebug('runAutoPush', 'isGithubConfigured() returned false — skipping push');
+      return;
+    }
+    _setState({ status: 'syncing', lastError: null });
+    logDebug('runAutoPush', 'Calling pushToCloud()...');
+    const res = await pushToCloud(settings);
+    logDebug('runAutoPush', `pushToCloud() succeeded -> ${JSON.stringify(res)}`);
+    _setState({ status: 'ok', lastSyncedAt: res.syncedAt, lastError: null });
+  } catch (e: any) {
+    const msg = e?.message || String(e);
+    logDebug('runAutoPush', `FAILED: ${msg}`);
+    _setState({ status: 'error', lastError: msg || 'Auto-push failed' });
   }
 }
