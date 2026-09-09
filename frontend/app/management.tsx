@@ -116,7 +116,7 @@ export default function ManagementScreen() {
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         {/* Cloud Sync */}
         <View style={styles.syncCard}>
-          <Text style={styles.syncTitle}>Cloud Sync</Text>
+          <Text style={styles.syncTitle}>Manual Cloud Sync</Text>
           <View style={styles.syncButtonsRow}>
             <TouchableOpacity style={styles.pushBtn} onPress={handlePush}>
               <Ionicons name="cloud-upload" size={20} color="#fff" />
