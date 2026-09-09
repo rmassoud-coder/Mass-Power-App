@@ -15,12 +15,12 @@ const SYNC_FILE_NAME = 'mass-power-db.json';
 const KEY_LAST_SYNC = 'mp_last_sync_at';
 const LOCAL_SNAPSHOT_FILE = `${FileSystem.documentDirectory}pre-pull-snapshot.json`;
 
-// ===== NEW: Timeout and retry configuration =====
-const DEFAULT_TIMEOUT_MS = 60000; // 60 seconds (was 20s)
+// ===== Timeout and retry configuration =====
+const DEFAULT_TIMEOUT_MS = 60000; // 60 seconds
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000; // 2 seconds between retries
 
-// ===== NEW: Helper for fetch with timeout =====
+// ===== Helper for fetch with timeout =====
 async function fetchWithTimeout(
   url: string,
   options: RequestInit = {},
@@ -45,26 +45,26 @@ async function fetchWithTimeout(
   }
 }
 
-// ===== NEW: Retry wrapper =====
+// ===== Retry wrapper =====
 async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   maxRetries: number = MAX_RETRIES,
   baseDelay: number = RETRY_DELAY_MS
 ): Promise<T> {
   let lastError: any;
-  
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error: any) {
       lastError = error;
       console.warn(`Attempt ${attempt}/${maxRetries} failed:`, error.message);
-      
+
       // Don't retry if it's a 404 (file not found) or 401 (auth error)
       if (error.status === 404 || error.status === 401) {
         throw error;
       }
-      
+
       if (attempt < maxRetries) {
         const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff: 2s, 4s, 8s
         console.log(`Retrying in ${delay / 1000}s...`);
@@ -72,11 +72,11 @@ async function retryWithBackoff<T>(
       }
     }
   }
-  
+
   throw lastError;
 }
 
-// ===== NEW: Check network connectivity =====
+// ===== Check network connectivity =====
 async function checkNetworkConnectivity(): Promise<boolean> {
   try {
     // Try to reach GitHub API with a simple request
@@ -137,22 +137,22 @@ function buildContentsUrl(settings: AppSettings): string {
   return `${GITHUB_API}/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
 }
 
-// ===== UPDATED: fetchCloudSnapshot with retry and timeout =====
+// ===== fetchCloudSnapshot with retry and timeout =====
 async function fetchCloudSnapshot(settings: AppSettings): Promise<FullDbSnapshot | null> {
   const url = buildContentsUrl(settings);
-  
+
   // Check connectivity first
   const isConnected = await checkNetworkConnectivity();
   if (!isConnected) {
     throw new Error('Network error: Cannot reach GitHub. Check your internet connection.');
   }
-  
+
   const response = await retryWithBackoff(async () => {
     const res = await fetchWithTimeout(url, {
       method: 'GET',
       headers: authHeaders(settings.githubToken),
     }, DEFAULT_TIMEOUT_MS);
-    
+
     if (res.status === 404) return res;
     if (!res.ok) {
       const error = new Error(`Sync fetch failed (${res.status})`);
@@ -161,9 +161,9 @@ async function fetchCloudSnapshot(settings: AppSettings): Promise<FullDbSnapshot
     }
     return res;
   });
-  
+
   if (response.status === 404) return null;
-  
+
   const text = await response.text();
   try {
     return JSON.parse(text) as FullDbSnapshot;
@@ -296,43 +296,64 @@ async function uploadVersionedBackup(
 /*                                Push / Pull                                 */
 /* -------------------------------------------------------------------------- */
 
-/** Upload-only: local → cloud. Overwrites mass-power-db.json AND writes a
- *  timestamped copy to backups/ so history is never lost even if a bad
- *  push happens later. Never touches local data. */
+/**
+ * Upload local → cloud.
+ *
+ * Merges the CURRENT cloud snapshot into local before exporting for
+ * upload, so the snapshot pushed is always a superset of what's already
+ * in the cloud — it can add new records, but can never erase another
+ * device's already-pushed data.
+ */
 export async function pushToCloud(settings?: AppSettings): Promise<SyncResult> {
-  // 🔥 FIX: Auto-load settings if they weren't passed in
+  // Auto-load settings if they weren't passed in
   if (!settings) {
     const { loadSettings } = require('./settings');
     settings = await loadSettings();
   }
-  
+
   assertConfigured(settings);
-  
+
   // Check connectivity first
   const isConnected = await checkNetworkConnectivity();
   if (!isConnected) {
     throw new Error('Network error: Cannot reach GitHub. Check your internet connection and try again.');
   }
-  
+
   const startedAt = new Date().toISOString();
+
+  // Merge in whatever is currently in the cloud BEFORE exporting for
+  // upload. If this fails (e.g. no cloud file yet, or a transient
+  // network blip), we still proceed and push local-only data — same
+  // behavior as a first-ever push.
+  let mergeResult: MergeResult | undefined;
+  try {
+    const cloud = await retryWithBackoff(async () => fetchCloudSnapshot(settings!));
+    if (cloud) {
+      mergeResult = await mergeCloudIntoLocal(cloud);
+    }
+  } catch (e: any) {
+    console.warn('Pre-push merge failed, pushing local data as-is:', e?.message);
+  }
+
   const snap = await exportFullDatabase();
-  const json = JSON.stringify(snap);  // ← no spaces (much smaller)
-  
+  const json = JSON.stringify(snap); // no spaces (smaller payload)
+
   // Upload with retry logic
   await retryWithBackoff(async () => {
-    await uploadFileToGithub(settings, SYNC_FILE_NAME, json, `Mass Power push ${startedAt}`);
+    await uploadFileToGithub(settings!, SYNC_FILE_NAME, json, `Mass Power push ${startedAt}`);
   });
-  
+
   // Backup upload (non-critical, don't retry)
   await uploadVersionedBackup(settings, json, startedAt);
-  
+
   await setLastSyncAt(startedAt);
   return {
-    pulled: false,
+    pulled: !!mergeResult,
     pushed: true,
     cloudExportedAt: null,
     localExportedAt: snap.exported_at,
     syncedAt: startedAt,
+    mergeResult,
   };
 }
 
@@ -344,29 +365,29 @@ export async function pushToCloud(settings?: AppSettings): Promise<SyncResult> {
  * pulls something unwanted.
  */
 export async function pullFromCloud(settings?: AppSettings): Promise<SyncResult> {
-  // 🔥 FIX: Auto-load settings if they weren't passed in
+  // Auto-load settings if they weren't passed in
   if (!settings) {
     const { loadSettings } = require('./settings');
     settings = await loadSettings();
   }
-  
+
   assertConfigured(settings);
-  
+
   // Check connectivity first
   const isConnected = await checkNetworkConnectivity();
   if (!isConnected) {
     throw new Error('Network error: Cannot reach GitHub. Check your internet connection and try again.');
   }
-  
+
   const startedAt = new Date().toISOString();
   const cloud = await retryWithBackoff(async () => {
-    return await fetchCloudSnapshot(settings);
+    return await fetchCloudSnapshot(settings!);
   });
-  
+
   if (!cloud) {
     throw new Error('No cloud snapshot found yet. Push from a device first.');
   }
-  
+
   await saveLocalSafetySnapshot();
   const mergeResult = await mergeCloudIntoLocal(cloud);
   await setLastSyncAt(startedAt);
@@ -389,19 +410,19 @@ export async function isDailyDue(): Promise<boolean> {
   return Date.now() - lastMs >= 24 * 60 * 60 * 1000;
 }
 
-// ===== NEW: Export for testing/debugging =====
+// ===== Export for testing/debugging =====
 export async function testGitHubConnection(settings: AppSettings): Promise<{ success: boolean; message: string }> {
   try {
     const isConnected = await checkNetworkConnectivity();
     if (!isConnected) {
       return { success: false, message: 'Cannot reach GitHub. Check your internet connection.' };
     }
-    
+
     // Test with a simple API call
     const response = await fetchWithTimeout('https://api.github.com/zen', {
       headers: { 'Accept': 'application/json' },
     }, 10000);
-    
+
     if (response.ok) {
       return { success: true, message: 'GitHub connection successful!' };
     } else {
