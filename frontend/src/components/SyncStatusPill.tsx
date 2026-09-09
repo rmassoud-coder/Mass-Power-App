@@ -18,12 +18,8 @@ import * as dbSync from '../utils/dbSync';
 import { loadSettings, isGithubConfigured } from '../utils/settings';
 import { getDebugLogs, clearDebugLogs, type DebugLogEntry } from '../utils/debugLog';
 
-// ============================================================
-// DEBUG MODE — set to true to bring back the visible "View Sync
-// Logs" button if you ever need to diagnose a sync issue again.
-// ============================================================
+// Set to true to bring back the visible "View Sync Logs" button for debugging.
 const SHOW_DEBUG_BUTTON = false;
-// ============================================================
 
 function fallbackFormatSyncedAt(iso: string | null): string {
   if (!iso) return 'Not synced yet';
@@ -66,8 +62,6 @@ export default function SyncStatusPill(): React.ReactElement | null {
   const [state, setState] = useState<AutoSyncState>(getAutoSyncState());
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [lastSyncFallback, setLastSyncFallback] = useState<string | null>(null);
-
-  // Debug log modal state
   const [logsVisible, setLogsVisible] = useState(false);
   const [logs, setLogs] = useState<DebugLogEntry[]>([]);
 
@@ -115,8 +109,6 @@ export default function SyncStatusPill(): React.ReactElement | null {
 
   return (
     <View>
-      {/* Pill itself — long-press still opens the debug log even with the
-          button hidden, so you can check it later without a rebuild. */}
       <TouchableOpacity onLongPress={openLogs} activeOpacity={0.7}>
         <View
           style={[
