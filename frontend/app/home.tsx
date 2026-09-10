@@ -33,6 +33,11 @@ let oilReminderShown = false;
 export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // ✅ NEW: toggle between numeric (phone-pad, default — covers ~90%
+  // of searches: mobile, VIN, plate) and full alphabetic keyboard for
+  // the rare name search. Defaults to numeric like before.
+  const [isAlphaMode, setIsAlphaMode] = useState(false);
   
   const router = useRouter();
   const { height } = useWindowDimensions();
@@ -236,9 +241,21 @@ export default function HomeScreen() {
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 autoCapitalize="characters"
-                keyboardType="phone-pad"
+                keyboardType={isAlphaMode ? 'default' : 'phone-pad'}
                 testID="unified-search-input"
               />
+              {/* ✅ NEW: toggle between numeric and full keyboard */}
+              <TouchableOpacity
+                style={styles.keyboardToggle}
+                onPress={() => setIsAlphaMode((prev) => !prev)}
+                testID="keyboard-toggle-button"
+              >
+                <Ionicons
+                  name={isAlphaMode ? 'keypad-outline' : 'text-outline'}
+                  size={18}
+                  color="#0052cc"
+                />
+              </TouchableOpacity>
             </View>
             <TouchableOpacity
               style={[styles.searchButton, loading && styles.searchButtonDisabled]}
@@ -392,13 +409,22 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   input: {
+    flex: 1,
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontSize: 14,
     color: '#1e293b',
     textAlign: 'right',
+  },
+  keyboardToggle: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderLeftWidth: 1,
+    borderLeftColor: '#e2e8f0',
   },
   searchButton: {
     backgroundColor: '#0052cc',
