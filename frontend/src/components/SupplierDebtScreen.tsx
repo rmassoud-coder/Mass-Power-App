@@ -16,10 +16,12 @@ import {
   getSupplierBalances,
   updateSupplierBalance,
   getWeeklyCashSummary,
+  getMonthlyCashSummary,
   getReport,
   saveWeeklyWages,
   getLocalDateStr,
   getWeekStartMonday,
+  getMonthStart,
 } from '../../src/db/database';
 
 export default function SupplierDebtScreen() {
@@ -34,23 +36,31 @@ export default function SupplierDebtScreen() {
     todayOutsource: number;
     wtdIncome: number;
     wtdOutsource: number;
+    mtdIncome: number;
+    mtdOutsource: number;
     totalDebt: number;
     paidToday: number;
     paidWeek: number;
+    paidMonth: number;
     wages: number;
     todayCashOut: number;
     weekCashOut: number;
+    monthCashOut: number;
   }>({
     todayRevenue: 0,
     todayOutsource: 0,
     wtdIncome: 0,
     wtdOutsource: 0,
+    mtdIncome: 0,
+    mtdOutsource: 0,
     totalDebt: 0,
     paidToday: 0,
     paidWeek: 0,
+    paidMonth: 0,
     wages: 0,
     todayCashOut: 0,
     weekCashOut: 0,
+    monthCashOut: 0,
   });
   const router = useRouter();
 
@@ -60,11 +70,13 @@ export default function SupplierDebtScreen() {
       const today = new Date();
 
       // ✅ UNIFIED: use the same helpers everywhere (database.ts) so
-      // "today" and "week start" are computed identically across the
-      // whole app. Week always starts Monday and only rolls over at
-      // local midnight Monday (fixes Sat/Sun reset mismatch).
+      // "today", "week start", and "month start" are computed
+      // identically across the whole app. Week always starts Monday,
+      // month always starts the 1st — both only roll over at local
+      // midnight (fixes timezone-edge reset mismatches).
       const todayStr = getLocalDateStr(today);
       const mondayStr = getLocalDateStr(getWeekStartMonday(today));
+      const monthStartStr = getLocalDateStr(getMonthStart(today));
 
       const todayReport = await getReport(
         `${todayStr}T00:00:00`,
@@ -76,9 +88,15 @@ export default function SupplierDebtScreen() {
         `${todayStr}T23:59:59`
       );
 
-      const [balanceList, cashSummary] = await Promise.all([
+      const mtdReport = await getReport(
+        `${monthStartStr}T00:00:00`,
+        `${todayStr}T23:59:59`
+      );
+
+      const [balanceList, cashSummary, monthlyCashSummary] = await Promise.all([
         getSupplierBalances(),
         getWeeklyCashSummary(),
+        getMonthlyCashSummary(),
       ]);
 
       setSuppliers(balanceList);
@@ -87,12 +105,16 @@ export default function SupplierDebtScreen() {
         todayOutsource: todayReport.outsource_total,
         wtdIncome: wtdReport.total_cost,
         wtdOutsource: wtdReport.outsource_total,
+        mtdIncome: mtdReport.total_cost,
+        mtdOutsource: mtdReport.outsource_total,
         totalDebt: cashSummary.totalOutstandingDebt,
         paidToday: cashSummary.paidTowardsDebtToday,
         paidWeek: cashSummary.paidTowardsDebtWeek,
+        paidMonth: monthlyCashSummary.paidTowardsDebtMonth,
         wages: cashSummary.weekWages,
         todayCashOut: cashSummary.todayWages,
         weekCashOut: cashSummary.weekWages,
+        monthCashOut: monthlyCashSummary.monthWages,
       });
     } catch (error) {
       Alert.alert('Error', 'Failed to load supplier data.');
@@ -297,6 +319,62 @@ export default function SupplierDebtScreen() {
                 summary.wtdOutsource -
                 summary.paidWeek -
                 summary.weekCashOut
+              ).toFixed(2)}
+            </Text>
+          </View>
+
+          <View style={styles.cashDivider} />
+
+          {/* ✅ NEW: Month-to-Date Section — same pattern as Today/WTD above */}
+          <View style={styles.cashRow}>
+            <Text style={styles.cashLabel}>Month-to-Date Income</Text>
+            <Text style={styles.cashValue}>${summary.mtdIncome.toFixed(2)}</Text>
+          </View>
+
+          <View style={styles.cashRow}>
+            <Text style={[styles.cashLabel, { color: '#dc2626' }]}>− Outsource (MTD)</Text>
+            <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${summary.mtdOutsource.toFixed(2)}</Text>
+          </View>
+
+          <View style={styles.cashRow}>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]}>− Paid Debts This Month</Text>
+            <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${summary.paidMonth.toFixed(2)}</Text>
+          </View>
+
+          <View style={styles.cashRow}>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]}>− Cash Out (Month)</Text>
+            <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${summary.monthCashOut.toFixed(2)}</Text>
+          </View>
+
+          <View style={styles.cashDivider} />
+
+          {/* ✅ NEW: NET CASH DRAWER (MONTH) */}
+          <View style={styles.cashRow}>
+            <Text style={[styles.cashLabel, { fontWeight: '800', color: '#0f172a' }]}>
+              Net Cash Drawer (Month)
+            </Text>
+            <Text
+              style={[
+                styles.cashValue,
+                {
+                  fontWeight: '900',
+                  color:
+                    summary.mtdIncome -
+                      summary.mtdOutsource -
+                      summary.paidMonth -
+                      summary.monthCashOut >=
+                    0
+                      ? '#059669'
+                      : '#dc2626',
+                },
+              ]}
+            >
+              $
+              {(
+                summary.mtdIncome -
+                summary.mtdOutsource -
+                summary.paidMonth -
+                summary.monthCashOut
               ).toFixed(2)}
             </Text>
           </View>
