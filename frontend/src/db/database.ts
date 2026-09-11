@@ -38,7 +38,7 @@ export function getWeekStartMonday(d: Date = new Date()): Date {
   return monday;
 }
 
-// ✅ NEW: same "single source of truth" pattern as getWeekStartMonday,
+// ✅ same "single source of truth" pattern as getWeekStartMonday,
 // for month-to-date calculations. Local calendar month, day 1.
 export function getMonthStart(d: Date = new Date()): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -244,6 +244,24 @@ export interface ReportItem {
   service_date: string;
 }
 
+// ✅ NEW: tombstone entity types. A tombstone records "this ID was
+// deleted, at this time" so that additive-only sync merges know NOT to
+// resurrect a record another device already deleted, instead of only
+// ever being able to insert/update and never delete.
+export type TombstoneEntityType =
+  | 'customer'
+  | 'vehicle'
+  | 'service'
+  | 'inventory'
+  | 'supplier'
+  | 'service_item';
+
+export interface Tombstone {
+  entity_type: TombstoneEntityType;
+  entity_id: string;
+  deleted_at: string;
+}
+
 /////////////// BLOCK 1 - SETUP, INIT, & CORE TABLES ///////////////
 
 // Initialize database tables and seed data on first run
@@ -350,6 +368,20 @@ export async function initDatabase() {
     `);
   } catch (e) { /* Tables already exist */ }
 
+  // ✅ NEW: tombstones table. One row per deleted entity. Never pruned —
+  // deletions are rare relative to normal records, so unbounded growth
+  // here is an acceptable tradeoff for correctness.
+  try {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS tombstones (
+        entity_type TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        deleted_at TEXT NOT NULL,
+        PRIMARY KEY (entity_type, entity_id)
+      );
+    `);
+  } catch (e) { /* Table already exists */ }
+
   try {
     await db.execAsync(`ALTER TABLE services ADD COLUMN is_paid INTEGER NOT NULL DEFAULT 1`);
   } catch {}
@@ -430,9 +462,9 @@ export async function initDatabase() {
     );
   } catch {}
 
-  // ✅ NEW: updated_at for vehicles and services. Without this, edits to
-  // an existing record (marking a service paid, changing its cost,
-  // fixing a VIN) have no timestamp to compare during sync merge — so
+  // ✅ updated_at for vehicles and services. Without this, edits to an
+  // existing record (marking a service paid, changing its cost, fixing
+  // a VIN) have no timestamp to compare during sync merge — so
   // mergeCloudIntoLocal previously could only ever INSERT brand-new
   // records, never UPDATE an edited one already present on a device.
   try {
@@ -478,6 +510,22 @@ export async function initDatabase() {
   }
 }
 
+// ✅ NEW: records a deletion so sync merges won't resurrect it. Uses
+// INSERT OR REPLACE so re-deleting (rare, but possible via import/merge
+// edge cases) always keeps the latest deleted_at.
+async function recordTombstone(
+  entityType: TombstoneEntityType,
+  entityId: string,
+  deletedAt?: string
+): Promise<void> {
+  const db = await getDb();
+  const ts = deletedAt || new Date().toISOString();
+  await db.runAsync(
+    `INSERT OR REPLACE INTO tombstones (entity_type, entity_id, deleted_at) VALUES (?, ?, ?)`,
+    [entityType, entityId, ts]
+  );
+}
+
 export async function createCustomer(name: string, mobileNumber: string): Promise<Customer> {
   const db = await getDb();
   const existing = await db.getFirstAsync<Customer>(
@@ -505,8 +553,34 @@ export async function updateCustomer(id: string, name: string, mobileNumber: str
   );
 }
 
+// ✅ FIXED: deleting a customer now records tombstones for the customer
+// AND every vehicle/service being cascade-deleted with it. Previously
+// this was a plain hard DELETE, which the sync merge (additive-only —
+// it only ever inserts/updates) had no way to distinguish from "this
+// device just hasn't received this record yet". Result: the very next
+// sync — even the pre-push merge step — would silently reinsert the
+// deleted customer from the cloud, undoing the deletion.
 export async function deleteCustomer(id: string): Promise<void> {
   const db = await getDb();
+  const now = new Date().toISOString();
+
+  const vehicles = await db.getAllAsync<{ id: string }>(
+    `SELECT id FROM vehicles WHERE customer_id = ?`,
+    [id]
+  );
+  const services = await db.getAllAsync<{ id: string }>(
+    `SELECT id FROM services WHERE customer_id = ?`,
+    [id]
+  );
+
+  for (const s of services) {
+    await recordTombstone('service', s.id, now);
+  }
+  for (const v of vehicles) {
+    await recordTombstone('vehicle', v.id, now);
+  }
+  await recordTombstone('customer', id, now);
+
   await db.runAsync(`DELETE FROM services WHERE customer_id = ?`, [id]);
   await db.runAsync(`DELETE FROM vehicles WHERE customer_id = ?`, [id]);
   await db.runAsync(`DELETE FROM customers WHERE id = ?`, [id]);
@@ -697,8 +771,22 @@ export async function updateVehicle(
   );
 }
 
+// ✅ FIXED: same tombstone treatment as deleteCustomer — deleting a
+// vehicle now tombstones the vehicle plus every service cascade-deleted
+// with it, so sync can't resurrect it.
 export async function deleteVehicle(id: string): Promise<void> {
   const db = await getDb();
+  const now = new Date().toISOString();
+
+  const services = await db.getAllAsync<{ id: string }>(
+    `SELECT id FROM services WHERE vehicle_id = ?`,
+    [id]
+  );
+  for (const s of services) {
+    await recordTombstone('service', s.id, now);
+  }
+  await recordTombstone('vehicle', id, now);
+
   await db.runAsync(`DELETE FROM services WHERE vehicle_id = ?`, [id]);
   await db.runAsync(`DELETE FROM vehicles WHERE id = ?`, [id]);
 }
@@ -876,9 +964,12 @@ export async function markServicesPaid(serviceIds: string[]): Promise<void> {
   );
 }
 
+// ✅ FIXED: deleting a service now tombstones it, same reasoning as
+// deleteCustomer/deleteVehicle above.
 export async function deleteService(id: string): Promise<void> {
   const db = await getDb();
   await restoreInventoryFromServiceItems(id);
+  await recordTombstone('service', id);
   await db.runAsync(`DELETE FROM services WHERE id = ?`, [id]);
 }
 
@@ -1166,8 +1257,11 @@ export async function adjustInventoryQuantity(
   return next;
 }
 
+// ✅ FIXED: deleting an inventory item now tombstones it too — same bug,
+// same fix.
 export async function deleteInventoryItem(id: string): Promise<void> {
   const db = await getDb();
+  await recordTombstone('inventory', id);
   await db.runAsync(`DELETE FROM inventory WHERE id = ?`, [id]);
 }
 
@@ -1223,6 +1317,10 @@ async function attachItemsToService(
   return saved;
 }
 
+// ✅ FIXED: the service_items rows removed here (whether from deleting a
+// service, or replacing its item list during an edit) are genuinely
+// gone and shouldn't be resurrected by sync either — tombstoned same
+// as everything else.
 async function restoreInventoryFromServiceItems(serviceId: string): Promise<void> {
   const db = await getDb();
   const rows = await db.getAllAsync<ServiceItem>(
@@ -1235,6 +1333,7 @@ async function restoreInventoryFromServiceItems(serviceId: string): Promise<void
       `UPDATE inventory SET item_quantity = item_quantity + ?, updated_at = ? WHERE id = ?`,
       [r.quantity, now, r.inventory_id]
     );
+    await recordTombstone('service_item', r.id, now);
   }
   await db.runAsync(`DELETE FROM service_items WHERE service_id = ?`, [serviceId]);
 }
@@ -1511,6 +1610,7 @@ export interface FullDbSnapshot {
   suppliers?: Supplier[];
   supplierBalances?: { supplier_id: string; balance: number; updated_at?: string }[];
   wagesPaid?: { id: number; date: string; amount: number; created_at: string }[];
+  tombstones?: Tombstone[];
 }
 
 export async function exportFullDatabase(): Promise<FullDbSnapshot> {
@@ -1544,9 +1644,10 @@ export async function exportFullDatabase(): Promise<FullDbSnapshot> {
   const wagesPaid = await db.getAllAsync<{ id: number; date: string; amount: number; created_at: string }>(
     `SELECT * FROM wages_paid`
   );
+  const tombstones = await db.getAllAsync<Tombstone>(`SELECT * FROM tombstones`);
 
   return {
-    version: 3,
+    version: 4,
     exported_at: new Date().toISOString(),
     customers,
     vehicles,
@@ -1556,6 +1657,7 @@ export async function exportFullDatabase(): Promise<FullDbSnapshot> {
     suppliers,
     supplierBalances,
     wagesPaid,
+    tombstones,
   };
 }
 
@@ -1565,7 +1667,7 @@ export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
   }
   const db = await getDb();
   await db.execAsync(
-    `DELETE FROM service_items; DELETE FROM services; DELETE FROM vehicles; DELETE FROM customers; DELETE FROM inventory; DELETE FROM suppliers;`
+    `DELETE FROM service_items; DELETE FROM services; DELETE FROM vehicles; DELETE FROM customers; DELETE FROM inventory; DELETE FROM suppliers; DELETE FROM tombstones;`
   );
   for (const c of snap.customers) {
     await db.runAsync(
@@ -1656,6 +1758,15 @@ export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
       );
     }
   }
+
+  if (Array.isArray(snap.tombstones)) {
+    for (const ts of snap.tombstones) {
+      await db.runAsync(
+        `INSERT OR REPLACE INTO tombstones (entity_type, entity_id, deleted_at) VALUES (?, ?, ?)`,
+        [ts.entity_type, ts.entity_id, ts.deleted_at]
+      );
+    }
+  }
 }
 
 export interface MergeResult {
@@ -1667,6 +1778,7 @@ export interface MergeResult {
   service_items: { inserted: number; updated: number };
   supplierBalances: { inserted: number; updated: number };
   wagesPaid: { inserted: number; updated: number };
+  tombstonesApplied: number;
 }
 
 function newer(a?: string | null, b?: string | null): boolean {
@@ -1686,10 +1798,56 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
     service_items: { inserted: 0, updated: 0 },
     supplierBalances: { inserted: 0, updated: 0 },
     wagesPaid: { inserted: 0, updated: 0 },
+    tombstonesApplied: 0,
   };
+
+  // ✅ NEW: STEP 0 — apply cloud tombstones FIRST, before merging any
+  // entity data below. This is what actually fixes "deleted record
+  // comes back": if another device deleted something, we (a) delete our
+  // own local copy too if we still have it, and (b) remember the ID as
+  // tombstoned in-memory so every insert-loop below skips it instead of
+  // resurrecting it.
+  const localTombstones = await db.getAllAsync<Tombstone>(`SELECT * FROM tombstones`);
+  const tombstoneSet: Record<TombstoneEntityType, Map<string, string>> = {
+    customer: new Map(),
+    vehicle: new Map(),
+    service: new Map(),
+    inventory: new Map(),
+    supplier: new Map(),
+    service_item: new Map(),
+  };
+  for (const t of localTombstones) {
+    tombstoneSet[t.entity_type].set(t.entity_id, t.deleted_at);
+  }
+
+  if (Array.isArray(snap.tombstones)) {
+    for (const t of snap.tombstones) {
+      const localDeletedAt = tombstoneSet[t.entity_type].get(t.entity_id);
+      if (!localDeletedAt || newer(t.deleted_at, localDeletedAt)) {
+        await db.runAsync(
+          `INSERT OR REPLACE INTO tombstones (entity_type, entity_id, deleted_at) VALUES (?, ?, ?)`,
+          [t.entity_type, t.entity_id, t.deleted_at]
+        );
+        tombstoneSet[t.entity_type].set(t.entity_id, t.deleted_at);
+        result.tombstonesApplied++;
+
+        // Also remove the local record if this device still has it —
+        // e.g. it hadn't synced since the other device deleted it.
+        const table =
+          t.entity_type === 'customer' ? 'customers' :
+          t.entity_type === 'vehicle' ? 'vehicles' :
+          t.entity_type === 'service' ? 'services' :
+          t.entity_type === 'inventory' ? 'inventory' :
+          t.entity_type === 'supplier' ? 'suppliers' :
+          'service_items';
+        await db.runAsync(`DELETE FROM ${table} WHERE id = ?`, [t.entity_id]);
+      }
+    }
+  }
 
   if (Array.isArray(snap.customers)) {
     for (const c of snap.customers) {
+      if (tombstoneSet.customer.has(c.id)) continue; // ✅ don't resurrect a deleted customer
       const local = await db.getFirstAsync<Customer>(`SELECT * FROM customers WHERE id = ?`, [c.id]);
       if (!local) {
         await db.runAsync(
@@ -1707,11 +1865,9 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
     }
   }
 
-  // ✅ FIXED: vehicles now UPDATE on a newer cloud copy, not just insert
-  // when missing. Previously an edited VIN/plate/make/model made on one
-  // device would never reach a device that already had that vehicle.
   if (Array.isArray(snap.vehicles)) {
     for (const v of snap.vehicles) {
+      if (tombstoneSet.vehicle.has(v.id)) continue; // ✅ don't resurrect a deleted vehicle
       const local = await db.getFirstAsync<Vehicle>(`SELECT * FROM vehicles WHERE id = ?`, [v.id]);
       if (!local) {
         await db.runAsync(
@@ -1729,13 +1885,9 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
     }
   }
 
-  // ✅ FIXED: services now UPDATE on a newer cloud copy, not just insert
-  // when missing. This was the main cause of cash-drawer mismatches —
-  // marking a service paid, changing its cost, or editing any service
-  // detail on one device never reached the other device once that
-  // device already had a (now-stale) local copy of the same service.
   if (Array.isArray(snap.services)) {
     for (const s of snap.services) {
+      if (tombstoneSet.service.has(s.id)) continue; // ✅ don't resurrect a deleted service
       const local = await db.getFirstAsync<any>(`SELECT * FROM services WHERE id = ?`, [s.id]);
       if (!local) {
         await db.runAsync(
@@ -1793,6 +1945,7 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
 
   if (Array.isArray(snap.inventory)) {
     for (const it of snap.inventory) {
+      if (tombstoneSet.inventory.has(it.id)) continue; // ✅ don't resurrect a deleted inventory item
       const local = await db.getFirstAsync<InventoryItem>(`SELECT * FROM inventory WHERE id = ?`, [it.id]);
       if (!local) {
         await db.runAsync(
@@ -1812,6 +1965,7 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
 
   if (Array.isArray(snap.suppliers)) {
     for (const sup of snap.suppliers) {
+      if (tombstoneSet.supplier.has(sup.id)) continue; // ✅ don't resurrect a deleted supplier
       const local = await db.getFirstAsync<Supplier>(`SELECT * FROM suppliers WHERE id = ?`, [sup.id]);
       if (!local) {
         await db.runAsync(
@@ -1825,6 +1979,7 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
 
   if (Array.isArray(snap.service_items)) {
     for (const si of snap.service_items) {
+      if (tombstoneSet.service_item.has(si.id)) continue; // ✅ don't resurrect a deleted service item
       const local = await db.getFirstAsync<ServiceItem>(`SELECT * FROM service_items WHERE id = ?`, [si.id]);
       if (!local) {
         await db.runAsync(
@@ -1836,10 +1991,6 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
     }
   }
 
-  // ✅ NEW: supplier_balances was previously never merged at all — cloud
-  // debt/payment changes from another device were silently dropped on
-  // every pull. supplier_id is globally unique (from generateId()), so
-  // matching by id is safe here, same pattern as inventory/customers.
   if (Array.isArray(snap.supplierBalances)) {
     for (const sb of snap.supplierBalances) {
       const local = await db.getFirstAsync<{ supplier_id: string; balance: number; updated_at: string }>(
@@ -1862,15 +2013,6 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
     }
   }
 
-  // ✅ NEW: wages_paid was previously never merged at all — the SAME gap
-  // as supplier_balances above. IMPORTANT: wages_paid.id is a local
-  // INTEGER AUTOINCREMENT, generated independently per device (1, 2, 3…)
-  // — NOT a collision-resistant generateId() string like every other
-  // table. Two devices will naturally produce rows with the same id, so
-  // matching by id here would be unsafe (could merge two unrelated
-  // wage entries into one). saveWeeklyWages() already guarantees at
-  // most one row per calendar date per device, so we match by `date`
-  // instead — which is safe and reflects how this table is actually used.
   if (Array.isArray(snap.wagesPaid)) {
     for (const wp of snap.wagesPaid) {
       const local = await db.getFirstAsync<{ id: number; date: string; amount: number; created_at: string }>(
@@ -1963,9 +2105,11 @@ export async function updateSupplier(
   }
 }
 
+// ✅ FIXED: deleting a supplier now tombstones it too.
 export async function deleteSupplier(id: string): Promise<void> {
   const db = await getDb();
   const prev = await db.getFirstAsync<Supplier>(`SELECT * FROM suppliers WHERE id = ?`, [id]);
+  await recordTombstone('supplier', id);
   await db.runAsync(`DELETE FROM suppliers WHERE id = ?`, [id]);
   if (prev) {
     await db.runAsync(
@@ -2321,9 +2465,9 @@ const netDrawer = revenue - paidToday - weekWages;
 };
 }
 
-// ✅ NEW: month-to-date version of getWeeklyCashSummary above. Same
-// tables, same logic, same shape of calculation — only the date range
-// changes from "Monday → today" to "1st of this month → today".
+// ✅ month-to-date version of getWeeklyCashSummary above. Same tables,
+// same logic, same shape of calculation — only the date range changes
+// from "Monday → today" to "1st of this month → today".
 export async function getMonthlyCashSummary(): Promise<{
   revenue: number;
   totalOutstandingDebt: number;
@@ -2336,8 +2480,6 @@ export async function getMonthlyCashSummary(): Promise<{
 }> {
   const db = await getDb();
 
-  // ✅ UNIFIED: same local-date helper used everywhere else, with the
-  // month-start helper defined alongside getWeekStartMonday above.
   const today = new Date();
   const monthStart = getMonthStart(today);
   const monthStartStr = getLocalDateStr(monthStart);
@@ -2355,7 +2497,6 @@ export async function getMonthlyCashSummary(): Promise<{
   );
   const totalDebt = debtResult?.total || 0;
 
-  // 🔥 TODAY'S paid amount (same as weekly — "today" doesn't change)
   let paidToday = 0;
   try {
     const paidResult = await db.getFirstAsync<{ total: number }>(
@@ -2368,7 +2509,6 @@ export async function getMonthlyCashSummary(): Promise<{
     paidToday = 0;
   }
 
-  // 🔥 MONTH's paid amount (1st of month → Today)
   let paidMonth = 0;
   try {
     const paidMonthResult = await db.getFirstAsync<{ total: number }>(
@@ -2381,7 +2521,6 @@ export async function getMonthlyCashSummary(): Promise<{
     paidMonth = 0;
   }
 
-  // ✅ Today's Cash Out (wages)
   let todayWages = 0;
   try {
     const todayWagesResult = await db.getFirstAsync<{ total: number }>(
@@ -2394,7 +2533,6 @@ export async function getMonthlyCashSummary(): Promise<{
     todayWages = 0;
   }
 
-  // ✅ Month's Cash Out (wages) (1st of month → Today)
   let monthWages = 0;
   try {
     const monthWagesResult = await db.getFirstAsync<{ total: number }>(
