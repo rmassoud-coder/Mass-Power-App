@@ -3,6 +3,10 @@
  * تم تجميعها للسيارات الشائعة في ورش السيارات في الشرق الأوسط.
  * يتم المطابقة من خلال البحث عن النص (غير حساس لحالة الأحرف) في سلسلة make + model.
  * في حالة عدم وجود تطابق، يتم إرجاع undefined لإخفاء القيمة أو عرض "غير متوفر".
+ *
+ * ملاحظة دقة: الأرقام أدناه هي قيم شائعة/منشورة تقريبية وقد تختلف قليلاً
+ * حسب سنة الصنع أو نوع المحرك المحدد داخل نفس الموديل. يُفضّل التأكد من
+ * كتيّب الصيانة عند الحاجة لدقة تامة، خصوصاً للموديلات الأحدث.
  */
 
 interface OilEntry {
@@ -10,14 +14,22 @@ interface OilEntry {
   match: string[];
   litres: number;
   note?: string;
+  /**
+   * ✅ جديد: يُستخدم لتمييز أسماء "الفئة" العامة (مثل "e-class"، "3 series")
+   * التي قد تتطابق أيضاً مع نص أي طراز فرعي أكثر تحديداً ضمن نفس الفئة
+   * (مثل "e350"، "320"). المدخلات العامة تُفحص دائماً بعد المدخلات
+   * المحددة، بدل الاعتماد على ترتيب هش حسب طول النص (كان يُخطئ سابقاً
+   * ويُفضّل "e-class" على "e350" في بعض الحالات).
+   */
+  generic?: boolean;
 }
 
 const TABLE: OilEntry[] = [
   // --- مرسيدس-بنز ---
-  { match: ['mercedes', 'c-class'], litres: 6.5 },
+  { match: ['mercedes', 'c-class'], litres: 6.5, generic: true },
   { match: ['mercedes', 'c200'], litres: 5.5 },
   { match: ['mercedes', 'c300'], litres: 5.8 },
-  { match: ['mercedes', 'e-class'], litres: 6.5 },
+  { match: ['mercedes', 'e-class'], litres: 6.5, generic: true },
   { match: ['mercedes', 'e200'], litres: 5.8 },
   { match: ['mercedes', 'e350'], litres: 8.0 },
   { match: ['mercedes', 'e500'], litres: 8.5 },
@@ -35,16 +47,16 @@ const TABLE: OilEntry[] = [
   { match: ['mercedes', 'vito'], litres: 6.5 },
 
   // --- بي إم دبليو ---
-  { match: ['bmw', '3 series'], litres: 4.25 },
+  { match: ['bmw', '3 series'], litres: 4.25, generic: true },
   { match: ['bmw', '320'], litres: 4.25 },
   { match: ['bmw', '328'], litres: 5.2 },
-  { match: ['bmw', '5 series'], litres: 6.5 },
+  { match: ['bmw', '5 series'], litres: 6.5, generic: true },
   { match: ['bmw', '520'], litres: 5.2 },
   { match: ['bmw', '525'], litres: 7.0 },
   { match: ['bmw', '528'], litres: 5.2 },
   { match: ['bmw', '530'], litres: 6.5 },
   { match: ['bmw', '535'], litres: 6.5 },
-  { match: ['bmw', '7 series'], litres: 7.0 },
+  { match: ['bmw', '7 series'], litres: 7.0, generic: true },
   { match: ['bmw', '740'], litres: 7.0 },
   { match: ['bmw', '750'], litres: 8.5 },
   { match: ['bmw', 'x1'], litres: 5.0 },
@@ -139,6 +151,55 @@ const TABLE: OilEntry[] = [
   { match: ['land rover', 'discovery'], litres: 8.0 },
   { match: ['jaguar', 'xf'], litres: 7.5 },
   { match: ['jaguar', 'xj'], litres: 7.5 },
+
+  // --- سيارات شائعة جداً في لبنان ---
+  // ملاحظة: ميتسوبيشي أتراج/ميراج من أكثر السيارات انتشاراً في السوق
+  // اللبناني، وكذلك دودج تشارجر وكرايسلر 300 (نفس محرك البنتاستار V6
+  // في أغلب الفئات الشائعة محلياً).
+  { match: ['mitsubishi', 'attrage'], litres: 3.0 },
+  { match: ['mitsubishi', 'mirage'], litres: 3.0 },
+
+  { match: ['renault', 'duster'], litres: 4.0 },
+  { match: ['renault', 'clio'], litres: 4.2 },
+  { match: ['renault', 'symbol'], litres: 4.2 },
+  { match: ['renault', 'logan'], litres: 4.2 },
+  { match: ['renault', 'megane'], litres: 4.5 },
+
+  { match: ['peugeot', '301'], litres: 4.0 },
+  { match: ['peugeot', '3008'], litres: 4.5 },
+  { match: ['peugeot', '508'], litres: 4.5 },
+  { match: ['citroen', 'c3'], litres: 4.0 },
+  { match: ['citroen', 'c4'], litres: 4.2 },
+
+  { match: ['chevrolet', 'optra'], litres: 4.0 },
+  { match: ['chevrolet', 'aveo'], litres: 3.5 },
+  { match: ['daewoo', 'lanos'], litres: 3.5 },
+  { match: ['daewoo', 'nexia'], litres: 3.5 },
+
+  { match: ['suzuki', 'alto'], litres: 2.7 },
+  { match: ['suzuki', 'swift'], litres: 3.2 },
+  { match: ['suzuki', 'vitara'], litres: 3.8 },
+
+  { match: ['skoda', 'octavia'], litres: 4.3 },
+  { match: ['skoda', 'fabia'], litres: 3.3 },
+  { match: ['seat', 'ibiza'], litres: 3.6 },
+  { match: ['seat', 'leon'], litres: 4.3 },
+  { match: ['fiat', 'tipo'], litres: 4.3 },
+  { match: ['fiat', 'punto'], litres: 3.3 },
+
+  { match: ['hyundai', 'i10'], litres: 2.8 },
+  { match: ['hyundai', 'i20'], litres: 3.3 },
+  { match: ['hyundai', 'i30'], litres: 4.0 },
+
+  // جيب في السوق اللبناني — "grand cherokee" مذكورة قبل "cherokee" العادية
+  // عمداً كي لا يتم الخلط بينهما (كلاهما يحتوي على النص "cherokee").
+  { match: ['jeep', 'grand cherokee'], litres: 5.7 },
+  { match: ['jeep', 'cherokee'], litres: 5.2 },
+  { match: ['jeep', 'wrangler'], litres: 5.7 },
+  { match: ['jeep', 'compass'], litres: 5.0 },
+
+  { match: ['dodge', 'charger'], litres: 5.7 },
+  { match: ['chrysler', '300'], litres: 5.7 },
 ];
 
 /** البحث عن سعة الزيت المقترحة بناءً على صنع وطراز المركبة.
@@ -149,13 +210,16 @@ export function suggestOilLitres(
 ): { litres: number; matchedKey: string } | undefined {
   if (!make && !model) return undefined;
   const haystack = `${(make || '').toLowerCase()} ${(model || '').toLowerCase()}`;
-  // التكرار بترتيب المصفوفة - التطابق الأول يفوز؛ التطابق الأكثر تحديداً (مثل "e350") يتم
-  // وضعه قبل الأكثر عمومية ("e-class") بحيث يتم اختيار الأكثر دقة.
-  // لتطبيق ذلك، نقوم بترتيب التطابقات: الأطول في نص المطابقة أولاً.
-  const ranked = [...TABLE].sort(
-    (a, b) => b.match.join('').length - a.match.join('').length
-  );
-  for (const entry of ranked) {
+
+  // ✅ الإصلاح: نفحص المدخلات المحددة (غير العامة) أولاً بترتيب ظهورها
+  // في الجدول، ثم مدخلات "الفئة" العامة (generic) في النهاية فقط كحل
+  // احتياطي. سابقاً كان الترتيب يعتمد على طول النص الإجمالي، وهذا كان
+  // أحياناً يُفضّل اسم الفئة العام (مثل "e-class") على الطراز المحدد
+  // فعلياً (مثل "e350") — وهو عكس المطلوب تماماً.
+  const specific = TABLE.filter((e) => !e.generic);
+  const generic = TABLE.filter((e) => e.generic);
+
+  for (const entry of [...specific, ...generic]) {
     if (entry.match.every((m) => haystack.includes(m))) {
       return { litres: entry.litres, matchedKey: entry.match.join(' / ') };
     }
