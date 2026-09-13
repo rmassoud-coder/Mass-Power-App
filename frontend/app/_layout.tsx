@@ -239,9 +239,9 @@ export default function RootLayout() {
             <Stack.Screen name="edit-vehicle" />
             <Stack.Screen name="add-service" />
             <Stack.Screen name="edit-service" />
-            <Stack.Screen name="report" />
             <Stack.Screen name="reports/index" options={{ title: 'Reports' }} />
             <Stack.Screen name="reports/sales" options={{ title: 'Sales Report' }} />
+            <Stack.Screen name="reports/unpaid" options={{ title: 'Unpaid Services' }} />
             <Stack.Screen name="reports/income" options={{ title: 'Income by Category' }} />
             <Stack.Screen name="reports/reorder" options={{ title: 'Reorder Report' }} />
             <Stack.Screen name="backup" />
