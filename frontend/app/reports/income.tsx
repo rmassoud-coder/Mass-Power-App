@@ -127,14 +127,14 @@ export default function IncomeByCategoryScreen() {
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>Revenue</Text>
             <Text style={[styles.summaryValue, { color: '#10b981' }]}>
-              ${grandTotal.toFixed(2)}
+              ${grandTotal.toFixed(0)}
             </Text>
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>Net</Text>
             <Text style={[styles.summaryValue, { color: '#7c3aed' }]}>
-              ${grandNet.toFixed(2)}
+              ${grandNet.toFixed(0)}
             </Text>
           </View>
         </View>
@@ -153,7 +153,7 @@ export default function IncomeByCategoryScreen() {
               <View key={r.category} style={styles.catCard}>
                 <View style={styles.rowTop}>
                   <Text style={styles.catName}>{getCategoryLabelAr(r.category)}</Text>
-                  <Text style={styles.catRevenue}>${r.total_revenue.toFixed(2)}</Text>
+                  <Text style={styles.catRevenue}>${r.total_revenue.toFixed(0)}</Text>
                 </View>
 
                 <View style={styles.barTrack}>
@@ -199,7 +199,7 @@ export default function IncomeByCategoryScreen() {
                 {r.outsource_total > 0 && (
                   <Text style={styles.netLine}>
                     Net after outsource:{' '}
-                    <Text style={{ fontWeight: '800' }}>${r.net_revenue.toFixed(2)}</Text>
+                    <Text style={{ fontWeight: '800' }}>${r.net_revenue.toFixed(0)}</Text>
                   </Text>
                 )}
               </View>
