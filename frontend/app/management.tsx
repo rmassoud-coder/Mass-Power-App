@@ -146,7 +146,7 @@ export default function ManagementScreen() {
 
         {/* 8-Button Grid */}
         <View style={styles.dashboardGrid}>
-          <TouchableOpacity style={[styles.dashCard, styles.reportCard]} onPress={() => router.push('/report')}>
+          <TouchableOpacity style={[styles.dashCard, styles.reportCard]} onPress={() => router.push('/reports')}>
             <Ionicons name="document-text-outline" size={32} color="#fff" />
             <Text style={styles.dashTitle}>Report</Text>
           </TouchableOpacity>
