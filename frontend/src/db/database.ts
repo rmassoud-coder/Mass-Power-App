@@ -1340,6 +1340,75 @@ async function restoreInventoryFromServiceItems(serviceId: string): Promise<void
 
 /////////////// BLOCK 2 - REPORTS, SYNC, SUPPLIERS, WALK-INS, WAGES & MATH ///////////////
 
+// ============================================================
+// ✅ NEW: Income by Category report
+// Groups services by service_description (which stores the
+// English SERVICE_CATEGORIES value — 'Oil Services', 'HVAC
+// Services', etc.) and sums up revenue / paid / partial /
+// unpaid / outsource per category, over an optional date range.
+//
+// IMPORTANT: this function ONLY READS. It does not modify any
+// row. Reports that group by English category strings keep
+// working because we never translate the stored value — the
+// Arabic label is display-only (see src/utils/categoryLabels.ts).
+// ============================================================
+export interface CategoryIncomeRow {
+  category: string;
+  total_services: number;
+  total_revenue: number;
+  paid_revenue: number;
+  partial_revenue: number;
+  unpaid_revenue: number;
+  outsource_total: number;
+  net_revenue: number;
+}
+
+export async function getIncomeByCategory(
+  startDate?: string,
+  endDate?: string,
+): Promise<CategoryIncomeRow[]> {
+  const db = await getDb();
+  const conditions: string[] = [];
+  const params: any[] = [];
+
+  if (startDate) {
+    conditions.push('DATE(s.service_date) >= DATE(?)');
+    params.push(startDate);
+  }
+  if (endDate) {
+    conditions.push('DATE(s.service_date) <= DATE(?)');
+    params.push(endDate);
+  }
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const rows = await db.getAllAsync<any>(
+    `SELECT
+       COALESCE(NULLIF(TRIM(s.service_description), ''), 'Uncategorized') AS category,
+       COUNT(*) AS total_services,
+       COALESCE(SUM(s.cost), 0) AS total_revenue,
+       COALESCE(SUM(CASE WHEN s.is_paid = 1 THEN s.cost ELSE 0 END), 0) AS paid_revenue,
+       COALESCE(SUM(CASE WHEN s.is_paid = 0 THEN COALESCE(s.partial_paid, 0) ELSE 0 END), 0) AS partial_revenue,
+       COALESCE(SUM(CASE WHEN s.is_paid = 0 THEN s.cost - COALESCE(s.partial_paid, 0) ELSE 0 END), 0) AS unpaid_revenue,
+       COALESCE(SUM(COALESCE(s.outsource_cost, 0)), 0) AS outsource_total
+     FROM services s
+     ${whereClause}
+     GROUP BY category
+     ORDER BY total_revenue DESC`,
+    params
+  );
+
+  return rows.map((r) => ({
+    category: r.category,
+    total_services: Number(r.total_services) || 0,
+    total_revenue: Number(r.total_revenue) || 0,
+    paid_revenue: Number(r.paid_revenue) || 0,
+    partial_revenue: Number(r.partial_revenue) || 0,
+    unpaid_revenue: Number(r.unpaid_revenue) || 0,
+    outsource_total: Number(r.outsource_total) || 0,
+    net_revenue: (Number(r.total_revenue) || 0) - (Number(r.outsource_total) || 0),
+  }));
+}
+
 export async function getReport(
   startDate?: string,
   endDate?: string,
