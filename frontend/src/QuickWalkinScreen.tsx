@@ -27,19 +27,22 @@ import InventoryPicker, { PickedItem } from './components/InventoryPicker';
  *
  * If a category is missing here, it falls back to the English name.
  */
+/**
+ * Arabic display labels for SERVICE_CATEGORIES.
+ * Keys MUST exactly match the English strings in SERVICE_CATEGORIES.
+ * Values stay English in DB → reporting stays safe.
+ */
 const CATEGORY_LABELS_AR: Record<string, string> = {
   'Oil Services': 'خدمات الزيت',
   'Battery Replacement': 'استبدال البطارية',
   'HVAC Services': 'خدمات التكييف',
-  'Brake Services': 'خدمات الفرامل',
-  'Tire Services': 'خدمات الإطارات',
-  'Engine Repair': 'إصلاح المحرك',
-  'Transmission': 'ناقل الحركة',
-  'Electrical': 'الكهرباء',
-  'Diagnostics': 'التشخيص',
-  'General Maintenance': 'صيانة عامة',
-  // 👇 Add any other categories that exist in SERVICE_CATEGORIES
+  'Locksmith Services': 'خدمات الأقفال',
+  'Electrical Services': 'الخدمات الكهربائية',
+  'Mechanical Services': 'الخدمات الميكانيكية',
+  'Other Services': 'خدمات أخرى',
 };
+
+const getCategoryLabelAr = (cat: string) => CATEGORY_LABELS_AR[cat] ?? cat;
 
 const getCategoryLabelAr = (cat: string) => CATEGORY_LABELS_AR[cat] ?? cat;
 
