@@ -43,6 +43,27 @@ interface Vehicle {
   year?: string;
 }
 
+/**
+ * Arabic labels for service categories.
+ * Keys MUST exactly match the strings in SERVICE_CATEGORIES (from database.ts).
+ * If a category is missing here, it falls back to the English value.
+ */
+const CATEGORY_LABELS_AR: Record<string, string> = {
+  'Oil Services': 'خدمات الزيت',
+  'Battery Replacement': 'استبدال البطارية',
+  'HVAC Services': 'خدمات التكييف',
+  'Brake Services': 'خدمات الفرامل',
+  'Tire Services': 'خدمات الإطارات',
+  'Engine Repair': 'إصلاح المحرك',
+  'Transmission': 'ناقل الحركة',
+  'Electrical': 'الكهرباء',
+  'Diagnostics': 'التشخيص',
+  'General Maintenance': 'صيانة عامة',
+  // 👇 Add any other categories that exist in SERVICE_CATEGORIES
+};
+
+const getCategoryLabel = (cat: string) => CATEGORY_LABELS_AR[cat] ?? cat;
+
 export default function AddServiceScreen() {
   const params = useLocalSearchParams();
   const vehicles: Vehicle[] = params.vehicles ? JSON.parse(params.vehicles as string) : [];
@@ -188,7 +209,7 @@ export default function AddServiceScreen() {
               </View>
             </View>
 
-            {/* Service Category (Dropdown) */}
+            {/* Service Category (Dropdown) — Arabic labels */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>نوع الخدمة *</Text>
               <View style={styles.pickerContainer}>
@@ -200,7 +221,7 @@ export default function AddServiceScreen() {
                   testID="service-category-picker"
                 >
                   {SERVICE_CATEGORIES.map((cat) => (
-                    <Picker.Item key={cat} label={cat} value={cat} />
+                    <Picker.Item key={cat} label={getCategoryLabel(cat)} value={cat} />
                   ))}
                 </Picker>
               </View>
