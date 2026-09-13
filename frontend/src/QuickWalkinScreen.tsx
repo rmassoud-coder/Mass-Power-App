@@ -78,18 +78,15 @@ export default function QuickWalkinScreen() {
       }
     }
 
-    // 🔥 NEW: Combine category + optional free-text notes into the description
-    // saved to the DB, so createQuickWalkinService's existing signature still works.
-    const finalDescription = additionalInfo.trim()
-      ? `${serviceCategory} - ${additionalInfo.trim()}`
-      : serviceCategory;
-
     setLoading(true);
     try {
-      // 🔥 Pass the customer name into the database (If blank, database defaults to 'Walk-in')
+      // 🔥 Pass the customer name, mandatory category, and optional notes
+      // as separate fields — matches createService's
+      // service_description / additional_info column split.
       await createQuickWalkinService(
-        customerName.trim() || undefined, // 🔥 NEW: Passing the name
-        finalDescription,
+        customerName.trim() || undefined,
+        serviceCategory,
+        additionalInfo.trim() || undefined,
         totalCost + productsSubtotal,
         totalCost > 0 ? (isPaid || isPartial) : false, // ✅ $0 = UNPAID, >0 = paid/partial
         partialPaidNumber,
@@ -276,7 +273,6 @@ const styles = StyleSheet.create({
   input: { flex: 1, fontSize: 16, color: '#1e293b' },
   currencySymbol: { fontSize: 16, fontWeight: '600', color: '#1e293b', marginRight: 8 },
   autoCalcText: { fontSize: 12, color: '#059669', marginTop: 6, fontStyle: 'italic' },
-  // 🔥 NEW: Picker styles (matching add-service.tsx)
   pickerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
