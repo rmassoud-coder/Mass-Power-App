@@ -44,8 +44,6 @@ const CATEGORY_LABELS_AR: Record<string, string> = {
 
 const getCategoryLabelAr = (cat: string) => CATEGORY_LABELS_AR[cat] ?? cat;
 
-const getCategoryLabelAr = (cat: string) => CATEGORY_LABELS_AR[cat] ?? cat;
-
 export default function QuickWalkinScreen() {
   const [customerName, setCustomerName] = useState(''); // 🔥 Optional name field
   const [serviceCategory, setServiceCategory] = useState<string>(SERVICE_CATEGORIES[0]); // 🔥 Mandatory dropdown
