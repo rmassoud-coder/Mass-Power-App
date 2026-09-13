@@ -1409,6 +1409,107 @@ export async function getIncomeByCategory(
   }));
 }
 
+// ============================================================
+// ✅ NEW: Unpaid services report helper.
+// Returns ALL unpaid services (full OR partial) across the entire
+// database — no date filtering. Only READS.
+//
+// "Unpaid" = is_paid = 0. This covers both:
+//   - full unpaid (partial_paid = 0)
+//   - partial payments (partial_paid > 0, still owing the rest)
+// ============================================================
+export interface UnpaidServiceRow {
+  service_id: string;
+  customer_id: string;
+  customer_name: string;
+  customer_mobile: string;
+  vehicle_id: string;
+  vehicle_make: string;
+  vehicle_model: string;
+  vehicle_year?: string;
+  vehicle_vin: string;
+  vehicle_plate: string;
+  service_description: string;
+  additional_info?: string;
+  cost: number;
+  partial_paid: number;
+  remaining: number;
+  service_date: string;
+}
+
+export interface UnpaidServicesResult {
+  items: UnpaidServiceRow[];
+  total_count: number;
+  total_cost: number;
+  total_partial: number;
+  total_remaining: number;
+}
+
+export async function getUnpaidServices(): Promise<UnpaidServicesResult> {
+  const db = await getDb();
+
+  const rows = await db.getAllAsync<any>(
+    `SELECT
+       s.id              AS service_id,
+       s.customer_id,
+       c.name            AS customer_name,
+       c.mobile_number   AS customer_mobile,
+       s.vehicle_id,
+       v.make            AS vehicle_make,
+       v.model           AS vehicle_model,
+       v.year            AS vehicle_year,
+       v.vin             AS vehicle_vin,
+       v.plate_number    AS vehicle_plate,
+       s.service_description,
+       s.additional_info,
+       s.cost,
+       COALESCE(s.partial_paid, 0) AS partial_paid,
+       s.service_date
+     FROM services s
+     JOIN customers c ON s.customer_id = c.id
+     JOIN vehicles  v ON s.vehicle_id = v.id
+     WHERE s.is_paid = 0
+     ORDER BY s.service_date DESC`
+  );
+
+  const items: UnpaidServiceRow[] = rows.map((r) => {
+    const cost = Number(r.cost) || 0;
+    const partial = Number(r.partial_paid) || 0;
+    const remaining = Math.max(0, cost - partial);
+    return {
+      service_id: r.service_id,
+      customer_id: r.customer_id,
+      customer_name: r.customer_name,
+      customer_mobile: r.customer_mobile,
+      vehicle_id: r.vehicle_id,
+      vehicle_make: r.vehicle_make,
+      vehicle_model: r.vehicle_model,
+      vehicle_year: r.vehicle_year,
+      vehicle_vin: r.vehicle_vin,
+      vehicle_plate: r.vehicle_plate,
+      service_description: r.service_description,
+      additional_info: r.additional_info,
+      cost,
+      partial_paid: partial,
+      remaining,
+      service_date: r.service_date,
+    };
+  });
+
+  const total_cost = items.reduce((s, i) => s + i.cost, 0);
+  const total_partial = items.reduce((s, i) => s + i.partial_paid, 0);
+  const total_remaining = items.reduce((s, i) => s + i.remaining, 0);
+
+  return {
+    items,
+    total_count: items.length,
+    total_cost,
+    total_partial,
+    total_remaining,
+  };
+}
+
+
 export async function getReport(
   startDate?: string,
   endDate?: string,
