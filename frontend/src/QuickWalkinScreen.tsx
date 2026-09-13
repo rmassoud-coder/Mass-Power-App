@@ -14,13 +14,15 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { createQuickWalkinService, createWalkinProductSale } from './db/database';
+import { Picker } from '@react-native-picker/picker';
+import { createQuickWalkinService, createWalkinProductSale, SERVICE_CATEGORIES } from './db/database';
 import { triggerAutoPush } from './utils/autoSync';
 import InventoryPicker, { PickedItem } from './components/InventoryPicker';
 
 export default function QuickWalkinScreen() {
   const [customerName, setCustomerName] = useState(''); // 🔥 NEW: Optional name field
-  const [serviceDesc, setServiceDesc] = useState('');
+  const [serviceCategory, setServiceCategory] = useState<string>(SERVICE_CATEGORIES[0]); // 🔥 NEW: Mandatory dropdown
+  const [additionalInfo, setAdditionalInfo] = useState(''); // 🔥 NEW: Optional free-text notes
   const [cost, setCost] = useState('');
   const [isPaid, setIsPaid] = useState(true);
   const [isPartial, setIsPartial] = useState(false);
@@ -36,6 +38,12 @@ export default function QuickWalkinScreen() {
   );
 
   const handleSubmit = async () => {
+    // 🔥 NEW: Category is mandatory
+    if (!serviceCategory) {
+      Alert.alert('خطأ', 'يرجى اختيار نوع الخدمة');
+      return;
+    }
+
     // If products were picked, we use the special Product Sale logic
     if (pickedItems.length > 0) {
       setLoading(true);
@@ -70,12 +78,18 @@ export default function QuickWalkinScreen() {
       }
     }
 
+    // 🔥 NEW: Combine category + optional free-text notes into the description
+    // saved to the DB, so createQuickWalkinService's existing signature still works.
+    const finalDescription = additionalInfo.trim()
+      ? `${serviceCategory} - ${additionalInfo.trim()}`
+      : serviceCategory;
+
     setLoading(true);
     try {
       // 🔥 Pass the customer name into the database (If blank, database defaults to 'Walk-in')
       await createQuickWalkinService(
         customerName.trim() || undefined, // 🔥 NEW: Passing the name
-        serviceDesc.trim() || 'Quick Walk-in Service',
+        finalDescription,
         totalCost + productsSubtotal,
         totalCost > 0 ? (isPaid || isPartial) : false, // ✅ $0 = UNPAID, >0 = paid/partial
         partialPaidNumber,
@@ -118,15 +132,36 @@ export default function QuickWalkinScreen() {
             </View>
           </View>
 
-          {/* Service Description */}
+          {/* 🔥 NEW: Service Category (Mandatory Dropdown) */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>وصف الخدمة (اختياري)</Text>
-            <View style={styles.inputContainer}>
+            <Text style={styles.label}>نوع الخدمة *</Text>
+            <View style={styles.pickerContainer}>
+              <Ionicons name="clipboard-outline" size={20} color="#666" style={styles.pickerIcon} />
+              <Picker
+                selectedValue={serviceCategory}
+                onValueChange={(value) => setServiceCategory(value)}
+                style={styles.picker}
+                testID="quick-walkin-category-picker"
+              >
+                {SERVICE_CATEGORIES.map((cat) => (
+                  <Picker.Item key={cat} label={cat} value={cat} />
+                ))}
+              </Picker>
+            </View>
+          </View>
+
+          {/* 🔥 NEW: Additional Notes (Optional free text) */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>ملاحظات إضافية (اختياري)</Text>
+            <View style={[styles.inputContainer, styles.textAreaContainer]}>
               <TextInput
-                style={styles.input}
+                style={[styles.input, styles.textArea]}
                 placeholder="مثال: تغيير زيت، بيع منتج..."
-                value={serviceDesc}
-                onChangeText={setServiceDesc}
+                value={additionalInfo}
+                onChangeText={setAdditionalInfo}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
               />
             </View>
           </View>
@@ -235,10 +270,24 @@ const styles = StyleSheet.create({
     borderRadius: 12, paddingHorizontal: 16, height: 56, borderWidth: 1,
     borderColor: '#e2e8f0',
   },
+  textAreaContainer: { height: 90, alignItems: 'flex-start', paddingVertical: 12 },
+  textArea: { height: '100%' },
   inputIcon: { marginRight: 12 },
   input: { flex: 1, fontSize: 16, color: '#1e293b' },
   currencySymbol: { fontSize: 16, fontWeight: '600', color: '#1e293b', marginRight: 8 },
   autoCalcText: { fontSize: 12, color: '#059669', marginTop: 6, fontStyle: 'italic' },
+  // 🔥 NEW: Picker styles (matching add-service.tsx)
+  pickerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingLeft: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  pickerIcon: { marginRight: 12 },
+  picker: { flex: 1, height: 56 },
   paymentRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
   payBtn: {
     flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
