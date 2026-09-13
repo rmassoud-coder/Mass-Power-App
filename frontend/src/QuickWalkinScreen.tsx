@@ -19,10 +19,34 @@ import { createQuickWalkinService, createWalkinProductSale, SERVICE_CATEGORIES }
 import { triggerAutoPush } from './utils/autoSync';
 import InventoryPicker, { PickedItem } from './components/InventoryPicker';
 
+/**
+ * Arabic display labels for SERVICE_CATEGORIES.
+ * Keys MUST exactly match the English strings in SERVICE_CATEGORIES.
+ * The VALUE saved to the DB stays English (via value={cat}) — only the
+ * label shown in the dropdown is Arabic. Reports/receipts are NOT affected.
+ *
+ * If a category is missing here, it falls back to the English name.
+ */
+const CATEGORY_LABELS_AR: Record<string, string> = {
+  'Oil Services': 'خدمات الزيت',
+  'Battery Replacement': 'استبدال البطارية',
+  'HVAC Services': 'خدمات التكييف',
+  'Brake Services': 'خدمات الفرامل',
+  'Tire Services': 'خدمات الإطارات',
+  'Engine Repair': 'إصلاح المحرك',
+  'Transmission': 'ناقل الحركة',
+  'Electrical': 'الكهرباء',
+  'Diagnostics': 'التشخيص',
+  'General Maintenance': 'صيانة عامة',
+  // 👇 Add any other categories that exist in SERVICE_CATEGORIES
+};
+
+const getCategoryLabelAr = (cat: string) => CATEGORY_LABELS_AR[cat] ?? cat;
+
 export default function QuickWalkinScreen() {
-  const [customerName, setCustomerName] = useState(''); // 🔥 NEW: Optional name field
-  const [serviceCategory, setServiceCategory] = useState<string>(SERVICE_CATEGORIES[0]); // 🔥 NEW: Mandatory dropdown
-  const [additionalInfo, setAdditionalInfo] = useState(''); // 🔥 NEW: Optional free-text notes
+  const [customerName, setCustomerName] = useState(''); // 🔥 Optional name field
+  const [serviceCategory, setServiceCategory] = useState<string>(SERVICE_CATEGORIES[0]); // 🔥 Mandatory dropdown
+  const [additionalInfo, setAdditionalInfo] = useState(''); // 🔥 Optional free-text notes
   const [cost, setCost] = useState('');
   const [isPaid, setIsPaid] = useState(true);
   const [isPartial, setIsPartial] = useState(false);
@@ -38,7 +62,7 @@ export default function QuickWalkinScreen() {
   );
 
   const handleSubmit = async () => {
-    // 🔥 NEW: Category is mandatory
+    // 🔥 Category is mandatory
     if (!serviceCategory) {
       Alert.alert('خطأ', 'يرجى اختيار نوع الخدمة');
       return;
@@ -61,7 +85,7 @@ export default function QuickWalkinScreen() {
       return;
     }
 
-    // ✅ ALLOW $0 (Free service) - Removed the validation block!
+    // ✅ ALLOW $0 (Free service)
     const totalCost = parseFloat(cost) || 0;
 
     let partialPaidNumber = 0;
@@ -71,7 +95,6 @@ export default function QuickWalkinScreen() {
         Alert.alert('خطأ', 'المبلغ الجزئي لا يمكن أن يكون سالباً.');
         return;
       }
-      // ✅ CHANGE: Now allows $0 partial payment for $0 service
       if (partialPaidNumber > totalCost) {
         Alert.alert('خطأ', 'يجب أن يكون المبلغ الجزئي أقل من التكلفة الإجمالية. استخدم "مدفوع" بدلاً من ذلك.');
         return;
@@ -80,9 +103,8 @@ export default function QuickWalkinScreen() {
 
     setLoading(true);
     try {
-      // 🔥 Pass the customer name, mandatory category, and optional notes
-      // as separate fields — matches createService's
-      // service_description / additional_info column split.
+      // Pass the customer name, mandatory category, and optional notes.
+      // serviceCategory stays ENGLISH so reports keep grouping correctly.
       await createQuickWalkinService(
         customerName.trim() || undefined,
         serviceCategory,
@@ -92,7 +114,7 @@ export default function QuickWalkinScreen() {
         partialPaidNumber,
         parseFloat(outsourceCost) || 0
       );
-      
+
       triggerAutoPush();
       Alert.alert('نجاح', 'تمت إضافة خدمة العميل بدون موعد إلى الصندوق!');
       router.back();
@@ -115,7 +137,7 @@ export default function QuickWalkinScreen() {
         </View>
 
         <ScrollView style={styles.content}>
-          {/* 🔥 NEW: Customer Name (Optional) */}
+          {/* 🔥 Customer Name (Optional) */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>اسم العميل (اختياري)</Text>
             <View style={styles.inputContainer}>
@@ -129,7 +151,7 @@ export default function QuickWalkinScreen() {
             </View>
           </View>
 
-          {/* 🔥 NEW: Service Category (Mandatory Dropdown) */}
+          {/* 🔥 Service Category (Mandatory Dropdown) — Arabic labels */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>نوع الخدمة *</Text>
             <View style={styles.pickerContainer}>
@@ -141,13 +163,13 @@ export default function QuickWalkinScreen() {
                 testID="quick-walkin-category-picker"
               >
                 {SERVICE_CATEGORIES.map((cat) => (
-                  <Picker.Item key={cat} label={cat} value={cat} />
+                  <Picker.Item key={cat} label={getCategoryLabelAr(cat)} value={cat} />
                 ))}
               </Picker>
             </View>
           </View>
 
-          {/* 🔥 NEW: Additional Notes (Optional free text) */}
+          {/* 🔥 Additional Notes (Optional free text) */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>ملاحظات إضافية (اختياري)</Text>
             <View style={[styles.inputContainer, styles.textAreaContainer]}>
@@ -194,7 +216,7 @@ export default function QuickWalkinScreen() {
               <Ionicons name="checkmark-circle" size={20} color={isPaid ? '#fff' : '#64748b'} />
               <Text style={[styles.payBtnText, isPaid && styles.payBtnTextActive]}>مدفوع</Text>
             </TouchableOpacity>
-            
+
             <TouchableOpacity style={[styles.payBtn, isPartial && styles.payBtnActivePartial]} onPress={() => { setIsPartial(!isPartial); setIsPaid(false); }}>
               <Ionicons name="time" size={20} color={isPartial ? '#fff' : '#64748b'} />
               <Text style={[styles.payBtnText, isPartial && styles.payBtnTextActive]}>دفعة جزئية</Text>
