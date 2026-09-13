@@ -1,91 +1,403 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+  ActivityIndicator,
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import { getReport } from '../../src/db/database';
 
-interface MenuItem {
-  key: string;
-  title: string;
-  subtitle: string;
-  icon: React.ReactNode;
-  route: string;
-  color: string;
+interface ReportItem {
+  service_id: string;
+  customer_id: string;
+  customer_name: string;
+  customer_mobile: string;
+  vehicle_id: string;
+  vehicle_make: string;
+  vehicle_model: string;
+  vehicle_year?: string;
+  vehicle_vin: string;
+  vehicle_plate: string;
+  service_description: string;
+  additional_info?: string;
+  cost: number;
+  is_paid: boolean;
+  partial_paid: number;
+  service_date: string;
 }
 
-export default function ReportsMenuScreen() {
+interface ReportResponse {
+  items: ReportItem[];
+  total_cost: number;
+  total_services: number;
+  unpaid_count: number;
+  unpaid_total: number;
+  outsource_total: number;
+  net_cash_flow: number;
+}
+
+type FilterType = 'mobile' | 'vin' | 'plate';
+
+export default function SalesReportScreen() {
   const router = useRouter();
 
-  const items: MenuItem[] = [
-    {
-      key: 'sales',
-      title: 'Sales Report',
-      subtitle: 'Services, revenue, filters by customer / VIN / plate',
-      icon: <Ionicons name="document-text" size={24} color="#2563eb" />,
-      route: '/reports/sales',
-      color: '#dbeafe',
-    },
-    {
-      key: 'income',
-      title: 'Income by Category',
-      subtitle: 'See which services bring in the most money',
-      icon: <Ionicons name="stats-chart" size={24} color="#059669" />,
-      route: '/reports/income',
-      color: '#d1fae5',
-    },
-    {
-      key: 'reorder',
-      title: 'Reorder Report',
-      subtitle: 'Low-stock items grouped by supplier',
-      icon: <MaterialCommunityIcons name="package-variant-closed" size={24} color="#b91c1c" />,
-      route: '/reports/reorder',
-      color: '#fee2e2',
-    },
-  ];
+  // Default to THIS WEEK (Monday - Today)
+  const today = new Date();
+  const todayIso = today.toISOString().slice(0, 10);
+  const dayOfWeek = today.getDay();
+  const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - diffToMonday);
+  const mondayIso = monday.toISOString().slice(0, 10);
+
+  const [startDate, setStartDate] = useState(mondayIso);
+  const [endDate, setEndDate] = useState(todayIso);
+  const [filterType, setFilterType] = useState<FilterType>('mobile');
+  const [filterValue, setFilterValue] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [report, setReport] = useState<ReportResponse | null>(null);
+
+  const didAutoRun = React.useRef(false);
+  useEffect(() => {
+    if (didAutoRun.current) return;
+    didAutoRun.current = true;
+    setTimeout(() => {
+      handleGenerate();
+    }, 0);
+  }, []);
+
+  const isValidDate = (dateStr: string) => {
+    if (!dateStr) return true;
+    return /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
+  };
+
+  const handleGenerate = async () => {
+    if (!isValidDate(startDate) || !isValidDate(endDate)) {
+      Alert.alert('Error', 'Please use YYYY-MM-DD date format');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = await getReport(
+        startDate ? `${startDate}T00:00:00` : undefined,
+        endDate ? `${endDate}T23:59:59` : undefined,
+        filterType === 'mobile' && filterValue.trim() ? filterValue.trim() : undefined,
+        filterType === 'vin' && filterValue.trim() ? filterValue.trim() : undefined,
+        filterType === 'plate' && filterValue.trim() ? filterValue.trim() : undefined,
+        false,
+      );
+      setReport(data);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to generate report');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClear = () => {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - diffToMonday);
+    const mondayIso = monday.toISOString().slice(0, 10);
+    const todayIso = today.toISOString().slice(0, 10);
+
+    setStartDate(mondayIso);
+    setEndDate(todayIso);
+    setFilterValue('');
+    setReport(null);
+  };
+
+  const getFilterPlaceholder = () => {
+    if (filterType === 'mobile') return 'Enter mobile number';
+    if (filterType === 'vin') return 'Enter VIN';
+    return 'Enter plate number';
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1e293b" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Reports</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionTitle}>Pick a report</Text>
-
-        {items.map((it) => (
-          <TouchableOpacity
-            key={it.key}
-            style={styles.card}
-            onPress={() => router.push(it.route as any)}
-            testID={`report-menu-${it.key}`}
-          >
-            <View style={[styles.iconWrap, { backgroundColor: it.color }]}>
-              {it.icon}
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.cardTitle}>{it.title}</Text>
-              <Text style={styles.cardSubtitle}>{it.subtitle}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#1e293b" />
           </TouchableOpacity>
-        ))}
-      </ScrollView>
+          <Text style={styles.headerTitle}>Sales Report</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={{ paddingBottom: 40 }}
+          nestedScrollEnabled
+        >
+          {/* Date Range */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Weekly Range (Mon - Today)</Text>
+            <View style={styles.row}>
+              <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
+                <Text style={styles.label}>From</Text>
+                <View style={styles.inputContainer}>
+                  <Ionicons name="calendar-outline" size={18} color="#666" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="YYYY-MM-DD"
+                    value={startDate}
+                    onChangeText={setStartDate}
+                    maxLength={10}
+                  />
+                </View>
+              </View>
+              <View style={[styles.inputGroup, { flex: 1 }]}>
+                <Text style={styles.label}>To</Text>
+                <View style={styles.inputContainer}>
+                  <Ionicons name="calendar-outline" size={18} color="#666" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="YYYY-MM-DD"
+                    value={endDate}
+                    onChangeText={setEndDate}
+                    maxLength={10}
+                  />
+                </View>
+              </View>
+            </View>
+            <Text style={styles.hint}>Leave blank for all dates</Text>
+          </View>
+
+          {/* Filter Type */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Filter By (Optional)</Text>
+            <View style={styles.filterTabs}>
+              <TouchableOpacity
+                style={[styles.filterTab, filterType === 'mobile' && styles.filterTabActive]}
+                onPress={() => setFilterType('mobile')}
+              >
+                <Ionicons
+                  name="call-outline"
+                  size={18}
+                  color={filterType === 'mobile' ? '#fff' : '#64748b'}
+                />
+                <Text style={[styles.filterTabText, filterType === 'mobile' && styles.filterTabTextActive]}>
+                  Mobile
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.filterTab, filterType === 'vin' && styles.filterTabActive]}
+                onPress={() => setFilterType('vin')}
+              >
+                <Ionicons
+                  name="barcode-outline"
+                  size={18}
+                  color={filterType === 'vin' ? '#fff' : '#64748b'}
+                />
+                <Text style={[styles.filterTabText, filterType === 'vin' && styles.filterTabTextActive]}>
+                  VIN
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.filterTab, filterType === 'plate' && styles.filterTabActive]}
+                onPress={() => setFilterType('plate')}
+              >
+                <Ionicons
+                  name="car-outline"
+                  size={18}
+                  color={filterType === 'plate' ? '#fff' : '#64748b'}
+                />
+                <Text style={[styles.filterTabText, filterType === 'plate' && styles.filterTabTextActive]}>
+                  Plate
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder={getFilterPlaceholder()}
+                value={filterValue}
+                onChangeText={setFilterValue}
+                autoCapitalize={filterType === 'mobile' ? 'none' : 'characters'}
+              />
+            </View>
+          </View>
+
+          {/* Action Buttons */}
+          <View style={styles.buttonRow}>
+            <TouchableOpacity style={styles.clearButton} onPress={handleClear}>
+              <Text style={styles.clearButtonText}>Clear</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.generateButton, loading && styles.buttonDisabled]}
+              onPress={handleGenerate}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="document-text" size={20} color="#fff" />
+                  <Text style={styles.generateButtonText}>Generate Report</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Report Results */}
+          {report && (
+            <View style={styles.resultsSection}>
+              <View style={styles.summaryCard}>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>Total Services</Text>
+                  <Text style={styles.summaryValue}>{report.total_services}</Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>Total Revenue</Text>
+                  <Text style={[styles.summaryValue, styles.totalCost]}>
+                    ${report.total_cost.toFixed(0)}
+                  </Text>
+                </View>
+              </View>
+
+              {/* PRIVATE cash-flow summary (owner-only, never printed) */}
+              {(report.outsource_total > 0 || report.total_cost > 0) && (
+                <View style={styles.cashflowCard}>
+                  <View style={styles.cashflowHeaderRow}>
+                    <Ionicons name="lock-closed" size={13} color="#6b21a8" />
+                    <Text style={styles.cashflowHeader}>Weekly Cash-Flow (Private)</Text>
+                  </View>
+                  <View style={styles.cashflowRow}>
+                    <Text style={styles.cashflowLabel}>Revenue</Text>
+                    <Text style={styles.cashflowValue}>
+                      ${report.total_cost.toFixed(0)}
+                    </Text>
+                  </View>
+                  <View style={styles.cashflowRow}>
+                    <Text style={[styles.cashflowLabel, { color: '#dc2626' }]}>
+                      − Outsource
+                    </Text>
+                    <Text style={[styles.cashflowValue, { color: '#dc2626' }]}>
+                      − ${report.outsource_total.toFixed(0)}
+                    </Text>
+                  </View>
+                  <View style={styles.cashflowGrandRow}>
+                    <Text style={styles.cashflowGrandLabel}>Net Cash in Hand</Text>
+                    <Text style={styles.cashflowGrandValue}>
+                      ${report.net_cash_flow.toFixed(0)}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {report.items.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="document-outline" size={48} color="#cbd5e1" />
+                  <Text style={styles.emptyText}>No services found for the selected filters</Text>
+                </View>
+              ) : (
+                <View style={styles.itemsList}>
+                  <Text style={styles.itemsTitle}>Service Records</Text>
+                  {report.items.map((item) => {
+                    const partial = Number((item as any).partial_paid) || 0;
+                    const isPending = !item.is_paid && partial > 0;
+                    const isUnpaid = !item.is_paid && partial === 0;
+                    return (
+                    <View
+                      key={item.service_id}
+                      style={[
+                        styles.reportItem,
+                        isUnpaid && styles.reportItemUnpaid,
+                        isPending && styles.reportItemPending,
+                      ]}
+                    >
+                      <View style={styles.itemHeader}>
+                        <View style={styles.itemIconContainer}>
+                          <Ionicons name="construct" size={20} color="#10b981" />
+                        </View>
+                        <View style={styles.itemInfo}>
+                          <View style={styles.itemTitleRow}>
+                            <Text style={styles.itemDescription}>{item.service_description}</Text>
+                            {isUnpaid && (
+                              <View style={styles.unpaidBadge}>
+                                <Text style={styles.unpaidBadgeText}>UNPAID</Text>
+                              </View>
+                            )}
+                            {isPending && (
+                              <View style={styles.pendingBadge} testID="pending-badge">
+                                <Text style={styles.pendingBadgeText}>
+                                  PENDING · ${partial.toFixed(0)}/${item.cost.toFixed(0)}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                          {item.additional_info && (
+                            <Text style={styles.itemAdditional}>{item.additional_info}</Text>
+                          )}
+                        </View>
+                        {isPending ? (
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={[styles.itemCost, styles.itemCostUnpaid]}>
+                              ${Math.max(0, item.cost - partial).toFixed(0)}
+                            </Text>
+                            <Text style={styles.itemCostHint}>
+                              remaining
+                            </Text>
+                          </View>
+                        ) : (
+                          <Text style={[styles.itemCost, !item.is_paid && styles.itemCostUnpaid]}>
+                            ${item.cost.toFixed(0)}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={styles.itemDetails}>
+                        <View style={styles.detailRow}>
+                          <Ionicons name="person-outline" size={14} color="#64748b" />
+                          <Text style={styles.detailText}>
+                            {item.customer_name} • {item.customer_mobile}
+                          </Text>
+                        </View>
+                        <View style={styles.detailRow}>
+                          <Ionicons name="car-sport-outline" size={14} color="#64748b" />
+                          <Text style={styles.detailText}>
+                            {item.vehicle_year ? `${item.vehicle_year} ` : ''}
+                            {item.vehicle_make} {item.vehicle_model} • {item.vehicle_plate}
+                          </Text>
+                        </View>
+                        <View style={styles.detailRow}>
+                          <Ionicons name="calendar-outline" size={14} color="#64748b" />
+                          <Text style={styles.detailText}>
+                            {new Date(item.service_date).toLocaleDateString()}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
+  keyboardView: { flex: 1 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -98,33 +410,223 @@ const styles = StyleSheet.create({
   },
   backButton: { padding: 8 },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#1e293b' },
-  content: { padding: 24 },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#64748b',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
+  content: { flex: 1, paddingHorizontal: 24, paddingTop: 16 },
+  section: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
-  card: {
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 12,
+  },
+  row: { flexDirection: 'row' },
+  inputGroup: { marginBottom: 0 },
+  label: { fontSize: 13, fontWeight: '600', color: '#64748b', marginBottom: 6 },
+  inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 48,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  inputIcon: { marginRight: 8 },
+  input: { flex: 1, fontSize: 15, color: '#1e293b' },
+  hint: { fontSize: 12, color: '#64748b', marginTop: 8, fontStyle: 'italic' },
+  filterTabs: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 10,
+    padding: 4,
+    marginBottom: 12,
+  },
+  filterTab: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  filterTabActive: { backgroundColor: '#2563eb' },
+  filterTabText: { fontSize: 13, fontWeight: '600', color: '#64748b', marginLeft: 6 },
+  filterTabTextActive: { color: '#fff' },
+  buttonRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  clearButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clearButtonText: { color: '#1e293b', fontSize: 16, fontWeight: '600' },
+  generateButton: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#2563eb',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  buttonDisabled: { opacity: 0.6 },
+  generateButtonText: { color: '#fff', fontSize: 16, fontWeight: '600', marginLeft: 8 },
+  resultsSection: { marginBottom: 32 },
+  summaryCard: {
+    flexDirection: 'row',
     backgroundColor: '#fff',
-    borderRadius: 14,
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  summaryItem: { flex: 1, alignItems: 'center' },
+  summaryDivider: { width: 1, backgroundColor: '#e2e8f0' },
+  summaryLabel: { fontSize: 13, color: '#64748b', marginBottom: 4 },
+  summaryValue: { fontSize: 24, fontWeight: 'bold', color: '#1e293b' },
+  totalCost: { color: '#10b981' },
+  emptyContainer: { alignItems: 'center', paddingVertical: 32 },
+  emptyText: { fontSize: 14, color: '#94a3b8', marginTop: 12, textAlign: 'center' },
+  itemsList: {},
+  itemsTitle: { fontSize: 16, fontWeight: '600', color: '#1e293b', marginBottom: 12 },
+  reportItem: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    gap: 14,
   },
-  iconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  itemHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 },
+  itemIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#d1fae5',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: '#1e293b' },
-  cardSubtitle: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  itemInfo: { flex: 1, marginLeft: 12 },
+  itemDescription: { fontSize: 15, fontWeight: '600', color: '#1e293b' },
+  itemAdditional: { fontSize: 13, color: '#64748b', marginTop: 2 },
+  itemCost: { fontSize: 16, fontWeight: 'bold', color: '#10b981' },
+  itemCostHint: {
+    fontSize: 10,
+    color: '#b45309',
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  itemDetails: { paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
+  detailRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+  detailText: { fontSize: 13, color: '#475569', marginLeft: 8 },
+  cashflowCard: {
+    marginTop: 8,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#c4b5fd',
+    backgroundColor: '#faf5ff',
+  },
+  cashflowHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  cashflowHeader: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#6b21a8',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  cashflowRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 4,
+  },
+  cashflowLabel: {
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '600',
+  },
+  cashflowValue: {
+    fontSize: 14,
+    color: '#0f172a',
+    fontWeight: '700',
+  },
+  cashflowGrandRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1.5,
+    borderTopColor: '#c4b5fd',
+  },
+  cashflowGrandLabel: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#6b21a8',
+  },
+  cashflowGrandValue: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#059669',
+  },
+  reportItemUnpaid: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#ef4444',
+    backgroundColor: '#fef9f9',
+  },
+  reportItemPending: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#eab308',
+    backgroundColor: '#fffbeb',
+  },
+  pendingBadge: {
+    backgroundColor: '#eab308',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 6,
+  },
+  pendingBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  unpaidBadge: {
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 6,
+  },
+  unpaidBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  itemCostUnpaid: {
+    color: '#ef4444',
+  },
+  itemTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
 });
