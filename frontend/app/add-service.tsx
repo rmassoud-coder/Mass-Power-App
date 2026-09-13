@@ -12,136 +12,106 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
-import {
-  createService,
-  SERVICE_CATEGORIES,
-  EMPTY_DASH_LIGHTS,
-  EMPTY_OIL_REMINDER,
-  EMPTY_BATTERY_REPLACEMENT,
-  EMPTY_HVAC_SERVICE,
-  DashLights,
-  OilReminder,
-  BatteryReplacement,
-  HvacService,
-} from '../src/db/database';
-import { triggerAutoPush } from '../src/utils/autoSync';
-import DashLightsPicker from '../src/components/DashLightsPicker';
-import OilReminderForm from '../src/components/OilReminderForm';
-import BatteryReplacementForm from '../src/components/BatteryReplacementForm';
-import HvacServiceForm from '../src/components/HvacServiceForm';
-import InventoryPicker, { PickedItem } from '../src/components/InventoryPicker';
+import { createQuickWalkinService, createWalkinProductSale, SERVICE_CATEGORIES } from './db/database';
+import { triggerAutoPush } from './utils/autoSync';
+import InventoryPicker, { PickedItem } from './components/InventoryPicker';
 
-interface Vehicle {
-  id: string;
-  vin: string;
-  plate_number: string;
-  make: string;
-  model: string;
-  year?: string;
-}
+// 🔥 NEW: Arabic labels for the dropdown. Keys must match SERVICE_CATEGORIES
+// exactly (the English values stored in the database and used for reports).
+// Only the displayed label is Arabic — the stored value stays English so it
+// still matches add-service.tsx's categories for correct report grouping.
+const SERVICE_CATEGORY_LABELS_AR: Record<string, string> = {
+  'HVAC Services': 'خدمات التكييف',
+  'Locksmith Services': 'خدمات الأقفال',
+  'Oil Services': 'خدمات الزيت',
+  'Battery Replacement': 'استبدال البطارية',
+  'Electrical Services': 'خدمات كهربائية',
+  'Mechanical Services': 'خدمات ميكانيكية',
+  'Other Services': 'خدمات أخرى',
+};
 
-export default function AddServiceScreen() {
-  const params = useLocalSearchParams();
-  const vehicles: Vehicle[] = params.vehicles ? JSON.parse(params.vehicles as string) : [];
-
-  const [selectedVehicleId, setSelectedVehicleId] = useState(vehicles[0]?.id || '');
-  const [serviceCategory, setServiceCategory] = useState<string>(SERVICE_CATEGORIES[0]);
-  const [additionalInfo, setAdditionalInfo] = useState('');
+export default function QuickWalkinScreen() {
+  const [customerName, setCustomerName] = useState(''); // 🔥 NEW: Optional name field
+  const [serviceCategory, setServiceCategory] = useState<string>(SERVICE_CATEGORIES[0]); // 🔥 NEW: Mandatory dropdown
+  const [additionalInfo, setAdditionalInfo] = useState(''); // 🔥 NEW: Optional free-text notes
   const [cost, setCost] = useState('');
-  const [isPaid, setIsPaid] = useState(false);
-  const [isPending, setIsPending] = useState(false);
+  const [isPaid, setIsPaid] = useState(true);
+  const [isPartial, setIsPartial] = useState(false);
   const [partialAmount, setPartialAmount] = useState('');
-  const [dashLights, setDashLights] = useState<DashLights>(EMPTY_DASH_LIGHTS);
-  const [oilReminder, setOilReminder] = useState<OilReminder>(EMPTY_OIL_REMINDER);
-  const [batteryReplacement, setBatteryReplacement] = useState<BatteryReplacement>(
-    EMPTY_BATTERY_REPLACEMENT
-  );
-  const [hvacService, setHvacService] = useState<HvacService>(EMPTY_HVAC_SERVICE);
   const [outsourceCost, setOutsourceCost] = useState('');
   const [pickedItems, setPickedItems] = useState<PickedItem[]>([]);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const isOilService = serviceCategory === 'Oil Services';
-  const isBatteryService = serviceCategory === 'Battery Replacement';
-  const isHvacService = serviceCategory === 'HVAC Services';
-  const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId);
-
   const productsSubtotal = pickedItems.reduce(
     (sum, it) => sum + it.quantity * it.unit_price,
     0
   );
-  const laborCost = parseFloat(cost) || 0;
-  const grandTotal = laborCost + productsSubtotal;
 
   const handleSubmit = async () => {
-    if (!selectedVehicleId || !serviceCategory || !cost.trim()) {
-      Alert.alert('خطأ', 'يرجى ملء جميع الحقول المطلوبة');
+    // 🔥 NEW: Category is mandatory
+    if (!serviceCategory) {
+      Alert.alert('خطأ', 'يرجى اختيار نوع الخدمة');
       return;
     }
 
-    if (isOilService && !oilReminder.oilGrade.trim()) {
-      Alert.alert('خطأ', 'درجة الزيت مطلوبة لخدمات الزيت (مثال: 5W-30)');
+    // If products were picked, we use the special Product Sale logic
+    if (pickedItems.length > 0) {
+      setLoading(true);
+      try {
+        const item = pickedItems[0];
+        await createWalkinProductSale(item.inventory_id, item.quantity);
+        triggerAutoPush();
+        Alert.alert('نجاح', 'تم بيع المنتج وخصمه من المخزون!');
+        router.back();
+      } catch (error: any) {
+        Alert.alert('خطأ', error.message || 'فشل بيع المنتج.');
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 
-    if (isBatteryService && !batteryReplacement.ampRate.trim()) {
-      Alert.alert(
-        'خطأ',
-        'معدل الأمبير مطلوب لاستبدال البطارية (مثال: 700 CCA أو 80 Ah)'
-      );
-      return;
-    }
+    // ✅ ALLOW $0 (Free service) - Removed the validation block!
+    const totalCost = parseFloat(cost) || 0;
 
-    const laborNumber = parseFloat(cost);
-    if (isNaN(laborNumber) || laborNumber < 0) {
-      Alert.alert('خطأ', 'يرجى إدخال تكلفة عمل صالحة');
-      return;
-    }
-    // Grand total = labor + parts retail
-    const costNumber = laborNumber + productsSubtotal;
-
-    // Pending payment validation
     let partialPaidNumber = 0;
-    if (isPending) {
+    if (isPartial) {
       partialPaidNumber = parseFloat(partialAmount) || 0;
       if (partialPaidNumber < 0) {
-        Alert.alert('خطأ', 'لا يمكن أن يكون الدفع الجزئي سالباً');
+        Alert.alert('خطأ', 'المبلغ الجزئي لا يمكن أن يكون سالباً.');
         return;
       }
-      if (partialPaidNumber >= costNumber) {
-        Alert.alert(
-          'خطأ',
-          'يجب أن يكون الدفع الجزئي أقل من التكلفة الإجمالية. استخدم "مدفوع" إذا كان مدفوعاً بالكامل.'
-        );
+      // ✅ CHANGE: Now allows $0 partial payment for $0 service
+      if (partialPaidNumber > totalCost) {
+        Alert.alert('خطأ', 'يجب أن يكون المبلغ الجزئي أقل من التكلفة الإجمالية. استخدم "مدفوع" بدلاً من ذلك.');
         return;
       }
     }
 
     setLoading(true);
     try {
-      await createService(
-        selectedVehicleId,
+      // 🔥 Pass the customer name, mandatory category (stored in English),
+      // and optional notes as separate fields — matches createService's
+      // service_description / additional_info column split.
+      await createQuickWalkinService(
+        customerName.trim() || undefined,
         serviceCategory,
         additionalInfo.trim() || undefined,
-        costNumber,
-        isPaid,
-        dashLights,
-        isOilService ? oilReminder : EMPTY_OIL_REMINDER,
-        pickedItems.map((p) => ({ inventory_id: p.inventory_id, quantity: p.quantity })),
+        totalCost + productsSubtotal,
+        totalCost > 0 ? (isPaid || isPartial) : false, // ✅ $0 = UNPAID, >0 = paid/partial
         partialPaidNumber,
-        isBatteryService ? batteryReplacement : undefined,
-        isHvacService ? hvacService : undefined,
-        parseFloat(outsourceCost || '0') || 0
+        parseFloat(outsourceCost) || 0
       );
+      
       triggerAutoPush();
-
+      Alert.alert('نجاح', 'تمت إضافة خدمة العميل بدون موعد إلى الصندوق!');
       router.back();
     } catch (error: any) {
-      Alert.alert('خطأ', error.message || 'فشل في إضافة الخدمة');
+      Alert.alert('خطأ', error.message || 'فشل إضافة خدمة العميل بدون موعد.');
     } finally {
       setLoading(false);
     }
@@ -149,244 +119,148 @@ export default function AddServiceScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#1e293b" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>إضافة سجل خدمة</Text>
+          <Text style={styles.headerTitle}>عميل بدون موعد</Text>
           <View style={{ width: 40 }} />
         </View>
 
-        <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
-          <View style={styles.form}>
-            <View style={styles.iconContainer}>
-              <Ionicons name="construct" size={48} color="#10b981" />
+        <ScrollView style={styles.content}>
+          {/* 🔥 NEW: Customer Name (Optional) */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>اسم العميل (اختياري)</Text>
+            <View style={styles.inputContainer}>
+              <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="اتركه فارغاً لعميل عام"
+                value={customerName}
+                onChangeText={setCustomerName}
+              />
             </View>
+          </View>
 
-            {/* Vehicle Selection */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>اختر المركبة *</Text>
-              <View style={styles.pickerContainer}>
-                <Ionicons name="car-sport-outline" size={20} color="#666" style={styles.pickerIcon} />
-                <Picker
-                  selectedValue={selectedVehicleId}
-                  onValueChange={(value) => setSelectedVehicleId(value)}
-                  style={styles.picker}
-                >
-                  {vehicles.map((vehicle) => (
-                    <Picker.Item
-                      key={vehicle.id}
-                      label={`${vehicle.year || ''} ${vehicle.make} ${vehicle.model} - ${vehicle.plate_number}`}
-                      value={vehicle.id}
-                    />
-                  ))}
-                </Picker>
-              </View>
+          {/* 🔥 NEW: Service Category (Mandatory Dropdown, Arabized labels) */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>نوع الخدمة *</Text>
+            <View style={styles.pickerContainer}>
+              <Ionicons name="clipboard-outline" size={20} color="#666" style={styles.pickerIcon} />
+              <Picker
+                selectedValue={serviceCategory}
+                onValueChange={(value) => setServiceCategory(value)}
+                style={styles.picker}
+                testID="quick-walkin-category-picker"
+              >
+                {SERVICE_CATEGORIES.map((cat) => (
+                  <Picker.Item
+                    key={cat}
+                    label={SERVICE_CATEGORY_LABELS_AR[cat] || cat}
+                    value={cat}
+                  />
+                ))}
+              </Picker>
             </View>
+          </View>
 
-            {/* Service Category (Dropdown) */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>نوع الخدمة *</Text>
-              <View style={styles.pickerContainer}>
-                <Ionicons name="clipboard-outline" size={20} color="#666" style={styles.pickerIcon} />
-                <Picker
-                  selectedValue={serviceCategory}
-                  onValueChange={(value) => setServiceCategory(value)}
-                  style={styles.picker}
-                  testID="service-category-picker"
-                >
-                  {SERVICE_CATEGORIES.map((cat) => (
-                    <Picker.Item key={cat} label={cat} value={cat} />
-                  ))}
-                </Picker>
-              </View>
+          {/* 🔥 NEW: Additional Notes (Optional free text) */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>ملاحظات إضافية (اختياري)</Text>
+            <View style={[styles.inputContainer, styles.textAreaContainer]}>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="مثال: تغيير زيت، بيع منتج..."
+                value={additionalInfo}
+                onChangeText={setAdditionalInfo}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
             </View>
+          </View>
 
-            {/* Oil Service Reminder (conditional) */}
-            {isOilService && (
-              <View style={styles.oilCard}>
-                <OilReminderForm
-                  value={oilReminder}
-                  onChange={setOilReminder}
-                  make={selectedVehicle?.make}
-                  model={selectedVehicle?.model}
-                />
-              </View>
-            )}
-
-            {/* Battery Replacement (conditional) */}
-            {isBatteryService && (
-              <View style={styles.batteryCard}>
-                <BatteryReplacementForm
-                  value={batteryReplacement}
-                  onChange={setBatteryReplacement}
-                />
-              </View>
-            )}
-
-            {/* HVAC Services (conditional) */}
-            {isHvacService && (
-              <View style={styles.hvacCard}>
-                <HvacServiceForm value={hvacService} onChange={setHvacService} />
-              </View>
-            )}
-
-            {/* Additional Info / Description */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>ملاحظات / وصف</Text>
-              <View style={[styles.inputContainer, styles.textAreaContainer]}>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  placeholder="مثال: تم تغيير فلتر الزيت، تآكل فرامل..."
-                  value={additionalInfo}
-                  onChangeText={setAdditionalInfo}
-                  multiline
-                  numberOfLines={4}
-                  textAlignVertical="top"
-                />
-              </View>
-            </View>
-
-            {/* Inventory Products Used */}
+          {/* Inventory Products Used */}
+          <View style={styles.productsCard}>
             <InventoryPicker value={pickedItems} onChange={setPickedItems} />
+          </View>
 
-            {/* Dashboard Warning Lights */}
-            <View style={styles.dashCard}>
-              <DashLightsPicker value={dashLights} onChange={setDashLights} />
+          {/* Total Price */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>السعر الإجمالي (عمل + قطع)</Text>
+            <View style={styles.inputContainer}>
+              <Text style={styles.currencySymbol}>$</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="0.00"
+                value={cost}
+                onChangeText={setCost}
+                keyboardType="decimal-pad"
+              />
             </View>
+            {productsSubtotal > 0 && (
+              <Text style={styles.autoCalcText}>
+                + ${productsSubtotal.toFixed(2)} في القطع (محسوب تلقائياً)
+              </Text>
+            )}
+          </View>
 
-            {/* Cost */}
+          {/* Payment Status */}
+          <View style={styles.paymentRow}>
+            <TouchableOpacity style={[styles.payBtn, isPaid && styles.payBtnActive]} onPress={() => { setIsPaid(true); setIsPartial(false); setPartialAmount(''); }}>
+              <Ionicons name="checkmark-circle" size={20} color={isPaid ? '#fff' : '#64748b'} />
+              <Text style={[styles.payBtnText, isPaid && styles.payBtnTextActive]}>مدفوع</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={[styles.payBtn, isPartial && styles.payBtnActivePartial]} onPress={() => { setIsPartial(!isPartial); setIsPaid(false); }}>
+              <Ionicons name="time" size={20} color={isPartial ? '#fff' : '#64748b'} />
+              <Text style={[styles.payBtnText, isPartial && styles.payBtnTextActive]}>دفعة جزئية</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Partial Amount Input */}
+          {isPartial && (
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>العمالة / رسوم الخدمة *</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="cash-outline" size={20} color="#666" style={styles.inputIcon} />
+              <Text style={styles.label}>المبلغ المستلم</Text>
+              <View style={[styles.inputContainer, { borderColor: '#eab308' }]}>
                 <Text style={styles.currencySymbol}>$</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="0.00"
-                  value={cost}
-                  onChangeText={setCost}
+                  value={partialAmount}
+                  onChangeText={setPartialAmount}
                   keyboardType="decimal-pad"
                 />
               </View>
-              {productsSubtotal > 0 && (
-                <View style={styles.totalBreakdown}>
-                  <Text style={styles.totalLine}>العمالة: ${laborCost.toFixed(2)}</Text>
-                  <Text style={styles.totalLine}>القطع (سعر التجزئة): ${productsSubtotal.toFixed(2)}</Text>
-                  <Text style={styles.totalGrand}>الإجمالي النهائي: ${grandTotal.toFixed(2)}</Text>
-                </View>
-              )}
             </View>
+          )}
 
-            {/* Outsource Cost (PRIVATE, Reports-only) */}
-            <View style={styles.outsourceCard}>
-              <View style={styles.outsourceHeaderRow}>
-                <Ionicons name="lock-closed" size={14} color="#6b21a8" />
-                <Text style={styles.outsourceHeader}>تكلفة المقاول (خاصة)</Text>
-              </View>
-              <Text style={styles.outsourceHint}>
-                المبلغ المدفوع لطرف ثالث مقابل هذه المهمة. يتم خصمه من التدفق النقدي في
-                شاشة التقارير فقط - ولا يظهر أبداً في الإيصالات أو الفواتير أو الملصقات.
-              </Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="cash-outline" size={20} color="#6b21a8" style={styles.inputIcon} />
-                <Text style={[styles.currencySymbol, { color: '#6b21a8' }]}>$</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="0.00"
-                  value={outsourceCost}
-                  onChangeText={(t) => setOutsourceCost(t.replace(/[^\d.]/g, ''))}
-                  keyboardType="decimal-pad"
-                  testID="outsource-cost-input"
-                />
-              </View>
+          {/* Outsource Cost */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>تكلفة الاستعانة بمصدر خارجي (خاصة)</Text>
+            <View style={styles.inputContainer}>
+              <Text style={styles.currencySymbol}>$</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="0.00"
+                value={outsourceCost}
+                onChangeText={(t) => setOutsourceCost(t.replace(/[^\d.]/g, ''))}
+                keyboardType="decimal-pad"
+              />
             </View>
-
-            {/* Paid Checkbox */}
-            <TouchableOpacity
-              style={styles.paidCheckbox}
-              onPress={() => {
-                const next = !isPaid;
-                setIsPaid(next);
-                if (next) {
-                  setIsPending(false);
-                  setPartialAmount('');
-                }
-              }}
-              testID="paid-checkbox"
-            >
-              <View style={[styles.checkbox, isPaid && styles.checkboxChecked]}>
-                {isPaid && <Ionicons name="checkmark" size={18} color="#fff" />}
-              </View>
-              <View style={styles.paidCheckboxLabel}>
-                <Text style={styles.paidCheckboxText}>الفاتورة مدفوعة</Text>
-                <Text style={styles.paidCheckboxSubtext}>
-                  {isPaid ? 'تم وضع علامة مدفوعة' : 'ستظهر كغير مدفوعة باللون الأحمر'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Pending Payment Checkbox + partial amount */}
-            <View style={styles.pendingRow}>
-              <TouchableOpacity
-                style={[styles.paidCheckbox, { flex: 1, marginTop: 0 }]}
-                onPress={() => {
-                  const next = !isPending;
-                  setIsPending(next);
-                  if (next) setIsPaid(false);
-                  else setPartialAmount('');
-                }}
-                testID="pending-checkbox"
-              >
-                <View
-                  style={[
-                    styles.checkbox,
-                    isPending && { backgroundColor: '#eab308', borderColor: '#eab308' },
-                  ]}
-                >
-                  {isPending && <Ionicons name="time" size={16} color="#fff" />}
-                </View>
-                <View style={styles.paidCheckboxLabel}>
-                  <Text style={styles.paidCheckboxText}>دفع معلق</Text>
-                  <Text style={styles.paidCheckboxSubtext}>
-                    {isPending ? 'ستظهر كمعلق باللون الأصفر' : 'دفع جزئي أو في انتظار الدفع'}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-              {isPending && (
-                <View style={styles.partialInputWrap} testID="partial-input-wrap">
-                  <Text style={styles.currencySymbol}>$</Text>
-                  <TextInput
-                    style={styles.partialInput}
-                    placeholder="0.00"
-                    value={partialAmount}
-                    onChangeText={setPartialAmount}
-                    keyboardType="decimal-pad"
-                    testID="partial-input"
-                  />
-                </View>
-              )}
-            </View>
-
-            <TouchableOpacity
-              style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-              onPress={handleSubmit}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="checkmark-circle" size={24} color="#fff" />
-                  <Text style={styles.submitButtonText}>إضافة الخدمة</Text>
-                </>
-              )}
-            </TouchableOpacity>
           </View>
+
+          <TouchableOpacity style={[styles.submitButton, loading && styles.disabled]} onPress={handleSubmit} disabled={loading}>
+            {loading ? <ActivityIndicator color="#fff" /> : (
+              <>
+                <Ionicons name="cash-outline" size={24} color="#fff" />
+                <Text style={styles.submitText}>
+                  {pickedItems.length > 0 ? 'بيع منتج' : 'إضافة إلى الصندوق'}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -397,31 +271,26 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   keyboardView: { flex: 1 },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 24, paddingVertical: 16, backgroundColor: '#fff',
+    borderBottomWidth: 1, borderBottomColor: '#e2e8f0',
   },
   backButton: { padding: 8 },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#1e293b' },
-  content: { flex: 1, paddingHorizontal: 24 },
-  form: { paddingTop: 24 },
-  iconContainer: {
-    alignSelf: 'center',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#d1fae5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
+  content: { flex: 1, padding: 24 },
   inputGroup: { marginBottom: 20 },
   label: { fontSize: 14, fontWeight: '600', color: '#1e293b', marginBottom: 8 },
+  inputContainer: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
+    borderRadius: 12, paddingHorizontal: 16, height: 56, borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  textAreaContainer: { height: 90, alignItems: 'flex-start', paddingVertical: 12 },
+  textArea: { height: '100%' },
+  inputIcon: { marginRight: 12 },
+  input: { flex: 1, fontSize: 16, color: '#1e293b' },
+  currencySymbol: { fontSize: 16, fontWeight: '600', color: '#1e293b', marginRight: 8 },
+  autoCalcText: { fontSize: 12, color: '#059669', marginTop: 6, fontStyle: 'italic' },
   pickerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -433,156 +302,27 @@ const styles = StyleSheet.create({
   },
   pickerIcon: { marginRight: 12 },
   picker: { flex: 1, height: 56 },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    height: 56,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+  paymentRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+  payBtn: {
+    flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+    height: 50, borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#fff', gap: 8,
   },
-  textAreaContainer: { height: 100, alignItems: 'flex-start', paddingVertical: 12 },
-  inputIcon: { marginRight: 12 },
-  input: { flex: 1, fontSize: 16, color: '#1e293b' },
-  textArea: { height: '100%' },
-  currencySymbol: { fontSize: 16, fontWeight: '600', color: '#1e293b', marginRight: 4 },
-  dashCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    marginBottom: 20,
-  },
-  oilCard: {
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1.5,
-    borderColor: '#fcd34d',
-    backgroundColor: '#fffbeb',
-    marginBottom: 20,
-  },
-  batteryCard: {
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1.5,
-    borderColor: '#6ee7b7',
-    backgroundColor: '#ecfdf5',
-    marginBottom: 20,
-  },
-  hvacCard: {
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1.5,
-    borderColor: '#7dd3fc',
-    backgroundColor: '#f0f9ff',
-    marginBottom: 20,
-  },
-  outsourceCard: {
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1.5,
-    borderColor: '#c4b5fd',
-    backgroundColor: '#faf5ff',
-    marginBottom: 20,
-  },
-  outsourceHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  outsourceHeader: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#6b21a8',
-    letterSpacing: 0.3,
-  },
-  outsourceHint: {
-    fontSize: 11,
-    color: '#7c3aed',
-    marginBottom: 10,
-    lineHeight: 15,
-  },
+  payBtnActive: { backgroundColor: '#10b981', borderColor: '#10b981' },
+  payBtnActivePartial: { backgroundColor: '#eab308', borderColor: '#eab308' },
+  payBtnText: { fontSize: 16, fontWeight: '600', color: '#64748b' },
+  payBtnTextActive: { color: '#fff' },
   submitButton: {
-    backgroundColor: '#10b981',
-    borderRadius: 12,
-    height: 56,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 32,
+    backgroundColor: '#0f172a', borderRadius: 12, height: 56,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 8
   },
-  paidCheckbox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#fff',
+  disabled: { opacity: 0.6 },
+  submitText: { color: '#fff', fontSize: 18, fontWeight: '600', marginLeft: 8 },
+  productsCard: {
+    backgroundColor: '#f8fafc',
     borderRadius: 12,
+    padding: 4,
+    marginBottom: 20,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    marginBottom: 16,
-  },
-  checkbox: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#cbd5e1',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-  },
-  checkboxChecked: { backgroundColor: '#10b981', borderColor: '#10b981' },
-  paidCheckboxLabel: { marginLeft: 12, flex: 1 },
-  paidCheckboxText: { fontSize: 16, fontWeight: '600', color: '#1e293b' },
-  paidCheckboxSubtext: { fontSize: 12, color: '#64748b', marginTop: 2 },
-  pendingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 12,
-  },
-  partialInputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fef3c7',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#eab308',
-    paddingHorizontal: 10,
-    height: 46,
-    minWidth: 120,
-    flexGrow: 1,
-    flexBasis: 120,
-  },
-  partialInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#0f172a',
-    fontWeight: '700',
-    minWidth: 60,
-  },
-  submitButtonDisabled: { opacity: 0.6 },
-  submitButtonText: { color: '#fff', fontSize: 18, fontWeight: '600', marginLeft: 8 },
-  totalBreakdown: {
-    backgroundColor: '#f1f5f9',
-    borderRadius: 10,
-    padding: 10,
-    marginTop: 8,
-  },
-  totalLine: { fontSize: 12, color: '#475569', marginBottom: 2 },
-  totalGrand: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0f766e',
-    marginTop: 4,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
   },
 });
