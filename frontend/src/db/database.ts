@@ -2182,9 +2182,17 @@ export async function saveWeeklyWages(amount: number): Promise<void> {
     [todayStr, amount, now]
   );
 }
+
+// ✅ UPDATED: now accepts `serviceDescription` (the mandatory category,
+// e.g. one of SERVICE_CATEGORIES) and `additionalInfo` (optional free
+// text) as two separate parameters, matching the same
+// service_description / additional_info column split that createService
+// already uses for regular jobs. This means walk-ins are now grouped
+// the same way as scheduled services for reporting.
 export async function createQuickWalkinService(
   customerName: string | undefined,
-  description: string,
+  serviceDescription: string,
+  additionalInfo: string | undefined,
   totalCost: number,
   isPaid: boolean,
   partialPaid: number = 0,
@@ -2233,6 +2241,8 @@ export async function createQuickWalkinService(
   const pp = Math.max(0, Number(partialPaid) || 0);
   const oc = Math.max(0, Number(outsourceCost) || 0);
   const finalCost = Math.max(0, Number(totalCost) || 0);
+  const finalDescription = serviceDescription.trim() || 'Quick Walk-in Service';
+  const finalAdditionalInfo = additionalInfo?.trim() || null;
 
   await db.runAsync(
     `INSERT INTO services (
@@ -2243,8 +2253,8 @@ export async function createQuickWalkinService(
       serviceId,
       walkinVehicle!.id,
       walkinCustomer!.id,
-      description.trim() || 'Quick Walk-in Service',
-      null,
+      finalDescription,
+      finalAdditionalInfo,
       finalCost,
       isPaid ? 1 : 0,
       pp,
@@ -2259,8 +2269,8 @@ export async function createQuickWalkinService(
     id: serviceId,
     vehicle_id: walkinVehicle!.id,
     customer_id: walkinCustomer!.id,
-    service_description: description.trim() || 'Quick Walk-in Service',
-    additional_info: undefined,
+    service_description: finalDescription,
+    additional_info: finalAdditionalInfo || undefined,
     cost: finalCost,
     is_paid: isPaid,
     service_date: now,
