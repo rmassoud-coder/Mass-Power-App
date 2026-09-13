@@ -2107,6 +2107,50 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
   return result;
 }
 
+// ============================================================
+// ✅ NEW: Reorder report helper.
+// Returns every inventory item whose stock is BELOW `threshold`,
+// grouped by supplier name. Items with no supplier tag go into a
+// group called "Unassigned". Only READS — does not modify stock.
+// ============================================================
+export async function getLowStockBySupplier(
+  threshold: number
+): Promise<LowStockItemBySupplier[]> {
+  const db = await getDb();
+  const safeThreshold =
+    Number.isFinite(threshold) && threshold >= 1 ? Math.floor(threshold) : 5;
+
+  const items = await db.getAllAsync<InventoryItem>(
+    `SELECT * FROM inventory
+     WHERE item_quantity < ?
+     ORDER BY LOWER(item_type) ASC`,
+    [safeThreshold]
+  );
+
+  // Group by supplier name in JS (keeps the SQL simple, avoids
+  // GROUP_CONCAT edge cases with NULLs and special characters).
+  const groupsMap = new Map<string, InventoryItem[]>();
+  for (const it of items) {
+    const key =
+      it.item_supplier && it.item_supplier.trim()
+        ? it.item_supplier.trim()
+        : 'Unassigned';
+    if (!groupsMap.has(key)) groupsMap.set(key, []);
+    groupsMap.get(key)!.push(it);
+  }
+
+  const groups: LowStockItemBySupplier[] = Array.from(groupsMap.entries())
+    .map(([supplier_name, items]) => ({ supplier_name, items }))
+    .sort((a, b) => {
+      // Unassigned always last, then alphabetical
+      if (a.supplier_name === 'Unassigned') return 1;
+      if (b.supplier_name === 'Unassigned') return -1;
+      return a.supplier_name.localeCompare(b.supplier_name);
+    });
+
+  return groups;
+}
+
 export async function listSuppliers(): Promise<Supplier[]> {
   const db = await getDb();
   return await db.getAllAsync<Supplier>(
