@@ -240,6 +240,10 @@ export default function RootLayout() {
             <Stack.Screen name="add-service" />
             <Stack.Screen name="edit-service" />
             <Stack.Screen name="report" />
+            <Stack.Screen name="reports/index" options={{ title: 'Reports' }} />
+            <Stack.Screen name="reports/sales" options={{ title: 'Sales Report' }} />
+            <Stack.Screen name="reports/income" options={{ title: 'Income by Category' }} />
+            <Stack.Screen name="reports/reorder" options={{ title: 'Reorder Report' }} />
             <Stack.Screen name="backup" />
             <Stack.Screen name="walkin-service" options={{ headerShown: false }} />
             <Stack.Screen name="supplier-debts" />
