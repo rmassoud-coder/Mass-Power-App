@@ -18,31 +18,7 @@ import { Picker } from '@react-native-picker/picker';
 import { createQuickWalkinService, createWalkinProductSale, SERVICE_CATEGORIES } from './db/database';
 import { triggerAutoPush } from './utils/autoSync';
 import InventoryPicker, { PickedItem } from './components/InventoryPicker';
-
-/**
- * Arabic display labels for SERVICE_CATEGORIES.
- * Keys MUST exactly match the English strings in SERVICE_CATEGORIES.
- * The VALUE saved to the DB stays English (via value={cat}) — only the
- * label shown in the dropdown is Arabic. Reports/receipts are NOT affected.
- *
- * If a category is missing here, it falls back to the English name.
- */
-/**
- * Arabic display labels for SERVICE_CATEGORIES.
- * Keys MUST exactly match the English strings in SERVICE_CATEGORIES.
- * Values stay English in DB → reporting stays safe.
- */
-const CATEGORY_LABELS_AR: Record<string, string> = {
-  'Oil Services': 'خدمات الزيت',
-  'Battery Replacement': 'استبدال البطارية',
-  'HVAC Services': 'خدمات التكييف',
-  'Locksmith Services': 'خدمات الأقفال',
-  'Electrical Services': 'الخدمات الكهربائية',
-  'Mechanical Services': 'الخدمات الميكانيكية',
-  'Other Services': 'خدمات أخرى',
-};
-
-const getCategoryLabelAr = (cat: string) => CATEGORY_LABELS_AR[cat] ?? cat;
+import { getCategoryLabelAr } from './utils/categoryLabels';
 
 export default function QuickWalkinScreen() {
   const [customerName, setCustomerName] = useState(''); // 🔥 Optional name field
