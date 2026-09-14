@@ -21,9 +21,10 @@ import InventoryPicker, { PickedItem } from './components/InventoryPicker';
 import { getCategoryLabelAr } from './utils/categoryLabels';
 
 export default function QuickWalkinScreen() {
-  const [customerName, setCustomerName] = useState(''); // 🔥 Optional name field
-  const [serviceCategory, setServiceCategory] = useState<string>(SERVICE_CATEGORIES[0]); // 🔥 Mandatory dropdown
-  const [additionalInfo, setAdditionalInfo] = useState(''); // 🔥 Optional free-text notes
+  const [customerName, setCustomerName] = useState('');
+  // ✅ Start EMPTY — force the employee to actively pick a category
+  const [serviceCategory, setServiceCategory] = useState<string>('');
+  const [additionalInfo, setAdditionalInfo] = useState('');
   const [cost, setCost] = useState('');
   const [isPaid, setIsPaid] = useState(true);
   const [isPartial, setIsPartial] = useState(false);
@@ -39,13 +40,12 @@ export default function QuickWalkinScreen() {
   );
 
   const handleSubmit = async () => {
-    // 🔥 Category is mandatory
+    // ✅ Mandatory category — blocks if still empty
     if (!serviceCategory) {
       Alert.alert('خطأ', 'يرجى اختيار نوع الخدمة');
       return;
     }
 
-    // If products were picked, we use the special Product Sale logic
     if (pickedItems.length > 0) {
       setLoading(true);
       try {
@@ -62,7 +62,6 @@ export default function QuickWalkinScreen() {
       return;
     }
 
-    // ✅ ALLOW $0 (Free service)
     const totalCost = parseFloat(cost) || 0;
 
     let partialPaidNumber = 0;
@@ -80,14 +79,12 @@ export default function QuickWalkinScreen() {
 
     setLoading(true);
     try {
-      // Pass the customer name, mandatory category, and optional notes.
-      // serviceCategory stays ENGLISH so reports keep grouping correctly.
       await createQuickWalkinService(
         customerName.trim() || undefined,
         serviceCategory,
         additionalInfo.trim() || undefined,
         totalCost + productsSubtotal,
-        totalCost > 0 ? (isPaid || isPartial) : false, // ✅ $0 = UNPAID, >0 = paid/partial
+        totalCost > 0 ? (isPaid || isPartial) : false,
         partialPaidNumber,
         parseFloat(outsourceCost) || 0
       );
@@ -114,7 +111,7 @@ export default function QuickWalkinScreen() {
         </View>
 
         <ScrollView style={styles.content}>
-          {/* 🔥 Customer Name (Optional) */}
+          {/* Customer Name (Optional) */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>اسم العميل (اختياري)</Text>
             <View style={styles.inputContainer}>
@@ -128,7 +125,7 @@ export default function QuickWalkinScreen() {
             </View>
           </View>
 
-          {/* 🔥 Service Category (Mandatory Dropdown) — Arabic labels */}
+          {/* Service Category (Mandatory Dropdown) — Arabic labels + placeholder */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>نوع الخدمة *</Text>
             <View style={styles.pickerContainer}>
@@ -139,6 +136,8 @@ export default function QuickWalkinScreen() {
                 style={styles.picker}
                 testID="quick-walkin-category-picker"
               >
+                {/* ✅ Placeholder — shown when nothing selected yet */}
+                <Picker.Item label="— اختر نوع الخدمة —" value="" color="#94a3b8" />
                 {SERVICE_CATEGORIES.map((cat) => (
                   <Picker.Item key={cat} label={getCategoryLabelAr(cat)} value={cat} />
                 ))}
@@ -146,7 +145,7 @@ export default function QuickWalkinScreen() {
             </View>
           </View>
 
-          {/* 🔥 Additional Notes (Optional free text) */}
+          {/* Additional Notes (Optional free text) */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>ملاحظات إضافية (اختياري)</Text>
             <View style={[styles.inputContainer, styles.textAreaContainer]}>
