@@ -254,12 +254,22 @@ export type TombstoneEntityType =
   | 'service'
   | 'inventory'
   | 'supplier'
-  | 'service_item';
+  | 'service_item'
+  | 'stock';
 
 export interface Tombstone {
   entity_type: TombstoneEntityType;
   entity_id: string;
   deleted_at: string;
+}
+
+// ✅ NEW: Locksmith stock item — synced like other tables.
+export interface StockItem {
+  id: string;
+  name: string;
+  quantity: number;
+  created_at: string;
+  updated_at: string;
 }
 
 /////////////// BLOCK 1 - SETUP, INIT, & CORE TABLES ///////////////
@@ -348,6 +358,16 @@ export async function initDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_service_items_service ON service_items(service_id);
     CREATE INDEX IF NOT EXISTS idx_service_items_inventory ON service_items(inventory_id);
+
+    CREATE TABLE IF NOT EXISTS stock (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_stock_quantity ON stock(quantity);
+    CREATE INDEX IF NOT EXISTS idx_stock_name ON stock(name);
   `);
 
   try {
@@ -553,13 +573,6 @@ export async function updateCustomer(id: string, name: string, mobileNumber: str
   );
 }
 
-// ✅ FIXED: deleting a customer now records tombstones for the customer
-// AND every vehicle/service being cascade-deleted with it. Previously
-// this was a plain hard DELETE, which the sync merge (additive-only —
-// it only ever inserts/updates) had no way to distinguish from "this
-// device just hasn't received this record yet". Result: the very next
-// sync — even the pre-push merge step — would silently reinsert the
-// deleted customer from the cloud, undoing the deletion.
 export async function deleteCustomer(id: string): Promise<void> {
   const db = await getDb();
   const now = new Date().toISOString();
@@ -771,9 +784,6 @@ export async function updateVehicle(
   );
 }
 
-// ✅ FIXED: same tombstone treatment as deleteCustomer — deleting a
-// vehicle now tombstones the vehicle plus every service cascade-deleted
-// with it, so sync can't resurrect it.
 export async function deleteVehicle(id: string): Promise<void> {
   const db = await getDb();
   const now = new Date().toISOString();
@@ -964,8 +974,6 @@ export async function markServicesPaid(serviceIds: string[]): Promise<void> {
   );
 }
 
-// ✅ FIXED: deleting a service now tombstones it, same reasoning as
-// deleteCustomer/deleteVehicle above.
 export async function deleteService(id: string): Promise<void> {
   const db = await getDb();
   await restoreInventoryFromServiceItems(id);
@@ -1257,8 +1265,6 @@ export async function adjustInventoryQuantity(
   return next;
 }
 
-// ✅ FIXED: deleting an inventory item now tombstones it too — same bug,
-// same fix.
 export async function deleteInventoryItem(id: string): Promise<void> {
   const db = await getDb();
   await recordTombstone('inventory', id);
@@ -1317,10 +1323,6 @@ async function attachItemsToService(
   return saved;
 }
 
-// ✅ FIXED: the service_items rows removed here (whether from deleting a
-// service, or replacing its item list during an edit) are genuinely
-// gone and shouldn't be resurrected by sync either — tombstoned same
-// as everything else.
 async function restoreInventoryFromServiceItems(serviceId: string): Promise<void> {
   const db = await getDb();
   const rows = await db.getAllAsync<ServiceItem>(
@@ -1338,19 +1340,59 @@ async function restoreInventoryFromServiceItems(serviceId: string): Promise<void
   await db.runAsync(`DELETE FROM service_items WHERE service_id = ?`, [serviceId]);
 }
 
+/* ============================================================
+   ✅ NEW: LOCKSHEMITH STOCK — CRUD + sync-aware
+   ============================================================ */
+
+export async function listStock(): Promise<StockItem[]> {
+  const db = await getDb();
+  return await db.getAllAsync<StockItem>(
+    `SELECT * FROM stock
+     ORDER BY CASE WHEN quantity = 0 THEN 1 ELSE 0 END ASC,
+              LOWER(name) ASC`
+  );
+}
+
+export async function addStockItem(
+  name: string,
+  quantity: number = 1
+): Promise<StockItem> {
+  const db = await getDb();
+  const clean = (name || '').trim();
+  if (!clean) throw new Error('Item name is required');
+  const qty = Math.max(0, Math.floor(Number(quantity) || 0));
+  const id = generateId();
+  const now = new Date().toISOString();
+  await db.runAsync(
+    `INSERT INTO stock (id, name, quantity, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+    [id, clean, qty, now, now]
+  );
+  return { id, name: clean, quantity: qty, created_at: now, updated_at: now };
+}
+
+export async function updateStockQuantity(
+  id: string,
+  quantity: number
+): Promise<void> {
+  const db = await getDb();
+  const qty = Math.max(0, Math.floor(Number(quantity) || 0));
+  const now = new Date().toISOString();
+  await db.runAsync(
+    `UPDATE stock SET quantity = ?, updated_at = ? WHERE id = ?`,
+    [qty, now, id]
+  );
+}
+
+export async function deleteStockItem(id: string): Promise<void> {
+  const db = await getDb();
+  await recordTombstone('stock', id);
+  await db.runAsync(`DELETE FROM stock WHERE id = ?`, [id]);
+}
+
 /////////////// BLOCK 2 - REPORTS, SYNC, SUPPLIERS, WALK-INS, WAGES & MATH ///////////////
 
 // ============================================================
 // ✅ NEW: Income by Category report
-// Groups services by service_description (which stores the
-// English SERVICE_CATEGORIES value — 'Oil Services', 'HVAC
-// Services', etc.) and sums up revenue / paid / partial /
-// unpaid / outsource per category, over an optional date range.
-//
-// IMPORTANT: this function ONLY READS. It does not modify any
-// row. Reports that group by English category strings keep
-// working because we never translate the stored value — the
-// Arabic label is display-only (see src/utils/categoryLabels.ts).
 // ============================================================
 export interface CategoryIncomeRow {
   category: string;
@@ -1411,12 +1453,6 @@ export async function getIncomeByCategory(
 
 // ============================================================
 // ✅ NEW: Unpaid services report helper.
-// Returns ALL unpaid services (full OR partial) across the entire
-// database — no date filtering. Only READS.
-//
-// "Unpaid" = is_paid = 0. This covers both:
-//   - full unpaid (partial_paid = 0)
-//   - partial payments (partial_paid > 0, still owing the rest)
 // ============================================================
 export interface UnpaidServiceRow {
   service_id: string;
@@ -1530,9 +1566,6 @@ export async function getReport(
   const conditions: string[] = [];
   const params: any[] = [];
 
-  // ✅ UNIFIED: use the same Monday-start + local-date helpers as the
-  // rest of the app (see getWeekStartMonday / getLocalDateStr above),
-  // instead of a local, differently-rounded copy of this math.
   const today = new Date();
   const monday = getWeekStartMonday(today);
 
@@ -1781,6 +1814,7 @@ export interface FullDbSnapshot {
   supplierBalances?: { supplier_id: string; balance: number; updated_at?: string }[];
   wagesPaid?: { id: number; date: string; amount: number; created_at: string }[];
   tombstones?: Tombstone[];
+  stock?: StockItem[];
 }
 
 export async function exportFullDatabase(): Promise<FullDbSnapshot> {
@@ -1815,9 +1849,10 @@ export async function exportFullDatabase(): Promise<FullDbSnapshot> {
     `SELECT * FROM wages_paid`
   );
   const tombstones = await db.getAllAsync<Tombstone>(`SELECT * FROM tombstones`);
+  const stock = await db.getAllAsync<StockItem>(`SELECT * FROM stock`);
 
   return {
-    version: 4,
+    version: 5,
     exported_at: new Date().toISOString(),
     customers,
     vehicles,
@@ -1828,6 +1863,7 @@ export async function exportFullDatabase(): Promise<FullDbSnapshot> {
     supplierBalances,
     wagesPaid,
     tombstones,
+    stock,
   };
 }
 
@@ -1837,7 +1873,7 @@ export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
   }
   const db = await getDb();
   await db.execAsync(
-    `DELETE FROM service_items; DELETE FROM services; DELETE FROM vehicles; DELETE FROM customers; DELETE FROM inventory; DELETE FROM suppliers; DELETE FROM tombstones;`
+    `DELETE FROM service_items; DELETE FROM services; DELETE FROM vehicles; DELETE FROM customers; DELETE FROM inventory; DELETE FROM suppliers; DELETE FROM tombstones; DELETE FROM stock;`
   );
   for (const c of snap.customers) {
     await db.runAsync(
@@ -1937,6 +1973,15 @@ export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
       );
     }
   }
+
+  if (Array.isArray(snap.stock)) {
+    for (const st of snap.stock) {
+      await db.runAsync(
+        `INSERT OR REPLACE INTO stock (id, name, quantity, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+        [st.id, st.name, st.quantity, st.created_at, st.updated_at]
+      );
+    }
+  }
 }
 
 export interface MergeResult {
@@ -1948,6 +1993,7 @@ export interface MergeResult {
   service_items: { inserted: number; updated: number };
   supplierBalances: { inserted: number; updated: number };
   wagesPaid: { inserted: number; updated: number };
+  stock: { inserted: number; updated: number };
   tombstonesApplied: number;
 }
 
@@ -1968,15 +2014,10 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
     service_items: { inserted: 0, updated: 0 },
     supplierBalances: { inserted: 0, updated: 0 },
     wagesPaid: { inserted: 0, updated: 0 },
+    stock: { inserted: 0, updated: 0 },
     tombstonesApplied: 0,
   };
 
-  // ✅ NEW: STEP 0 — apply cloud tombstones FIRST, before merging any
-  // entity data below. This is what actually fixes "deleted record
-  // comes back": if another device deleted something, we (a) delete our
-  // own local copy too if we still have it, and (b) remember the ID as
-  // tombstoned in-memory so every insert-loop below skips it instead of
-  // resurrecting it.
   const localTombstones = await db.getAllAsync<Tombstone>(`SELECT * FROM tombstones`);
   const tombstoneSet: Record<TombstoneEntityType, Map<string, string>> = {
     customer: new Map(),
@@ -1985,6 +2026,7 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
     inventory: new Map(),
     supplier: new Map(),
     service_item: new Map(),
+    stock: new Map(),
   };
   for (const t of localTombstones) {
     tombstoneSet[t.entity_type].set(t.entity_id, t.deleted_at);
@@ -2001,14 +2043,13 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
         tombstoneSet[t.entity_type].set(t.entity_id, t.deleted_at);
         result.tombstonesApplied++;
 
-        // Also remove the local record if this device still has it —
-        // e.g. it hadn't synced since the other device deleted it.
         const table =
           t.entity_type === 'customer' ? 'customers' :
           t.entity_type === 'vehicle' ? 'vehicles' :
           t.entity_type === 'service' ? 'services' :
           t.entity_type === 'inventory' ? 'inventory' :
           t.entity_type === 'supplier' ? 'suppliers' :
+          t.entity_type === 'stock' ? 'stock' :
           'service_items';
         await db.runAsync(`DELETE FROM ${table} WHERE id = ?`, [t.entity_id]);
       }
@@ -2017,7 +2058,7 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
 
   if (Array.isArray(snap.customers)) {
     for (const c of snap.customers) {
-      if (tombstoneSet.customer.has(c.id)) continue; // ✅ don't resurrect a deleted customer
+      if (tombstoneSet.customer.has(c.id)) continue;
       const local = await db.getFirstAsync<Customer>(`SELECT * FROM customers WHERE id = ?`, [c.id]);
       if (!local) {
         await db.runAsync(
@@ -2037,7 +2078,7 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
 
   if (Array.isArray(snap.vehicles)) {
     for (const v of snap.vehicles) {
-      if (tombstoneSet.vehicle.has(v.id)) continue; // ✅ don't resurrect a deleted vehicle
+      if (tombstoneSet.vehicle.has(v.id)) continue;
       const local = await db.getFirstAsync<Vehicle>(`SELECT * FROM vehicles WHERE id = ?`, [v.id]);
       if (!local) {
         await db.runAsync(
@@ -2057,7 +2098,7 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
 
   if (Array.isArray(snap.services)) {
     for (const s of snap.services) {
-      if (tombstoneSet.service.has(s.id)) continue; // ✅ don't resurrect a deleted service
+      if (tombstoneSet.service.has(s.id)) continue;
       const local = await db.getFirstAsync<any>(`SELECT * FROM services WHERE id = ?`, [s.id]);
       if (!local) {
         await db.runAsync(
@@ -2115,7 +2156,7 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
 
   if (Array.isArray(snap.inventory)) {
     for (const it of snap.inventory) {
-      if (tombstoneSet.inventory.has(it.id)) continue; // ✅ don't resurrect a deleted inventory item
+      if (tombstoneSet.inventory.has(it.id)) continue;
       const local = await db.getFirstAsync<InventoryItem>(`SELECT * FROM inventory WHERE id = ?`, [it.id]);
       if (!local) {
         await db.runAsync(
@@ -2135,7 +2176,7 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
 
   if (Array.isArray(snap.suppliers)) {
     for (const sup of snap.suppliers) {
-      if (tombstoneSet.supplier.has(sup.id)) continue; // ✅ don't resurrect a deleted supplier
+      if (tombstoneSet.supplier.has(sup.id)) continue;
       const local = await db.getFirstAsync<Supplier>(`SELECT * FROM suppliers WHERE id = ?`, [sup.id]);
       if (!local) {
         await db.runAsync(
@@ -2149,7 +2190,7 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
 
   if (Array.isArray(snap.service_items)) {
     for (const si of snap.service_items) {
-      if (tombstoneSet.service_item.has(si.id)) continue; // ✅ don't resurrect a deleted service item
+      if (tombstoneSet.service_item.has(si.id)) continue;
       const local = await db.getFirstAsync<ServiceItem>(`SELECT * FROM service_items WHERE id = ?`, [si.id]);
       if (!local) {
         await db.runAsync(
@@ -2157,6 +2198,26 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
           [si.id, si.service_id, si.inventory_id, si.item_type, si.quantity, si.unit_price, si.created_at]
         );
         result.service_items.inserted++;
+      }
+    }
+  }
+
+  if (Array.isArray(snap.stock)) {
+    for (const st of snap.stock) {
+      if (tombstoneSet.stock.has(st.id)) continue;
+      const local = await db.getFirstAsync<StockItem>(`SELECT * FROM stock WHERE id = ?`, [st.id]);
+      if (!local) {
+        await db.runAsync(
+          `INSERT INTO stock (id, name, quantity, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+          [st.id, st.name, st.quantity, st.created_at, st.updated_at]
+        );
+        result.stock.inserted++;
+      } else if (newer(st.updated_at, local.updated_at)) {
+        await db.runAsync(
+          `UPDATE stock SET name = ?, quantity = ?, updated_at = ? WHERE id = ?`,
+          [st.name, st.quantity, st.updated_at, st.id]
+        );
+        result.stock.updated++;
       }
     }
   }
@@ -2210,9 +2271,6 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
 
 // ============================================================
 // ✅ NEW: Reorder report helper.
-// Returns every inventory item whose stock is BELOW `threshold`,
-// grouped by supplier name. Items with no supplier tag go into a
-// group called "Unassigned". Only READS — does not modify stock.
 // ============================================================
 export async function getLowStockBySupplier(
   threshold: number
@@ -2228,8 +2286,6 @@ export async function getLowStockBySupplier(
     [safeThreshold]
   );
 
-  // Group by supplier name in JS (keeps the SQL simple, avoids
-  // GROUP_CONCAT edge cases with NULLs and special characters).
   const groupsMap = new Map<string, InventoryItem[]>();
   for (const it of items) {
     const key =
@@ -2243,7 +2299,6 @@ export async function getLowStockBySupplier(
   const groups: LowStockItemBySupplier[] = Array.from(groupsMap.entries())
     .map(([supplier_name, items]) => ({ supplier_name, items }))
     .sort((a, b) => {
-      // Unassigned always last, then alphabetical
       if (a.supplier_name === 'Unassigned') return 1;
       if (b.supplier_name === 'Unassigned') return -1;
       return a.supplier_name.localeCompare(b.supplier_name);
@@ -2319,7 +2374,6 @@ export async function updateSupplier(
   }
 }
 
-// ✅ FIXED: deleting a supplier now tombstones it too.
 export async function deleteSupplier(id: string): Promise<void> {
   const db = await getDb();
   const prev = await db.getFirstAsync<Supplier>(`SELECT * FROM suppliers WHERE id = ?`, [id]);
@@ -2353,21 +2407,18 @@ export async function updateSupplierBalance(supplierId: string, newBalance: numb
   const db = await getDb();
   const now = new Date().toISOString();
   
-  // 1. Get OLD balance
   const oldRecord = await db.getFirstAsync<{ balance: number }>(
     `SELECT balance FROM supplier_balances WHERE supplier_id = ?`,
     [supplierId]
   );
   const oldBalance = oldRecord?.balance || 0;
   
-  // 2. Update the balance
   await db.runAsync(
     `INSERT INTO supplier_balances (supplier_id, balance, updated_at) VALUES (?, ?, ?)
      ON CONFLICT(supplier_id) DO UPDATE SET balance = ?, updated_at = ?`,
     [supplierId, newBalance, now, newBalance, now]
   );
 
-  // 3. Log the payment if money was paid
   if (newBalance < oldBalance) {
     const amountPaid = oldBalance - newBalance;
     const paymentId = generateId();
@@ -2384,25 +2435,17 @@ export async function saveWeeklyWages(amount: number): Promise<void> {
   
   const todayStr = getLocalDateStr();
 
-  // Delete ONLY today's entry
   await db.runAsync(
     `DELETE FROM wages_paid WHERE DATE(date) = ?`,
     [todayStr]
   );
 
-  // Insert with TODAY's date
   await db.runAsync(
     `INSERT INTO wages_paid (date, amount, created_at) VALUES (?, ?, ?)`,
     [todayStr, amount, now]
   );
 }
 
-// ✅ UPDATED: now accepts `serviceDescription` (the mandatory category,
-// e.g. one of SERVICE_CATEGORIES) and `additionalInfo` (optional free
-// text) as two separate parameters, matching the same
-// service_description / additional_info column split that createService
-// already uses for regular jobs. This means walk-ins are now grouped
-// the same way as scheduled services for reporting.
 export async function createQuickWalkinService(
   customerName: string | undefined,
   serviceDescription: string,
@@ -2601,13 +2644,12 @@ export async function getWeeklyCashSummary(): Promise<{
   paidTowardsDebtToday: number;
   paidTowardsDebtWeek: number;
   wages: number;
-  todayWages: number;  // ✅ ADD THIS
-  weekWages: number;   // ✅ ADD THIS
+  todayWages: number;
+  weekWages: number;
   netDrawer: number;
 }> {
   const db = await getDb();
 
-  // ✅ UNIFIED: same Monday-start + local-date helpers used everywhere else.
   const today = new Date();
   const monday = getWeekStartMonday(today);
   const mondayStr = getLocalDateStr(monday);
@@ -2625,7 +2667,6 @@ export async function getWeeklyCashSummary(): Promise<{
   );
   const totalDebt = debtResult?.total || 0;
 
-  // 🔥 TODAY'S paid amount
   let paidToday = 0;
   try {
     const paidResult = await db.getFirstAsync<{ total: number }>(
@@ -2638,7 +2679,6 @@ export async function getWeeklyCashSummary(): Promise<{
     paidToday = 0;
   }
 
-  // 🔥 WEEK's paid amount (Monday → Today)
   let paidWeek = 0;
   try {
     const paidWeekResult = await db.getFirstAsync<{ total: number }>(
@@ -2651,47 +2691,44 @@ export async function getWeeklyCashSummary(): Promise<{
     paidWeek = 0;
   }
 
-  // ✅ Today's Cash Out (wages + goods)
-let todayWages = 0;
-try {
-  const todayWagesResult = await db.getFirstAsync<{ total: number }>(
-    `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid 
-     WHERE DATE(date) = ?`,
-    [todayStr]
-  );
-  todayWages = todayWagesResult?.total || 0;
-} catch (e) {
-  todayWages = 0;
-}
+  let todayWages = 0;
+  try {
+    const todayWagesResult = await db.getFirstAsync<{ total: number }>(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid 
+       WHERE DATE(date) = ?`,
+      [todayStr]
+    );
+    todayWages = todayWagesResult?.total || 0;
+  } catch (e) {
+    todayWages = 0;
+  }
 
-// ✅ Week's Cash Out (wages + goods) (Mon - Today)
-let weekWages = 0;
-try {
-  const weekWagesResult = await db.getFirstAsync<{ total: number }>(
-    `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid 
-     WHERE DATE(date) >= ? AND DATE(date) <= ?`,
-    [mondayStr, todayStr]
-  );
-  weekWages = weekWagesResult?.total || 0;
-} catch (e) {
-  weekWages = 0;
-}
-const netDrawer = revenue - paidToday - weekWages;
+  let weekWages = 0;
+  try {
+    const weekWagesResult = await db.getFirstAsync<{ total: number }>(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid 
+       WHERE DATE(date) >= ? AND DATE(date) <= ?`,
+      [mondayStr, todayStr]
+    );
+    weekWages = weekWagesResult?.total || 0;
+  } catch (e) {
+    weekWages = 0;
+  }
+  const netDrawer = revenue - paidToday - weekWages;
 
   return {
-  revenue,
-  totalOutstandingDebt: totalDebt,
-  paidTowardsDebtToday: paidToday,
-  paidTowardsDebtWeek: paidWeek,
-  wages: weekWages,       // ✅ Week value
-  todayWages: todayWages, // ✅ NEW: Today value
-  weekWages: weekWages,   // ✅ NEW: Week value
-};
+    revenue,
+    totalOutstandingDebt: totalDebt,
+    paidTowardsDebtToday: paidToday,
+    paidTowardsDebtWeek: paidWeek,
+    wages: weekWages,
+    todayWages: todayWages,
+    weekWages: weekWages,
+    netDrawer,
+  };
 }
 
-// ✅ month-to-date version of getWeeklyCashSummary above. Same tables,
-// same logic, same shape of calculation — only the date range changes
-// from "Monday → today" to "1st of this month → today".
+// ✅ month-to-date version of getWeeklyCashSummary above.
 export async function getMonthlyCashSummary(): Promise<{
   revenue: number;
   totalOutstandingDebt: number;
