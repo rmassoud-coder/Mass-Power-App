@@ -109,6 +109,12 @@ export default function OrderListScreen() {
     saveOrders(updated);
   };
 
+  // ✅ NEW: Sort orders — unticked first, ticked last
+  const sortedOrders = [...orders].sort((a, b) => {
+    if (a.isCompleted === b.isCompleted) return 0;
+    return a.isCompleted ? 1 : -1;
+  });
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -132,7 +138,7 @@ export default function OrderListScreen() {
               <Text style={styles.emptyText}>No orders yet. Add items you need to purchase.</Text>
             </View>
           ) : (
-            orders.map((item) => (
+            sortedOrders.map((item) => (
               <View key={item.id} style={styles.orderItem}>
                 {/* Checkbox */}
                 <TouchableOpacity
