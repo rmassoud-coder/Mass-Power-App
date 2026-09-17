@@ -57,11 +57,10 @@ export default function LocksmithStockScreen() {
       return;
     }
     try {
-      const id = Date.now().toString() + Math.random().toString(36).slice(2, 8);
-      await addStockItem(id, text, 1);
+      await addStockItem(text, 1);
       await loadItems();
       setInputText('');
-      triggerAutoPush(); // ← Trigger cloud push
+      triggerAutoPush();
     } catch (e) {
       Alert.alert('Error', 'Failed to add item.');
     }
