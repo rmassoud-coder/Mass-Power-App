@@ -1382,7 +1382,26 @@ export async function updateStockQuantity(
     [qty, now, id]
   );
 }
-
+// ✅ NEW: Deduct multiple stock items at once (for Locksmith walk-in services)
+export async function deductStockItems(
+  items: { id: string; quantity: number }[]
+): Promise<void> {
+  const db = await getDb();
+  const now = new Date().toISOString();
+  for (const item of items) {
+    if (!item.id || !item.quantity || item.quantity <= 0) continue;
+    const current = await db.getFirstAsync<{ quantity: number }>(
+      `SELECT quantity FROM stock WHERE id = ?`,
+      [item.id]
+    );
+    if (!current) continue;
+    const next = Math.max(0, current.quantity - item.quantity);
+    await db.runAsync(
+      `UPDATE stock SET quantity = ?, updated_at = ? WHERE id = ?`,
+      [next, now, item.id]
+    );
+  }
+}
 export async function deleteStockItem(id: string): Promise<void> {
   const db = await getDb();
   await recordTombstone('stock', id);
