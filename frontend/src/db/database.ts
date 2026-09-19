@@ -1347,9 +1347,7 @@ async function restoreInventoryFromServiceItems(serviceId: string): Promise<void
 export async function listStock(): Promise<StockItem[]> {
   const db = await getDb();
   return await db.getAllAsync<StockItem>(
-    `SELECT * FROM stock
-     ORDER BY CASE WHEN quantity = 0 THEN 1 ELSE 0 END ASC,
-              LOWER(name) ASC`
+    `SELECT id, name, CAST(quantity AS INTEGER) as quantity, created_at, updated_at FROM stock`
   );
 }
 
