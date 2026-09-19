@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -77,36 +77,46 @@ export default function QuickWalkinScreen() {
     }
   }, [isLocksmith]);
 
+  // ✅ Reload stock when the picker opens (fresh data + fresh sort)
+  useEffect(() => {
+    if (stockPickerVisible) {
+      loadStock();
+    }
+  }, [stockPickerVisible]);
+
   const loadStock = async () => {
     try {
       const data = await listStock();
-      // ✅ Normalize quantity to a real number right at the source
       const normalized = (data as StockItem[]).map((it) => ({
         ...it,
         quantity: Number(it.quantity) || 0,
       }));
+      console.log(
+        '🔍 RAW from DB:',
+        normalized.map((i) => `${i.name}=${i.quantity}`).join(' | ')
+      );
       setStockList(normalized);
     } catch (e) {
       console.warn('Failed to load stock:', e);
     }
   };
 
-  // ✅ Filtered + sorted stock (0 → 1 → 2 → ... → alphabetical within same qty)
-  const filteredStock = useMemo(() => {
-    const q = stockSearchQuery.trim().toLowerCase();
-    let list = stockList;
-
-    if (q) {
-      list = list.filter((item) => item.name.toLowerCase().includes(q));
-    }
-
-    return [...list].sort((a, b) => {
+  // ✅ Filtered + sorted stock
+  const filterQuery = stockSearchQuery.trim().toLowerCase();
+  const filteredStock = stockList
+    .filter((item) => !filterQuery || item.name.toLowerCase().includes(filterQuery))
+    .sort((a, b) => {
       const aQty = Number(a.quantity) || 0;
       const bQty = Number(b.quantity) || 0;
       if (aQty !== bQty) return aQty - bQty;
       return a.name.localeCompare(b.name);
     });
-  }, [stockList, stockSearchQuery]);
+
+  // 🔍 DEBUG — log the final sorted order
+  console.log(
+    '🔍 SORTED order:',
+    filteredStock.map((i) => `${i.name}=${i.quantity}`).join(' | ')
+  );
 
   // ============ STOCK PICKER HELPERS ============
 
@@ -128,12 +138,7 @@ export default function QuickWalkinScreen() {
       }
       setPickedStock((prev) => [
         ...prev,
-        {
-          id: item.id,
-          name: item.name,
-          quantity: 1,
-          available: itemQty,
-        },
+        { id: item.id, name: item.name, quantity: 1, available: itemQty },
       ]);
     }
   };
