@@ -78,15 +78,11 @@ async function retryWithBackoff<T>(
 
 // ===== Check network connectivity =====
 async function checkNetworkConnectivity(): Promise<boolean> {
-  try {
-    // Try to reach GitHub API with a simple request
-    const response = await fetchWithTimeout('https://api.github.com/zen', {
-      headers: { 'Accept': 'application/json' },
-    }, 10000); // 10s timeout for connectivity check
-    return response.ok;
-  } catch {
-    return false;
-  }
+  // Skip pre-flight ping — it uses /zen endpoint which is unreliable
+  // and gets rate-limited. Real API calls (fetch/upload) already
+  // retry 3 times with backoff. Just assume connected and let the
+  // actual request fail if there's a real network issue.
+  return true;
 }
 
 export interface SyncResult {
