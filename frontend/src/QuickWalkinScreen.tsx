@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -56,10 +56,11 @@ export default function QuickWalkinScreen() {
   const [outsourceCost, setOutsourceCost] = useState('');
   const [pickedItems, setPickedItems] = useState<PickedItem[]>([]);
 
-  // ✅ NEW: Locksmith stock state
+  // ✅ Locksmith stock state
   const [stockList, setStockList] = useState<StockItem[]>([]);
   const [pickedStock, setPickedStock] = useState<PickedStockItem[]>([]);
   const [stockPickerVisible, setStockPickerVisible] = useState(false);
+  const [stockSearchQuery, setStockSearchQuery] = useState(''); // ✅ NEW: search
 
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -86,6 +87,25 @@ export default function QuickWalkinScreen() {
       console.warn('Failed to load stock:', e);
     }
   };
+
+  // ✅ NEW: Filtered + sorted stock list (quantity ascending, then filtered by search)
+  const filteredStock = useMemo(() => {
+    const q = stockSearchQuery.trim().toLowerCase();
+    let list = stockList;
+
+    // Filter by search query
+    if (q) {
+      list = list.filter((item) => item.name.toLowerCase().includes(q));
+    }
+
+    // Sort: quantity ascending (0 first, then 1, then 2+, then alphabetical within same quantity)
+    return [...list].sort((a, b) => {
+      if (a.quantity !== b.quantity) {
+        return a.quantity - b.quantity;
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }, [stockList, stockSearchQuery]);
 
   // ============ STOCK PICKER HELPERS ============
 
@@ -146,8 +166,6 @@ export default function QuickWalkinScreen() {
       return;
     }
 
-    // ❌ Disable existing product sale logic when Locksmith is selected
-    // (Walk-in product sale is for the inventory table, not stock)
     if (!isLocksmith && pickedItems.length > 0) {
       setLoading(true);
       try {
@@ -184,7 +202,6 @@ export default function QuickWalkinScreen() {
 
     setLoading(true);
     try {
-      // ✅ Create the walk-in service first
       await createQuickWalkinService(
         customerName.trim() || undefined,
         serviceCategory,
@@ -195,7 +212,6 @@ export default function QuickWalkinScreen() {
         parseFloat(outsourceCost) || 0
       );
 
-      // ✅ Then deduct stock (only if Locksmith + items picked)
       if (isLocksmith && pickedStock.length > 0) {
         await deductStockItems(
           pickedStock.map((p) => ({ id: p.id, quantity: p.quantity }))
@@ -245,12 +261,7 @@ export default function QuickWalkinScreen() {
           <View style={styles.inputGroup}>
             <Text style={styles.label}>نوع الخدمة *</Text>
             <View style={styles.pickerContainer}>
-              <Ionicons
-                name="clipboard-outline"
-                size={20}
-                color="#666"
-                style={styles.pickerIcon}
-              />
+              <Ionicons name="clipboard-outline" size={20} color="#666" style={styles.pickerIcon} />
               <Picker
                 selectedValue={serviceCategory}
                 onValueChange={(value) => setServiceCategory(value)}
@@ -281,7 +292,7 @@ export default function QuickWalkinScreen() {
             </View>
           </View>
 
-          {/* ✅ CONDITIONAL: Locksmith Stock picker OR Inventory picker */}
+          {/* CONDITIONAL: Locksmith Stock OR Inventory */}
           {isLocksmith ? (
             <View style={styles.stockSection}>
               <View style={styles.stockHeader}>
@@ -305,9 +316,7 @@ export default function QuickWalkinScreen() {
                   <View key={item.id} style={styles.pickedStockRow}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.pickedStockName}>{item.name}</Text>
-                      <Text style={styles.pickedStockMeta}>
-                        متوفر: {item.available}
-                      </Text>
+                      <Text style={styles.pickedStockMeta}>متوفر: {item.available}</Text>
                     </View>
                     <View style={styles.qtyControls}>
                       <TouchableOpacity
@@ -443,7 +452,7 @@ export default function QuickWalkinScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ✅ STOCK PICKER MODAL */}
+      {/* STOCK PICKER MODAL */}
       <Modal
         visible={stockPickerVisible}
         animationType="slide"
@@ -459,38 +468,82 @@ export default function QuickWalkinScreen() {
               </TouchableOpacity>
             </View>
 
-            {stockList.length === 0 ? (
+            {/* ✅ NEW: Search bar */}
+            <View style={styles.searchContainer}>
+              <Ionicons name="search" size={18} color="#94a3b8" />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="ابحث عن قطعة..."
+                placeholderTextColor="#94a3b8"
+                value={stockSearchQuery}
+                onChangeText={setStockSearchQuery}
+                autoCorrect={false}
+              />
+              {stockSearchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setStockSearchQuery('')}>
+                  <Ionicons name="close-circle" size={18} color="#94a3b8" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {filteredStock.length === 0 ? (
               <View style={styles.emptyModal}>
                 <Ionicons name="cube-outline" size={48} color="#94a3b8" />
-                <Text style={styles.emptyModalText}>لا توجد قطع في المخزون</Text>
+                <Text style={styles.emptyModalText}>
+                  {stockSearchQuery ? 'لا توجد نتائج' : 'لا توجد قطع في المخزون'}
+                </Text>
               </View>
             ) : (
               <FlatList
-                data={stockList}
+                data={filteredStock}
                 keyExtractor={(item) => item.id}
                 style={{ maxHeight: 400 }}
                 renderItem={({ item }) => {
                   const alreadyPicked = pickedStock.find((p) => p.id === item.id);
                   const isOut = item.quantity === 0;
+                  const isLow = item.quantity === 1;
+
                   return (
                     <TouchableOpacity
-                      style={[styles.stockRow, isOut && styles.stockRowDisabled]}
+                      style={[
+                        styles.stockRow,
+                        isOut && styles.stockRowOut,
+                        isLow && styles.stockRowLow,
+                      ]}
                       onPress={() => !isOut && addStockItem(item)}
                       disabled={isOut}
                     >
                       <View style={{ flex: 1 }}>
                         <Text
-                          style={[styles.stockRowName, isOut && styles.stockRowNameDisabled]}
+                          style={[
+                            styles.stockRowName,
+                            isOut && styles.stockRowNameOut,
+                            isLow && styles.stockRowNameLow,
+                          ]}
                         >
                           {item.name}
                         </Text>
-                        <Text style={styles.stockRowMeta}>
-                          {isOut ? 'غير متوفر' : `متوفر: ${item.quantity}`}
+                        <Text
+                          style={[
+                            styles.stockRowMeta,
+                            isOut && styles.stockRowMetaOut,
+                            isLow && styles.stockRowMetaLow,
+                          ]}
+                        >
+                          {isOut
+                            ? 'غير متوفر — نفذت الكمية'
+                            : isLow
+                            ? 'الكمية منخفضة: 1'
+                            : `متوفر: ${item.quantity}`}
                           {alreadyPicked ? ` • مختار: ${alreadyPicked.quantity}` : ''}
                         </Text>
                       </View>
                       {!isOut && (
-                        <Ionicons name="add-circle" size={24} color="#2563eb" />
+                        <Ionicons
+                          name="add-circle"
+                          size={24}
+                          color={isLow ? '#d97706' : '#2563eb'}
+                        />
                       )}
                     </TouchableOpacity>
                   );
@@ -586,7 +639,7 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
   },
 
-  // ✅ NEW: Locksmith stock section styles
+  // Locksmith stock section styles
   stockSection: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -665,7 +718,7 @@ const styles = StyleSheet.create({
   },
   deleteBtn: { padding: 4 },
 
-  // ✅ NEW: Modal styles
+  // Modal styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -689,6 +742,27 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1e293b',
   },
+
+  // ✅ NEW: Search bar styles
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 44,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#1e293b',
+    paddingVertical: 0,
+  },
+
   emptyModal: {
     alignItems: 'center',
     paddingVertical: 40,
@@ -702,23 +776,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
+    paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
+    borderRadius: 8,
+    marginBottom: 4,
   },
-  stockRowDisabled: {
-    opacity: 0.4,
+  stockRowOut: {
+    backgroundColor: '#fef2f2',
+    borderLeftWidth: 4,
+    borderLeftColor: '#ef4444',
+    opacity: 0.7,
+  },
+  stockRowLow: {
+    backgroundColor: '#fffbeb',
+    borderLeftWidth: 4,
+    borderLeftColor: '#eab308',
   },
   stockRowName: {
     fontSize: 15,
     fontWeight: '600',
     color: '#1e293b',
   },
-  stockRowNameDisabled: {
-    color: '#94a3b8',
+  stockRowNameOut: {
+    color: '#b91c1c',
+  },
+  stockRowNameLow: {
+    color: '#92400e',
   },
   stockRowMeta: {
     fontSize: 12,
     color: '#64748b',
     marginTop: 2,
+  },
+  stockRowMetaOut: {
+    color: '#dc2626',
+    fontWeight: '600',
+  },
+  stockRowMetaLow: {
+    color: '#d97706',
+    fontWeight: '600',
   },
 });
