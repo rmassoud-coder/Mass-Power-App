@@ -42,7 +42,12 @@ export default function LocksmithStockScreen() {
   const loadItems = async () => {
     try {
       const data = await listStock();
-      setItems(data as StockItem[]);
+      // ✅ Normalize quantity to a real number
+      const normalized = (data as StockItem[]).map((it) => ({
+        ...it,
+        quantity: Number(it.quantity) || 0,
+      }));
+      setItems(normalized);
     } catch (e) {
       console.warn('Failed to load stock:', e);
     } finally {
@@ -109,14 +114,15 @@ export default function LocksmithStockScreen() {
     );
   };
 
+  // ✅ FIXED: Sort by quantity ascending (0 → 1 → 2 → 3...)
   const sortedItems = [...items].sort((a, b) => {
-    const aOut = a.quantity === 0;
-    const bOut = b.quantity === 0;
-    if (aOut === bOut) return a.name.localeCompare(b.name);
-    return aOut ? 1 : -1;
+    const aQty = Number(a.quantity) || 0;
+    const bQty = Number(b.quantity) || 0;
+    if (aQty !== bQty) return aQty - bQty;
+    return a.name.localeCompare(b.name);
   });
 
-  const outOfStockCount = items.filter((i) => i.quantity === 0).length;
+  const outOfStockCount = items.filter((i) => Number(i.quantity) === 0).length;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -153,17 +159,24 @@ export default function LocksmithStockScreen() {
             </View>
           ) : (
             sortedItems.map((item) => {
-              const isOutOfStock = item.quantity === 0;
+              const qty = Number(item.quantity) || 0;
+              const isOutOfStock = qty === 0;
+              const isLow = qty === 1;
+
               return (
                 <View
                   key={item.id}
-                  style={[styles.stockItem, isOutOfStock && styles.stockItemOut]}
+                  style={[
+                    styles.stockItem,
+                    isOutOfStock && styles.stockItemOut,
+                    isLow && styles.stockItemLow,
+                  ]}
                 >
                   <View style={styles.iconContainer}>
                     <Ionicons
                       name={isOutOfStock ? 'alert-circle' : 'cube-outline'}
                       size={22}
-                      color={isOutOfStock ? '#ef4444' : '#10b981'}
+                      color={isOutOfStock ? '#ef4444' : isLow ? '#d97706' : '#10b981'}
                     />
                   </View>
 
@@ -172,6 +185,7 @@ export default function LocksmithStockScreen() {
                       style={[
                         styles.stockText,
                         isOutOfStock && styles.stockTextOut,
+                        isLow && styles.stockTextLow,
                       ]}
                     >
                       {item.name}
@@ -180,25 +194,28 @@ export default function LocksmithStockScreen() {
                       style={[
                         styles.qtyText,
                         isOutOfStock && styles.qtyTextOut,
+                        isLow && styles.qtyTextLow,
                       ]}
                     >
                       {isOutOfStock
                         ? 'Out of stock — needs restocking'
-                        : `In stock: ${item.quantity}`}
+                        : isLow
+                        ? 'Low stock: 1'
+                        : `In stock: ${qty}`}
                     </Text>
                   </View>
 
                   <View style={styles.qtyControls}>
                     <TouchableOpacity
                       style={styles.qtyBtn}
-                      onPress={() => decreaseQty(item.id, item.quantity)}
+                      onPress={() => decreaseQty(item.id, qty)}
                     >
                       <Ionicons name="remove" size={18} color="#0f172a" />
                     </TouchableOpacity>
-                    <Text style={styles.qtyNumber}>{item.quantity}</Text>
+                    <Text style={styles.qtyNumber}>{qty}</Text>
                     <TouchableOpacity
                       style={styles.qtyBtn}
-                      onPress={() => increaseQty(item.id, item.quantity)}
+                      onPress={() => increaseQty(item.id, qty)}
                     >
                       <Ionicons name="add" size={18} color="#0f172a" />
                     </TouchableOpacity>
@@ -286,6 +303,11 @@ const styles = StyleSheet.create({
     borderColor: '#ef4444',
     borderWidth: 1.5,
   },
+  stockItemLow: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#eab308',
+    borderWidth: 1.5,
+  },
   iconContainer: {
     width: 32,
     height: 32,
@@ -295,8 +317,10 @@ const styles = StyleSheet.create({
   itemContent: { flex: 1, marginHorizontal: 8 },
   stockText: { fontSize: 16, color: '#1e293b', fontWeight: '600' },
   stockTextOut: { color: '#b91c1c', fontWeight: '700' },
+  stockTextLow: { color: '#92400e', fontWeight: '700' },
   qtyText: { fontSize: 12, color: '#64748b', marginTop: 4 },
   qtyTextOut: { color: '#dc2626', fontWeight: '700' },
+  qtyTextLow: { color: '#d97706', fontWeight: '700' },
   qtyControls: {
     flexDirection: 'row',
     alignItems: 'center',
