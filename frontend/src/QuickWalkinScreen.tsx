@@ -39,7 +39,7 @@ interface StockItem {
 interface PickedStockItem {
   id: string;
   name: string;
-  quantity: number; // picked quantity
+  quantity: number;
   available: number;
 }
 
@@ -56,11 +56,10 @@ export default function QuickWalkinScreen() {
   const [outsourceCost, setOutsourceCost] = useState('');
   const [pickedItems, setPickedItems] = useState<PickedItem[]>([]);
 
-  // ✅ Locksmith stock state
   const [stockList, setStockList] = useState<StockItem[]>([]);
   const [pickedStock, setPickedStock] = useState<PickedStockItem[]>([]);
   const [stockPickerVisible, setStockPickerVisible] = useState(false);
-  const [stockSearchQuery, setStockSearchQuery] = useState(''); // ✅ NEW: search
+  const [stockSearchQuery, setStockSearchQuery] = useState('');
 
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -72,7 +71,6 @@ export default function QuickWalkinScreen() {
     0
   );
 
-  // ✅ Load stock list when Locksmith is selected
   useEffect(() => {
     if (isLocksmith) {
       loadStock();
@@ -82,27 +80,30 @@ export default function QuickWalkinScreen() {
   const loadStock = async () => {
     try {
       const data = await listStock();
-      setStockList(data as StockItem[]);
+      // ✅ Normalize quantity to a real number right at the source
+      const normalized = (data as StockItem[]).map((it) => ({
+        ...it,
+        quantity: Number(it.quantity) || 0,
+      }));
+      setStockList(normalized);
     } catch (e) {
       console.warn('Failed to load stock:', e);
     }
   };
 
-  // ✅ NEW: Filtered + sorted stock list (quantity ascending, then filtered by search)
+  // ✅ Filtered + sorted stock (0 → 1 → 2 → ... → alphabetical within same qty)
   const filteredStock = useMemo(() => {
     const q = stockSearchQuery.trim().toLowerCase();
     let list = stockList;
 
-    // Filter by search query
     if (q) {
       list = list.filter((item) => item.name.toLowerCase().includes(q));
     }
 
-    // Sort: quantity ascending (0 first, then 1, then 2+, then alphabetical within same quantity)
     return [...list].sort((a, b) => {
-      if (a.quantity !== b.quantity) {
-        return a.quantity - b.quantity;
-      }
+      const aQty = Number(a.quantity) || 0;
+      const bQty = Number(b.quantity) || 0;
+      if (aQty !== bQty) return aQty - bQty;
       return a.name.localeCompare(b.name);
     });
   }, [stockList, stockSearchQuery]);
@@ -110,6 +111,7 @@ export default function QuickWalkinScreen() {
   // ============ STOCK PICKER HELPERS ============
 
   const addStockItem = (item: StockItem) => {
+    const itemQty = Number(item.quantity) || 0;
     const existing = pickedStock.find((p) => p.id === item.id);
     if (existing) {
       if (existing.quantity >= existing.available) {
@@ -120,7 +122,7 @@ export default function QuickWalkinScreen() {
         prev.map((p) => (p.id === item.id ? { ...p, quantity: p.quantity + 1 } : p))
       );
     } else {
-      if (item.quantity <= 0) {
+      if (itemQty <= 0) {
         Alert.alert('تنبيه', 'هذا العنصر غير متوفر في المخزون.');
         return;
       }
@@ -130,7 +132,7 @@ export default function QuickWalkinScreen() {
           id: item.id,
           name: item.name,
           quantity: 1,
-          available: item.quantity,
+          available: itemQty,
         },
       ]);
     }
@@ -243,7 +245,6 @@ export default function QuickWalkinScreen() {
         </View>
 
         <ScrollView style={styles.content}>
-          {/* Customer Name */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>اسم العميل (اختياري)</Text>
             <View style={styles.inputContainer}>
@@ -257,7 +258,6 @@ export default function QuickWalkinScreen() {
             </View>
           </View>
 
-          {/* Service Category */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>نوع الخدمة *</Text>
             <View style={styles.pickerContainer}>
@@ -276,7 +276,6 @@ export default function QuickWalkinScreen() {
             </View>
           </View>
 
-          {/* Additional Notes */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>ملاحظات إضافية (اختياري)</Text>
             <View style={[styles.inputContainer, styles.textAreaContainer]}>
@@ -292,7 +291,6 @@ export default function QuickWalkinScreen() {
             </View>
           </View>
 
-          {/* CONDITIONAL: Locksmith Stock OR Inventory */}
           {isLocksmith ? (
             <View style={styles.stockSection}>
               <View style={styles.stockHeader}>
@@ -349,7 +347,6 @@ export default function QuickWalkinScreen() {
             </View>
           )}
 
-          {/* Total Price */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>السعر الإجمالي (عمل + قطع)</Text>
             <View style={styles.inputContainer}>
@@ -369,7 +366,6 @@ export default function QuickWalkinScreen() {
             )}
           </View>
 
-          {/* Payment Status */}
           <View style={styles.paymentRow}>
             <TouchableOpacity
               style={[styles.payBtn, isPaid && styles.payBtnActive]}
@@ -403,7 +399,6 @@ export default function QuickWalkinScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Partial Amount */}
           {isPartial && (
             <View style={styles.inputGroup}>
               <Text style={styles.label}>المبلغ المستلم</Text>
@@ -420,7 +415,6 @@ export default function QuickWalkinScreen() {
             </View>
           )}
 
-          {/* Outsource Cost */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>تكلفة الاستعانة بمصدر خارجي (خاصة)</Text>
             <View style={styles.inputContainer}>
@@ -452,7 +446,6 @@ export default function QuickWalkinScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* STOCK PICKER MODAL */}
       <Modal
         visible={stockPickerVisible}
         animationType="slide"
@@ -468,7 +461,6 @@ export default function QuickWalkinScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* ✅ NEW: Search bar */}
             <View style={styles.searchContainer}>
               <Ionicons name="search" size={18} color="#94a3b8" />
               <TextInput
@@ -500,8 +492,9 @@ export default function QuickWalkinScreen() {
                 style={{ maxHeight: 400 }}
                 renderItem={({ item }) => {
                   const alreadyPicked = pickedStock.find((p) => p.id === item.id);
-                  const isOut = item.quantity === 0;
-                  const isLow = item.quantity === 1;
+                  const qty = Number(item.quantity) || 0;
+                  const isOut = qty === 0;
+                  const isLow = qty === 1;
 
                   return (
                     <TouchableOpacity
@@ -534,7 +527,7 @@ export default function QuickWalkinScreen() {
                             ? 'غير متوفر — نفذت الكمية'
                             : isLow
                             ? 'الكمية منخفضة: 1'
-                            : `متوفر: ${item.quantity}`}
+                            : `متوفر: ${qty}`}
                           {alreadyPicked ? ` • مختار: ${alreadyPicked.quantity}` : ''}
                         </Text>
                       </View>
@@ -638,8 +631,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
-
-  // Locksmith stock section styles
   stockSection: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -717,8 +708,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   deleteBtn: { padding: 4 },
-
-  // Modal styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -742,8 +731,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1e293b',
   },
-
-  // ✅ NEW: Search bar styles
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -762,7 +749,6 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     paddingVertical: 0,
   },
-
   emptyModal: {
     alignItems: 'center',
     paddingVertical: 40,
