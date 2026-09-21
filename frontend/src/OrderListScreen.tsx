@@ -33,6 +33,7 @@ export default function LocksmithStockScreen() {
   const router = useRouter();
   const [items, setItems] = useState<StockItem[]>([]);
   const [inputText, setInputText] = useState('');
+  const [searchQuery, setSearchQuery] = useState(''); // ✅ NEW: search
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -42,7 +43,6 @@ export default function LocksmithStockScreen() {
   const loadItems = async () => {
     try {
       const data = await listStock();
-      // ✅ Normalize quantity to a real number
       const normalized = (data as StockItem[]).map((it) => ({
         ...it,
         quantity: Number(it.quantity) || 0,
@@ -114,13 +114,18 @@ export default function LocksmithStockScreen() {
     );
   };
 
-  // ✅ FIXED: Sort by quantity ascending (0 → 1 → 2 → 3...)
+  // ✅ Sort by quantity ascending (0 → 1 → 2 → 3...)
   const sortedItems = [...items].sort((a, b) => {
     const aQty = Number(a.quantity) || 0;
     const bQty = Number(b.quantity) || 0;
     if (aQty !== bQty) return aQty - bQty;
     return a.name.localeCompare(b.name);
   });
+
+  // ✅ NEW: Filter by search query
+  const filteredItems = sortedItems.filter((item) =>
+    item.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
+  );
 
   const outOfStockCount = items.filter((i) => Number(i.quantity) === 0).length;
 
@@ -143,6 +148,26 @@ export default function LocksmithStockScreen() {
         </View>
       )}
 
+      {/* ✅ NEW: Search bar */}
+      <View style={styles.searchWrapper}>
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={18} color="#94a3b8" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="ابحث عن قطعة..."
+            placeholderTextColor="#94a3b8"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCorrect={false}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={18} color="#94a3b8" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -157,8 +182,13 @@ export default function LocksmithStockScreen() {
                 No stock items yet. Add your first item to get started.
               </Text>
             </View>
+          ) : filteredItems.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="search-outline" size={48} color="#94a3b8" />
+              <Text style={styles.emptyText}>لا توجد نتائج لـ "{searchQuery}"</Text>
+            </View>
           ) : (
-            sortedItems.map((item) => {
+            filteredItems.map((item) => {
               const qty = Number(item.quantity) || 0;
               const isOutOfStock = qty === 0;
               const isLow = qty === 1;
@@ -277,6 +307,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   alertBannerText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+
+  // ✅ NEW: Search bar styles
+  searchWrapper: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+    backgroundColor: '#f8fafc',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 44,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#1e293b',
+    paddingVertical: 0,
+  },
+
   content: { flex: 1 },
   contentContainer: { padding: 16, paddingBottom: 100 },
   loadingText: { textAlign: 'center', color: '#94a3b8', marginTop: 20 },
@@ -319,8 +375,8 @@ const styles = StyleSheet.create({
   stockTextOut: { color: '#b91c1c', fontWeight: '700' },
   stockTextLow: { color: '#92400e', fontWeight: '700' },
   qtyText: { fontSize: 12, color: '#64748b', marginTop: 4 },
-  qtyTextOut: { color: '#dc2626', fontWeight: '700' },
-  qtyTextLow: { color: '#d97706', fontWeight: '700' },
+  qtyTextOut: { color: '#dc2626', fontWeight: '600' },
+  qtyTextLow: { color: '#d97706', fontWeight: '600' },
   qtyControls: {
     flexDirection: 'row',
     alignItems: 'center',
