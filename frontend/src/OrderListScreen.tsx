@@ -38,7 +38,7 @@ export default function LocksmithStockScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
-  // ✅ NEW: Edit modal state
+  // Edit modal state
   const [editVisible, setEditVisible] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -99,7 +99,6 @@ export default function LocksmithStockScreen() {
     }
   };
 
-  // ✅ NEW: Open edit modal
   const openEdit = (item: StockItem) => {
     setEditingId(item.id);
     setEditName(item.name);
@@ -107,7 +106,6 @@ export default function LocksmithStockScreen() {
     setEditVisible(true);
   };
 
-  // ✅ NEW: Save edits
   const saveEdit = async () => {
     if (!editingId) return;
     const cleanName = editName.trim();
@@ -163,7 +161,6 @@ export default function LocksmithStockScreen() {
     );
   };
 
-  // ✅ Sort by quantity ascending (0 → 1 → 2 → 3...)
   const sortedItems = [...items].sort((a, b) => {
     const aQty = Number(a.quantity) || 0;
     const bQty = Number(b.quantity) || 0;
@@ -196,7 +193,6 @@ export default function LocksmithStockScreen() {
         </View>
       )}
 
-      {/* Search bar */}
       <View style={styles.searchWrapper}>
         <View style={styles.searchContainer}>
           <Ionicons name="search" size={18} color="#94a3b8" />
@@ -250,69 +246,76 @@ export default function LocksmithStockScreen() {
                     isLow && styles.stockItemLow,
                   ]}
                 >
-                  <View style={styles.iconContainer}>
-                    <Ionicons
-                      name={isOutOfStock ? 'alert-circle' : 'cube-outline'}
-                      size={22}
-                      color={isOutOfStock ? '#ef4444' : isLow ? '#d97706' : '#10b981'}
-                    />
+                  {/* ROW 1: icon + name + status */}
+                  <View style={styles.rowTop}>
+                    <View style={styles.iconContainer}>
+                      <Ionicons
+                        name={isOutOfStock ? 'alert-circle' : 'cube-outline'}
+                        size={22}
+                        color={isOutOfStock ? '#ef4444' : isLow ? '#d97706' : '#10b981'}
+                      />
+                    </View>
+                    <View style={styles.textBlock}>
+                      <Text
+                        style={[
+                          styles.stockText,
+                          isOutOfStock && styles.stockTextOut,
+                          isLow && styles.stockTextLow,
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {item.name}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.qtyText,
+                          isOutOfStock && styles.qtyTextOut,
+                          isLow && styles.qtyTextLow,
+                        ]}
+                      >
+                        {isOutOfStock
+                          ? 'Out of stock — needs restocking'
+                          : isLow
+                          ? 'Low stock: 1'
+                          : `In stock: ${qty}`}
+                      </Text>
+                    </View>
                   </View>
 
-                  <View style={styles.itemContent}>
-                    <Text
-                      style={[
-                        styles.stockText,
-                        isOutOfStock && styles.stockTextOut,
-                        isLow && styles.stockTextLow,
-                      ]}
-                    >
-                      {item.name}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.qtyText,
-                        isOutOfStock && styles.qtyTextOut,
-                        isLow && styles.qtyTextLow,
-                      ]}
-                    >
-                      {isOutOfStock
-                        ? 'Out of stock — needs restocking'
-                        : isLow
-                        ? 'Low stock: 1'
-                        : `In stock: ${qty}`}
-                    </Text>
+                  {/* ROW 2: quantity controls + edit + trash */}
+                  <View style={styles.rowBottom}>
+                    <View style={styles.qtyControls}>
+                      <TouchableOpacity
+                        style={styles.qtyBtn}
+                        onPress={() => decreaseQty(item.id, qty)}
+                      >
+                        <Ionicons name="remove" size={18} color="#0f172a" />
+                      </TouchableOpacity>
+                      <Text style={styles.qtyNumber}>{qty}</Text>
+                      <TouchableOpacity
+                        style={styles.qtyBtn}
+                        onPress={() => increaseQty(item.id, qty)}
+                      >
+                        <Ionicons name="add" size={18} color="#0f172a" />
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.actionsGroup}>
+                      <TouchableOpacity
+                        onPress={() => openEdit(item)}
+                        style={styles.iconBtn}
+                      >
+                        <Ionicons name="pencil-outline" size={18} color="#2563eb" />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => removeItem(item.id)}
+                        style={styles.iconBtn}
+                      >
+                        <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-
-                  <View style={styles.qtyControls}>
-                    <TouchableOpacity
-                      style={styles.qtyBtn}
-                      onPress={() => decreaseQty(item.id, qty)}
-                    >
-                      <Ionicons name="remove" size={18} color="#0f172a" />
-                    </TouchableOpacity>
-                    <Text style={styles.qtyNumber}>{qty}</Text>
-                    <TouchableOpacity
-                      style={styles.qtyBtn}
-                      onPress={() => increaseQty(item.id, qty)}
-                    >
-                      <Ionicons name="add" size={18} color="#0f172a" />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* ✅ NEW: Edit button */}
-                  <TouchableOpacity
-                    onPress={() => openEdit(item)}
-                    style={styles.iconBtn}
-                  >
-                    <Ionicons name="pencil-outline" size={20} color="#2563eb" />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={() => removeItem(item.id)}
-                    style={styles.iconBtn}
-                  >
-                    <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                  </TouchableOpacity>
                 </View>
               );
             })
@@ -335,7 +338,7 @@ export default function LocksmithStockScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* ✅ NEW: Edit modal */}
+      {/* Edit modal */}
       <Modal
         visible={editVisible}
         animationType="fade"
@@ -452,12 +455,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 30,
   },
+
+  // ✅ Stacked card layout
   stockItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
+    padding: 14,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: '#e2e8f0',
@@ -472,19 +475,42 @@ const styles = StyleSheet.create({
     borderColor: '#eab308',
     borderWidth: 1.5,
   },
+
+  // Row 1: icon + name + status
+  rowTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
   iconContainer: {
-    width: 32,
-    height: 32,
+    width: 28,
+    height: 28,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 8,
+    marginTop: 2,
   },
-  itemContent: { flex: 1, marginHorizontal: 8 },
-  stockText: { fontSize: 16, color: '#1e293b', fontWeight: '600' },
+  textBlock: {
+    flex: 1,
+  },
+  stockText: {
+    fontSize: 16,
+    color: '#1e293b',
+    fontWeight: '600',
+    flexWrap: 'wrap',
+  },
   stockTextOut: { color: '#b91c1c', fontWeight: '700' },
   stockTextLow: { color: '#92400e', fontWeight: '700' },
   qtyText: { fontSize: 12, color: '#64748b', marginTop: 4 },
   qtyTextOut: { color: '#dc2626', fontWeight: '600' },
   qtyTextLow: { color: '#d97706', fontWeight: '600' },
+
+  // Row 2: quantity controls + edit + delete
+  rowBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   qtyControls: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -492,17 +518,32 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    marginRight: 4,
   },
-  qtyBtn: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
+  qtyBtn: {
+    width: 34,
+    height: 34,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   qtyNumber: {
     fontSize: 16,
     fontWeight: '700',
     color: '#0f172a',
-    minWidth: 24,
+    minWidth: 28,
     textAlign: 'center',
   },
-  iconBtn: { padding: 6, marginLeft: 2 },
+  actionsGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  iconBtn: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
 
   inputContainer: {
     flexDirection: 'row',
@@ -538,7 +579,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  // ✅ NEW: Edit modal styles
+  // Edit modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.6)',
