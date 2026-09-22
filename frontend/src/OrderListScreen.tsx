@@ -9,6 +9,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -17,6 +18,7 @@ import {
   listStock,
   addStockItem,
   updateStockQuantity,
+  updateStockItem,
   deleteStockItem,
 } from '../src/db/database';
 import { triggerAutoPush } from '../src/utils/autoSync';
@@ -33,8 +35,14 @@ export default function LocksmithStockScreen() {
   const router = useRouter();
   const [items, setItems] = useState<StockItem[]>([]);
   const [inputText, setInputText] = useState('');
-  const [searchQuery, setSearchQuery] = useState(''); // ✅ NEW: search
+  const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+
+  // ✅ NEW: Edit modal state
+  const [editVisible, setEditVisible] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editQty, setEditQty] = useState('');
 
   useEffect(() => {
     loadItems();
@@ -91,6 +99,47 @@ export default function LocksmithStockScreen() {
     }
   };
 
+  // ✅ NEW: Open edit modal
+  const openEdit = (item: StockItem) => {
+    setEditingId(item.id);
+    setEditName(item.name);
+    setEditQty(String(Number(item.quantity) || 0));
+    setEditVisible(true);
+  };
+
+  // ✅ NEW: Save edits
+  const saveEdit = async () => {
+    if (!editingId) return;
+    const cleanName = editName.trim();
+    if (!cleanName) {
+      Alert.alert('Error', 'Item name cannot be empty.');
+      return;
+    }
+    const qtyNum = parseInt(editQty, 10);
+    if (!Number.isFinite(qtyNum) || qtyNum < 0) {
+      Alert.alert('Error', 'Quantity must be 0 or greater.');
+      return;
+    }
+    try {
+      await updateStockItem(editingId, cleanName, qtyNum);
+      await loadItems();
+      setEditVisible(false);
+      setEditingId(null);
+      setEditName('');
+      setEditQty('');
+      triggerAutoPush();
+    } catch (e) {
+      Alert.alert('Error', 'Failed to update item.');
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditVisible(false);
+    setEditingId(null);
+    setEditName('');
+    setEditQty('');
+  };
+
   const removeItem = (id: string) => {
     Alert.alert(
       'Delete Item',
@@ -122,7 +171,6 @@ export default function LocksmithStockScreen() {
     return a.name.localeCompare(b.name);
   });
 
-  // ✅ NEW: Filter by search query
   const filteredItems = sortedItems.filter((item) =>
     item.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
   );
@@ -148,7 +196,7 @@ export default function LocksmithStockScreen() {
         </View>
       )}
 
-      {/* ✅ NEW: Search bar */}
+      {/* Search bar */}
       <View style={styles.searchWrapper}>
         <View style={styles.searchContainer}>
           <Ionicons name="search" size={18} color="#94a3b8" />
@@ -251,9 +299,17 @@ export default function LocksmithStockScreen() {
                     </TouchableOpacity>
                   </View>
 
+                  {/* ✅ NEW: Edit button */}
+                  <TouchableOpacity
+                    onPress={() => openEdit(item)}
+                    style={styles.iconBtn}
+                  >
+                    <Ionicons name="pencil-outline" size={20} color="#2563eb" />
+                  </TouchableOpacity>
+
                   <TouchableOpacity
                     onPress={() => removeItem(item.id)}
-                    style={styles.deleteBtn}
+                    style={styles.iconBtn}
                   >
                     <Ionicons name="trash-outline" size={20} color="#ef4444" />
                   </TouchableOpacity>
@@ -278,6 +334,59 @@ export default function LocksmithStockScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* ✅ NEW: Edit modal */}
+      <Modal
+        visible={editVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={cancelEdit}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Stock Item</Text>
+
+            <Text style={styles.modalLabel}>Item name</Text>
+            <View style={styles.modalInputContainer}>
+              <TextInput
+                style={styles.modalInput}
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="Item name"
+                placeholderTextColor="#94a3b8"
+                autoFocus
+              />
+            </View>
+
+            <Text style={styles.modalLabel}>Quantity</Text>
+            <View style={styles.modalInputContainer}>
+              <TextInput
+                style={styles.modalInput}
+                value={editQty}
+                onChangeText={setEditQty}
+                placeholder="0"
+                placeholderTextColor="#94a3b8"
+                keyboardType="number-pad"
+              />
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={cancelEdit}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalSaveBtn}
+                onPress={saveEdit}
+              >
+                <Text style={styles.modalSaveText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -308,7 +417,6 @@ const styles = StyleSheet.create({
   },
   alertBannerText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 
-  // ✅ NEW: Search bar styles
   searchWrapper: {
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -384,7 +492,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    marginRight: 8,
+    marginRight: 4,
   },
   qtyBtn: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
   qtyNumber: {
@@ -394,7 +502,8 @@ const styles = StyleSheet.create({
     minWidth: 24,
     textAlign: 'center',
   },
-  deleteBtn: { padding: 4 },
+  iconBtn: { padding: 6, marginLeft: 2 },
+
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -427,5 +536,75 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+
+  // ✅ NEW: Edit modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 22,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+    marginBottom: 6,
+  },
+  modalInputContainer: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 14,
+    height: 48,
+    marginBottom: 16,
+    justifyContent: 'center',
+  },
+  modalInput: {
+    fontSize: 16,
+    color: '#1e293b',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    color: '#64748b',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  modalSaveBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+  },
+  modalSaveText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });
