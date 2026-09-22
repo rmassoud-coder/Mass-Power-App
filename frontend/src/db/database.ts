@@ -1367,7 +1367,21 @@ export async function addStockItem(
   );
   return { id, name: clean, quantity: qty, created_at: now, updated_at: now };
 }
-
+export async function updateStockItem(
+  id: string,
+  name: string,
+  quantity: number
+): Promise<void> {
+  const db = await getDb();
+  const clean = (name || '').trim();
+  if (!clean) throw new Error('Item name is required');
+  const qty = Math.max(0, Math.floor(Number(quantity) || 0));
+  const now = new Date().toISOString();
+  await db.runAsync(
+    `UPDATE stock SET name = ?, quantity = ?, updated_at = ? WHERE id = ?`,
+    [clean, qty, now, id]
+  );
+}
 export async function updateStockQuantity(
   id: string,
   quantity: number
