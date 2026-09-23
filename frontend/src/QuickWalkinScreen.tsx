@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import {
   createQuickWalkinService,
-  createWalkinProductSale,
+  createWalkinProductSaleMulti,
   SERVICE_CATEGORIES,
   listStock,
   deductStockItems,
@@ -77,7 +77,6 @@ export default function QuickWalkinScreen() {
     }
   }, [isLocksmith]);
 
-  // ✅ Reload stock when the picker opens (fresh data + fresh sort)
   useEffect(() => {
     if (stockPickerVisible) {
       loadStock();
@@ -91,17 +90,12 @@ export default function QuickWalkinScreen() {
         ...it,
         quantity: Number(it.quantity) || 0,
       }));
-      console.log(
-        '🔍 RAW from DB:',
-        normalized.map((i) => `${i.name}=${i.quantity}`).join(' | ')
-      );
       setStockList(normalized);
     } catch (e) {
       console.warn('Failed to load stock:', e);
     }
   };
 
-  // ✅ Filtered + sorted stock
   const filterQuery = stockSearchQuery.trim().toLowerCase();
   const filteredStock = stockList
     .filter((item) => !filterQuery || item.name.toLowerCase().includes(filterQuery))
@@ -111,12 +105,6 @@ export default function QuickWalkinScreen() {
       if (aQty !== bQty) return aQty - bQty;
       return a.name.localeCompare(b.name);
     });
-
-  // 🔍 DEBUG — log the final sorted order
-  console.log(
-    '🔍 SORTED order:',
-    filteredStock.map((i) => `${i.name}=${i.quantity}`).join(' | ')
-  );
 
   // ============ STOCK PICKER HELPERS ============
 
@@ -173,22 +161,35 @@ export default function QuickWalkinScreen() {
       return;
     }
 
+    // ============ NON-LOCKSMITH: sell all picked inventory items ============
     if (!isLocksmith && pickedItems.length > 0) {
+      // Validate all picked items have qty > 0
+      const validItems = pickedItems.filter((it) => it.quantity > 0);
+      if (validItems.length === 0) {
+        Alert.alert('خطأ', 'يرجى اختيار منتج واحد على الأقل بكمية أكبر من صفر.');
+        return;
+      }
+
       setLoading(true);
       try {
-        const item = pickedItems[0];
-        await createWalkinProductSale(item.inventory_id, item.quantity);
+        await createWalkinProductSaleMulti(
+          validItems.map((it) => ({
+            inventory_id: it.inventory_id,
+            quantity: it.quantity,
+          }))
+        );
         triggerAutoPush();
-        Alert.alert('نجاح', 'تم بيع المنتج وخصمه من المخزون!');
+        Alert.alert('نجاح', 'تم بيع المنتجات وخصمها من المخزون!');
         router.back();
       } catch (error: any) {
-        Alert.alert('خطأ', error.message || 'فشل بيع المنتج.');
+        Alert.alert('خطأ', error.message || 'فشل بيع المنتجات.');
       } finally {
         setLoading(false);
       }
       return;
     }
 
+    // ============ SERVICE-ONLY OR LOCKSMITH FLOW ============
     const totalCost = parseFloat(cost) || 0;
 
     let partialPaidNumber = 0;
@@ -219,6 +220,7 @@ export default function QuickWalkinScreen() {
         parseFloat(outsourceCost) || 0
       );
 
+      // Locksmith: deduct stock after service is created
       if (isLocksmith && pickedStock.length > 0) {
         await deductStockItems(
           pickedStock.map((p) => ({ id: p.id, quantity: p.quantity }))
@@ -346,11 +348,11 @@ export default function QuickWalkinScreen() {
                 ))
               )}
             </View>
-          ) : (
+          ) : serviceCategory ? (
             <View style={styles.productsCard}>
               <InventoryPicker value={pickedItems} onChange={setPickedItems} />
             </View>
-          )}
+          ) : null}
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>السعر الإجمالي (عمل + قطع)</Text>
@@ -444,7 +446,11 @@ export default function QuickWalkinScreen() {
             ) : (
               <>
                 <Ionicons name="cash-outline" size={24} color="#fff" />
-                <Text style={styles.submitText}>إضافة إلى الصندوق</Text>
+                <Text style={styles.submitText}>
+                  {!isLocksmith && pickedItems.length > 0
+                    ? 'بيع المنتجات'
+                    : 'إضافة إلى الصندوق'}
+                </Text>
               </>
             )}
           </TouchableOpacity>
