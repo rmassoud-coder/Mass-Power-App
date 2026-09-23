@@ -2476,7 +2476,146 @@ export async function saveWeeklyWages(amount: number): Promise<void> {
     [todayStr, amount, now]
   );
 }
+export async function createWalkinProductSaleMulti(
+  items: { inventory_id: string; quantity: number }[]
+): Promise<Service> {
+  const db = await getDb();
+  const now = new Date().toISOString();
 
+  if (!items.length) {
+    throw new Error('No items to sell.');
+  }
+
+  // Load all inventory items first (validate + compute)
+  const loaded: {
+    inv: InventoryItem;
+    qty: number;
+    unitPrice: number;
+    lineTotal: number;
+  }[] = [];
+
+  for (const item of items) {
+    if (!item.inventory_id || !item.quantity || item.quantity <= 0) continue;
+    const inv = await db.getFirstAsync<InventoryItem>(
+      `SELECT * FROM inventory WHERE id = ?`,
+      [item.inventory_id]
+    );
+    if (!inv) {
+      throw new Error('Product not found in inventory.');
+    }
+    if (inv.item_quantity < item.quantity) {
+      throw new Error(
+        `Insufficient stock for "${inv.item_type}". Only ${inv.item_quantity} available.`
+      );
+    }
+    const unitPrice =
+      inv.item_retail_price && inv.item_retail_price > 0
+        ? inv.item_retail_price
+        : inv.item_price;
+    loaded.push({
+      inv,
+      qty: Math.floor(item.quantity),
+      unitPrice,
+      lineTotal: unitPrice * Math.floor(item.quantity),
+    });
+  }
+
+  if (loaded.length === 0) {
+    throw new Error('No valid items to sell.');
+  }
+
+  // Ensure walk-in customer + vehicle
+  let walkinCustomer = await db.getFirstAsync<Customer>(
+    `SELECT * FROM customers WHERE name = 'Walk-in' AND mobile_number = 'N/A' LIMIT 1`
+  );
+  if (!walkinCustomer) {
+    const walkinId = generateId();
+    await db.runAsync(
+      `INSERT INTO customers (id, name, mobile_number, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      [walkinId, 'Walk-in', 'N/A', now, now]
+    );
+    walkinCustomer = await db.getFirstAsync<Customer>(
+      `SELECT * FROM customers WHERE id = ?`,
+      [walkinId]
+    );
+  }
+
+  let walkinVehicle = await db.getFirstAsync<Vehicle>(
+    `SELECT * FROM vehicles WHERE customer_id = ? AND plate_number = 'WALK-IN' LIMIT 1`,
+    [walkinCustomer!.id]
+  );
+  if (!walkinVehicle) {
+    const vehicleId = generateId();
+    await db.runAsync(
+      `INSERT INTO vehicles (id, customer_id, vin, plate_number, make, model, year, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [vehicleId, walkinCustomer!.id, 'N/A', 'WALK-IN', 'Walk-in', 'Vehicle', null, now, now]
+    );
+    walkinVehicle = await db.getFirstAsync<Vehicle>(
+      `SELECT * FROM vehicles WHERE id = ?`,
+      [vehicleId]
+    );
+  }
+
+  // Build summary line
+  const summary = loaded
+    .map((l) => `${l.inv.item_type} (x${l.qty})`)
+    .join(', ');
+  const totalCost = loaded.reduce((sum, l) => sum + l.lineTotal, 0);
+
+  // Create the single service
+  const serviceId = generateId();
+  await db.runAsync(
+    `INSERT INTO services (
+      id, vehicle_id, customer_id, service_description, additional_info, cost, is_paid, partial_paid,
+      service_date, created_at, updated_at, outsource_cost
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      serviceId,
+      walkinVehicle!.id,
+      walkinCustomer!.id,
+      `Product Sale: ${summary}`,
+      null,
+      totalCost,
+      1,
+      0,
+      now,
+      now,
+      now,
+      0,
+    ]
+  );
+
+  // Deduct each inventory item + save service_items
+  for (const l of loaded) {
+    const newQty = Math.max(0, l.inv.item_quantity - l.qty);
+    await db.runAsync(
+      `UPDATE inventory SET item_quantity = ?, updated_at = ? WHERE id = ?`,
+      [newQty, now, l.inv.id]
+    );
+
+    const rowId = generateId();
+    await db.runAsync(
+      `INSERT INTO service_items (id, service_id, inventory_id, item_type, quantity, unit_price, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [rowId, serviceId, l.inv.id, l.inv.item_type, l.qty, l.unitPrice, now]
+    );
+  }
+
+  return {
+    id: serviceId,
+    vehicle_id: walkinVehicle!.id,
+    customer_id: walkinCustomer!.id,
+    service_description: `Product Sale: ${summary}`,
+    additional_info: undefined,
+    cost: totalCost,
+    is_paid: true,
+    service_date: now,
+    created_at: now,
+    updated_at: now,
+    partial_paid: 0,
+    outsource_cost: 0,
+  };
+}
 export async function createQuickWalkinService(
   customerName: string | undefined,
   serviceDescription: string,
