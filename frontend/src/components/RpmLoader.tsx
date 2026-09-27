@@ -1,14 +1,19 @@
 // src/components/RpmLoader.tsx
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
-import {
+import Animated, {
   useSharedValue,
+  useAnimatedProps,
   useDerivedValue,
   withTiming,
   withSequence,
   withDelay,
+  withRepeat,
+  interpolateColor,
+  cancelAnimation,
   Easing,
   runOnJS,
+  SharedValue,
 } from 'react-native-reanimated';
 import Svg, {
   Line,
@@ -40,12 +45,130 @@ const GREEN = '#22C55E';
 const M_BLUE = '#0066B1';
 const M_PURPLE = '#333366';
 const M_RED = '#FF0000';
+const INACTIVE_SEGMENT = '#1A2029';
 const MAX_RPM = 8500;
-const TOTAL_ANIMATION_MS = 7200; // 15% reduction from 8500
+// Matches the actual longest gauge sequence (RPM) below, so onComplete
+// fires once the animation has genuinely settled instead of mid-motion.
+const TOTAL_ANIMATION_MS = 6300;
+const REDLINE_THRESHOLD = 0.85; // ratio of RPM sweep considered "redline"
 
+const AnimatedLine = Animated.createAnimatedComponent(Line);
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+/** Angle->point on a circle. Marked worklet so it can run on the UI thread
+ * inside useAnimatedProps as well as being called from plain JS for the
+ * static tick marks. */
 function pt(cx: number, cy: number, r: number, deg: number) {
+  'worklet';
   const rad = ((deg - 90) * Math.PI) / 180;
   return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+
+/**
+ * A single tick segment. Its color/opacity are driven entirely by the
+ * shared `progress` value via useAnimatedProps, so lighting up the sweep
+ * never triggers a React re-render or crosses the JS bridge.
+ */
+function GaugeSegment({
+  x1,
+  y1,
+  x2,
+  y2,
+  ratio,
+  progress,
+  activeColor,
+}: {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  ratio: number;
+  progress: SharedValue<number>;
+  activeColor: string;
+}) {
+  const animatedProps = useAnimatedProps(() => {
+    const active = progress.value >= ratio;
+    return {
+      stroke: active ? activeColor : INACTIVE_SEGMENT,
+      opacity: active ? 1 : 0.2,
+    };
+  });
+  return (
+    <AnimatedLine
+      x1={x1}
+      y1={y1}
+      x2={x2}
+      y2={y2}
+      strokeWidth={8}
+      strokeLinecap="round"
+      animatedProps={animatedProps}
+    />
+  );
+}
+
+/** Needle + tip dot/glow, fully UI-thread driven off the shared progress value. */
+function GaugeNeedle({
+  cx,
+  cy,
+  r,
+  progress,
+  startAngle,
+  endAngle,
+  colorForRatio,
+  redlinePulse,
+}: {
+  cx: number;
+  cy: number;
+  r: number;
+  progress: SharedValue<number>;
+  startAngle: number;
+  endAngle: number;
+  colorForRatio: (ratio: number) => string;
+  redlinePulse?: SharedValue<number>;
+}) {
+  const needleProps = useAnimatedProps(() => {
+    const angle = startAngle + progress.value * (endAngle - startAngle);
+    const inner = pt(cx, cy, r * 0.48, angle);
+    const outer = pt(cx, cy, r * 0.94, angle);
+    return { x1: inner.x, y1: inner.y, x2: outer.x, y2: outer.y };
+  });
+
+  const tipDotProps = useAnimatedProps(() => {
+    const angle = startAngle + progress.value * (endAngle - startAngle);
+    const tip = pt(cx, cy, r, angle);
+    return { cx: tip.x, cy: tip.y, fill: colorForRatio(progress.value) };
+  });
+
+  const tipGlowProps = useAnimatedProps(() => {
+    const angle = startAngle + progress.value * (endAngle - startAngle);
+    const tip = pt(cx, cy, r, angle);
+    const pulse = redlinePulse ? redlinePulse.value : 0;
+    const inRedline = progress.value >= REDLINE_THRESHOLD;
+    const baseOpacity = 0.35;
+    const opacity = inRedline ? baseOpacity + pulse * 0.35 : baseOpacity;
+    const radius = inRedline ? 7 + pulse * 2.5 : 7;
+    return { cx: tip.x, cy: tip.y, fill: colorForRatio(progress.value), opacity, r: radius };
+  });
+
+  return (
+    <>
+      <AnimatedCircle animatedProps={tipGlowProps} r={7} />
+      <AnimatedCircle animatedProps={tipDotProps} r={3} />
+      <AnimatedLine animatedProps={needleProps} stroke={TEXT_WHITE} strokeWidth={1.5} opacity={0.85} strokeLinecap="round" />
+    </>
+  );
+}
+
+function speedColorForRatio(ratio: number) {
+  'worklet';
+  if (ratio >= 0.8) return BMW_RED;
+  if (ratio > 0.6) return BMW_ORANGE;
+  return BMW_LT_BLUE;
+}
+
+function rpmColorForRatio(ratio: number) {
+  'worklet';
+  return ratio > 0.7 ? BMW_RED : BMW_ORANGE;
 }
 
 function SpeedGauge({
@@ -53,13 +176,13 @@ function SpeedGauge({
   cy,
   r,
   progress,
-  value,
+  valueText,
 }: {
   cx: number;
   cy: number;
   r: number;
-  progress: number;
-  value: number;
+  progress: SharedValue<number>;
+  valueText: string;
 }) {
   const segments = 50;
   const startAngle = -150;
@@ -76,44 +199,37 @@ function SpeedGauge({
     />
   );
 
-  let tipColor = BMW_LT_BLUE;
   for (let i = 0; i < segments; i++) {
     const ratio = i / segments;
     const a1 = startAngle + ratio * (endAngle - startAngle);
     const a2 = startAngle + ((i + 1) / segments) * (endAngle - startAngle);
     const p1 = pt(cx, cy, r, a1);
     const p2 = pt(cx, cy, r, a2);
-    const active = ratio <= progress;
-
-    let color = BMW_LT_BLUE;
-    if (ratio > 0.6 && ratio < 0.8) color = BMW_ORANGE;
-    else if (ratio >= 0.8) color = BMW_RED;
-    if (active) tipColor = color;
-
     nodes.push(
-      <Line
+      <GaugeSegment
         key={i}
         x1={p1.x}
         y1={p1.y}
         x2={p2.x}
         y2={p2.y}
-        stroke={active ? color : '#1A2029'}
-        strokeWidth={8}
-        strokeLinecap="round"
-        opacity={active ? 1 : 0.2}
+        ratio={ratio}
+        progress={progress}
+        activeColor={speedColorForRatio(ratio)}
       />
     );
   }
 
-  const tipAngle = startAngle + progress * (endAngle - startAngle);
-  const tip = pt(cx, cy, r, tipAngle);
-  nodes.push(<Circle key="tipGlow" cx={tip.x} cy={tip.y} r={7} fill={tipColor} opacity={0.35} />);
-  nodes.push(<Circle key="tipDot" cx={tip.x} cy={tip.y} r={3} fill={tipColor} />);
-
-  const needleInner = pt(cx, cy, r * 0.48, tipAngle);
-  const needleOuter = pt(cx, cy, r * 0.94, tipAngle);
   nodes.push(
-    <Line key="needle" x1={needleInner.x} y1={needleInner.y} x2={needleOuter.x} y2={needleOuter.y} stroke={TEXT_WHITE} strokeWidth={1.5} opacity={0.85} strokeLinecap="round" />
+    <GaugeNeedle
+      key="needle"
+      cx={cx}
+      cy={cy}
+      r={r}
+      progress={progress}
+      startAngle={startAngle}
+      endAngle={endAngle}
+      colorForRatio={speedColorForRatio}
+    />
   );
 
   const tickValues = [0, 40, 80, 120, 160, 200, 240];
@@ -140,12 +256,12 @@ function SpeedGauge({
   nodes.push(<Circle key="glow" cx={cx} cy={cy} r={r * 0.5} fill="url(#speedGlow)" />);
   nodes.push(
     <SvgText key="valueShadow" x={cx + 1} y={cy + r * 0.14 + 1} fill="#000" opacity={0.35} fontSize={valueFontSize} fontWeight="900" textAnchor="middle">
-      {value}
+      {valueText}
     </SvgText>
   );
   nodes.push(
     <SvgText key="value" x={cx} y={cy + r * 0.14} fill={TEXT_WHITE} fontSize={valueFontSize} fontWeight="900" textAnchor="middle">
-      {value}
+      {valueText}
     </SvgText>
   );
   nodes.push(
@@ -162,13 +278,15 @@ function RpmGauge({
   cy,
   r,
   progress,
-  value,
+  valueText,
+  redlinePulse,
 }: {
   cx: number;
   cy: number;
   r: number;
-  progress: number;
-  value: number;
+  progress: SharedValue<number>;
+  valueText: string;
+  redlinePulse: SharedValue<number>;
 }) {
   const segments = 50;
   const startAngle = 150;
@@ -185,43 +303,38 @@ function RpmGauge({
     />
   );
 
-  let tipColor = BMW_ORANGE;
   for (let i = 0; i < segments; i++) {
     const ratio = i / segments;
     const a1 = startAngle - ratio * (startAngle - endAngle);
     const a2 = startAngle - ((i + 1) / segments) * (startAngle - endAngle);
     const p1 = pt(cx, cy, r, a1);
     const p2 = pt(cx, cy, r, a2);
-    const active = ratio <= progress;
-
-    let color = BMW_ORANGE;
-    if (ratio > 0.7) color = BMW_RED;
-    if (active) tipColor = color;
-
     nodes.push(
-      <Line
+      <GaugeSegment
         key={i}
         x1={p1.x}
         y1={p1.y}
         x2={p2.x}
         y2={p2.y}
-        stroke={active ? color : '#1A2029'}
-        strokeWidth={8}
-        strokeLinecap="round"
-        opacity={active ? 1 : 0.2}
+        ratio={ratio}
+        progress={progress}
+        activeColor={rpmColorForRatio(ratio)}
       />
     );
   }
 
-  const tipAngle = startAngle - progress * (startAngle - endAngle);
-  const tip = pt(cx, cy, r, tipAngle);
-  nodes.push(<Circle key="tipGlow" cx={tip.x} cy={tip.y} r={7} fill={tipColor} opacity={0.35} />);
-  nodes.push(<Circle key="tipDot" cx={tip.x} cy={tip.y} r={3} fill={tipColor} />);
-
-  const needleInner = pt(cx, cy, r * 0.48, tipAngle);
-  const needleOuter = pt(cx, cy, r * 0.94, tipAngle);
   nodes.push(
-    <Line key="needle" x1={needleInner.x} y1={needleInner.y} x2={needleOuter.x} y2={needleOuter.y} stroke={TEXT_WHITE} strokeWidth={1.5} opacity={0.85} strokeLinecap="round" />
+    <GaugeNeedle
+      key="needle"
+      cx={cx}
+      cy={cy}
+      r={r}
+      progress={progress}
+      startAngle={startAngle}
+      endAngle={endAngle}
+      colorForRatio={rpmColorForRatio}
+      redlinePulse={redlinePulse}
+    />
   );
 
   const tickValues = [0, 1, 2, 3, 4, 5, 6, 7, 8];
@@ -248,12 +361,12 @@ function RpmGauge({
   nodes.push(<Circle key="glow" cx={cx} cy={cy} r={r * 0.5} fill="url(#rpmGlow)" />);
   nodes.push(
     <SvgText key="valueShadow" x={cx + 1} y={cy + r * 0.14 + 1} fill="#000" opacity={0.35} fontSize={valueFontSize} fontWeight="900" textAnchor="middle">
-      {value}
+      {valueText}
     </SvgText>
   );
   nodes.push(
     <SvgText key="value" x={cx} y={cy + r * 0.14} fill={BMW_ORANGE} fontSize={valueFontSize} fontWeight="900" textAnchor="middle">
-      {value}
+      {valueText}
     </SvgText>
   );
   nodes.push(
@@ -307,22 +420,57 @@ function TempGauge({ cx, cy, r, value }: { cx: number; cy: number; r: number; va
   );
 }
 
+/** Animated fill bar for OIL/BATTERY/BRAKE that grows in on mount instead of
+ * snapping to its final width instantly. */
+function StatusBar({ label, targetPct, color, delay }: { label: string; targetPct: number; color: string; delay: number }) {
+  const width = useSharedValue(0);
+
+  useEffect(() => {
+    width.value = withDelay(delay, withTiming(targetPct, { duration: 600, easing: Easing.out(Easing.cubic) }));
+    return () => cancelAnimation(width);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <View style={styles.barSection}>
+      <Text style={styles.barLabel}>{label}</Text>
+      <View style={styles.barTrack}>
+        <Animated.View
+          style={[
+            styles.barFill,
+            { backgroundColor: color },
+            useAnimatedStyleWidth(width),
+          ]}
+        />
+      </View>
+    </View>
+  );
+}
+
+function useAnimatedStyleWidth(width: SharedValue<number>) {
+  // Small wrapper kept local to this file so StatusBar stays self-contained.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  return Animated.useAnimatedStyle(() => ({
+    width: `${width.value}%`,
+  }));
+}
+
 export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComplete }: Props) {
   const [containerWidth, setContainerWidth] = useState(Dimensions.get('window').width - 32);
   const speed = useSharedValue(0);
   const rpm = useSharedValue(0);
   const tempSV = useSharedValue(42);
+  const redlinePulse = useSharedValue(0);
 
+  // Throttled display state — updated a few times a second instead of every
+  // animation frame, so text updates stay cheap and never touch gauge geometry.
   const [displayRpm, setDisplayRpm] = useState(0);
   const [displaySpeed, setDisplaySpeed] = useState(0);
-  const [speedProgress, setSpeedProgress] = useState(0);
-  const [rpmProgress, setRpmProgress] = useState(0);
   const [engineOn, setEngineOn] = useState(false);
   const [animationPhase, setAnimationPhase] = useState(0);
-  const [fuelLevel, setFuelLevel] = useState(65);
+  const [fuelLevel] = useState(65); // static during the boot sequence — draining fuel while starting reads as a bug
   const [tempLevel, setTempLevel] = useState(42);
-
-  const gear = String(animationPhase + 1);
+  const [gear, setGear] = useState(1);
 
   const phases = [
     { label: 'CHISELED OUTER SHROUD', desc: 'Loading data and frameworks' },
@@ -332,50 +480,62 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComple
     { label: 'M SPORT MODE', desc: 'Reached destination SAFELY' },
   ];
 
-  // SPEED - 15% faster transitions
+  // SPEED sweep, with a small overshoot-and-settle on the final approach so
+  // the needle doesn't just glide to a stop like a robot.
   useEffect(() => {
     speed.value = withSequence(
       withTiming(0.02, { duration: 340, easing: Easing.out(Easing.cubic) }),
       withTiming(0.17, { duration: 850, easing: Easing.inOut(Easing.quad) }),
       withTiming(0.34, { duration: 850, easing: Easing.inOut(Easing.quad) }),
       withTiming(0.5, { duration: 850, easing: Easing.inOut(Easing.quad) }),
-      withTiming(0.67, { duration: 850, easing: Easing.inOut(Easing.quad) }),
-      withDelay(850, withTiming(0.67, { duration: 1 }))
+      withTiming(0.7, { duration: 750, easing: Easing.out(Easing.quad) }), // slight overshoot
+      withTiming(0.67, { duration: 180, easing: Easing.inOut(Easing.quad) }), // settle back
+      withDelay(1480, withTiming(0.67, { duration: 1 }))
     );
+    return () => cancelAnimation(speed);
   }, [speed]);
 
-  // RPM - 15% faster shifts
+  // RPM sweep with shift-style drops. Each drop is what the gear counter
+  // below listens for, so the gear digit and the tach stay in sync.
   useEffect(() => {
     rpm.value = withSequence(
       withTiming(800, { duration: 340, easing: Easing.out(Easing.cubic) }),
       withTiming(6500, { duration: 1020, easing: Easing.out(Easing.quad) }),
-      withTiming(4500, { duration: 255, easing: Easing.inOut(Easing.quad) }),
+      withTiming(4500, { duration: 255, easing: Easing.inOut(Easing.quad) }), // 1->2 shift
       withTiming(6500, { duration: 1020, easing: Easing.out(Easing.quad) }),
-      withTiming(4800, { duration: 255, easing: Easing.inOut(Easing.quad) }),
+      withTiming(4800, { duration: 255, easing: Easing.inOut(Easing.quad) }), // 2->3 shift
       withTiming(6500, { duration: 1020, easing: Easing.out(Easing.quad) }),
-      withTiming(5200, { duration: 255, easing: Easing.inOut(Easing.quad) }),
-      withTiming(6200, { duration: 1020, easing: Easing.out(Easing.quad) }),
-      withTiming(5000, { duration: 255, easing: Easing.inOut(Easing.quad) }),
-      withDelay(850, withTiming(5000, { duration: 1 }))
+      withTiming(5200, { duration: 255, easing: Easing.inOut(Easing.quad) }), // 3->4 shift
+      withTiming(6200, { duration: 700, easing: Easing.out(Easing.quad) }),
+      withTiming(5000, { duration: 255, easing: Easing.inOut(Easing.quad) }), // 4->5 shift, settle
+      withDelay(180, withTiming(5000, { duration: 1 }))
     );
+    return () => cancelAnimation(rpm);
   }, [rpm]);
 
-  // Temp - 15% faster warmup
+  // Redline pulse — always running; only visible once RPM crosses the
+  // redline threshold (see GaugeNeedle).
+  useEffect(() => {
+    redlinePulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 220, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: 220, easing: Easing.inOut(Easing.sin) })
+      ),
+      -1,
+      true
+    );
+    return () => cancelAnimation(redlinePulse);
+  }, [redlinePulse]);
+
+  // Temp warm-up, trimmed to fit inside TOTAL_ANIMATION_MS.
   useEffect(() => {
     tempSV.value = withSequence(
-      withTiming(88, { duration: 3400, easing: Easing.out(Easing.quad) }),
-      withTiming(93, { duration: 2125, easing: Easing.inOut(Easing.sin) }),
-      withTiming(89, { duration: 2125, easing: Easing.inOut(Easing.sin) }),
-      withDelay(850, withTiming(91, { duration: 1700, easing: Easing.inOut(Easing.sin) }))
+      withTiming(88, { duration: 2600, easing: Easing.out(Easing.quad) }),
+      withTiming(93, { duration: 1600, easing: Easing.inOut(Easing.sin) }),
+      withTiming(91, { duration: 2100, easing: Easing.inOut(Easing.sin) })
     );
+    return () => cancelAnimation(tempSV);
   }, [tempSV]);
-
-  useEffect(() => {
-    const fuelInterval = setInterval(() => {
-      setFuelLevel((prev) => Math.max(10, prev - Math.random() * 0.3));
-    }, 2000);
-    return () => clearInterval(fuelInterval);
-  }, []);
 
   useEffect(() => {
     const onTimer = setTimeout(() => setEngineOn(true), 400);
@@ -386,16 +546,25 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComple
     };
   }, [onComplete]);
 
+  // Throttled bridge crossing: only pushes text/gear/phase state, and only
+  // when the rounded value actually changed — geometry above never touches
+  // this path at all.
+  const lastRpmRef = useSharedValue(0);
   useDerivedValue(() => {
     const sp = speed.value;
     const rp = rpm.value;
     const speedKmh = Math.round(sp * 240);
+    const rpmRounded = Math.round(rp);
 
-    runOnJS(setSpeedProgress)(sp);
-    runOnJS(setRpmProgress)(Math.min(rp / MAX_RPM, 1));
     runOnJS(setDisplaySpeed)(speedKmh);
-    runOnJS(setDisplayRpm)(Math.round(rp));
+    runOnJS(setDisplayRpm)(rpmRounded);
     runOnJS(setTempLevel)(tempSV.value);
+
+    // Detect a shift: a sharp drop in RPM after climbing.
+    if (lastRpmRef.value - rp > 1200) {
+      runOnJS(setGear)((g: number) => Math.min(g + 1, 6));
+    }
+    lastRpmRef.value = rp;
 
     let phaseIndex = 0;
     if (speedKmh > 140) phaseIndex = 4;
@@ -471,8 +640,8 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComple
                 <Rect x={0} y={0} width={gaugeWidth} height={gaugeHeight} rx={12} fill="url(#clusterBg)" />
                 <Rect x={1} y={1} width={gaugeWidth - 2} height={gaugeHeight - 2} rx={11} fill="none" stroke="#2A3448" strokeWidth={0.5} />
 
-                <SpeedGauge cx={leftX} cy={centerY} r={gaugeR} progress={speedProgress} value={displaySpeed} />
-                <RpmGauge cx={rightX} cy={centerY} r={gaugeR} progress={rpmProgress} value={displayRpm} />
+                <SpeedGauge cx={leftX} cy={centerY} r={gaugeR} progress={speed} valueText={String(displaySpeed)} />
+                <RpmGauge cx={rightX} cy={centerY} r={gaugeR} progress={useDerivedValue(() => Math.min(rpm.value / MAX_RPM, 1))} valueText={String(displayRpm)} redlinePulse={redlinePulse} />
 
                 <G>
                   <Path d={`M ${centerX - 40} ${centerY - 40} L ${centerX} ${centerY - 58} L ${centerX + 40} ${centerY - 40} L ${centerX} ${centerY - 22} Z`} stroke="#2A3448" strokeWidth={0.5} fill="none" opacity={0.5} />
@@ -495,18 +664,9 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComple
             </View>
 
             <View style={styles.bottomBar}>
-              <View style={styles.barSection}>
-                <Text style={styles.barLabel}>OIL</Text>
-                <View style={styles.barTrack}><View style={[styles.barFill, { width: '85%', backgroundColor: BMW_LT_BLUE }]} /></View>
-              </View>
-              <View style={styles.barSection}>
-                <Text style={styles.barLabel}>BATTERY</Text>
-                <View style={styles.barTrack}><View style={[styles.barFill, { width: '92%', backgroundColor: GREEN }]} /></View>
-              </View>
-              <View style={styles.barSection}>
-                <Text style={styles.barLabel}>BRAKE</Text>
-                <View style={styles.barTrack}><View style={[styles.barFill, { width: '100%', backgroundColor: BMW_ORANGE }]} /></View>
-              </View>
+              <StatusBar label="OIL" targetPct={85} color={BMW_LT_BLUE} delay={200} />
+              <StatusBar label="BATTERY" targetPct={92} color={GREEN} delay={350} />
+              <StatusBar label="BRAKE" targetPct={100} color={BMW_ORANGE} delay={500} />
             </View>
 
             <View style={styles.settingsContainer}>
