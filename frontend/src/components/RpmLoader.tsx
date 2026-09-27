@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedProps,
+  useAnimatedStyle,
   useDerivedValue,
   withTiming,
   withSequence,
@@ -431,28 +432,18 @@ function StatusBar({ label, targetPct, color, delay }: { label: string; targetPc
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const fillStyle = useAnimatedStyle(() => ({
+    width: `${width.value}%`,
+  }));
+
   return (
     <View style={styles.barSection}>
       <Text style={styles.barLabel}>{label}</Text>
       <View style={styles.barTrack}>
-        <Animated.View
-          style={[
-            styles.barFill,
-            { backgroundColor: color },
-            useAnimatedStyleWidth(width),
-          ]}
-        />
+        <Animated.View style={[styles.barFill, { backgroundColor: color }, fillStyle]} />
       </View>
     </View>
   );
-}
-
-function useAnimatedStyleWidth(width: SharedValue<number>) {
-  // Small wrapper kept local to this file so StatusBar stays self-contained.
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  return Animated.useAnimatedStyle(() => ({
-    width: `${width.value}%`,
-  }));
 }
 
 export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComplete }: Props) {
@@ -461,6 +452,10 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComple
   const rpm = useSharedValue(0);
   const tempSV = useSharedValue(42);
   const redlinePulse = useSharedValue(0);
+  // Hoisted once, not recreated every render — was previously called inline
+  // in JSX (`progress={useDerivedValue(...)}`), which allocated a fresh
+  // derived value on every re-render and could desync the needle.
+  const rpmProgress = useDerivedValue(() => Math.min(rpm.value / MAX_RPM, 1), [rpm]);
 
   // Throttled display state — updated a few times a second instead of every
   // animation frame, so text updates stay cheap and never touch gauge geometry.
@@ -641,7 +636,7 @@ export default function RpmLoader({ label = 'STARTING ENGINE...', size, onComple
                 <Rect x={1} y={1} width={gaugeWidth - 2} height={gaugeHeight - 2} rx={11} fill="none" stroke="#2A3448" strokeWidth={0.5} />
 
                 <SpeedGauge cx={leftX} cy={centerY} r={gaugeR} progress={speed} valueText={String(displaySpeed)} />
-                <RpmGauge cx={rightX} cy={centerY} r={gaugeR} progress={useDerivedValue(() => Math.min(rpm.value / MAX_RPM, 1))} valueText={String(displayRpm)} redlinePulse={redlinePulse} />
+                <RpmGauge cx={rightX} cy={centerY} r={gaugeR} progress={rpmProgress} valueText={String(displayRpm)} redlinePulse={redlinePulse} />
 
                 <G>
                   <Path d={`M ${centerX - 40} ${centerY - 40} L ${centerX} ${centerY - 58} L ${centerX + 40} ${centerY - 40} L ${centerX} ${centerY - 22} Z`} stroke="#2A3448" strokeWidth={0.5} fill="none" opacity={0.5} />
