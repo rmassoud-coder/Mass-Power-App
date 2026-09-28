@@ -19,10 +19,6 @@ function generateId(): string {
 }
 
 // ✅ UNIFIED DATE HELPERS
-// Single source of truth for "today" and "start of week" so every screen
-// and query agrees on when the week resets. Always resets Monday, and
-// uses local calendar date (not toISOString(), which converts to UTC
-// first and can roll the date over early/late depending on timezone).
 export function getLocalDateStr(d: Date = new Date()): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -31,15 +27,13 @@ export function getLocalDateStr(d: Date = new Date()): string {
 }
 
 export function getWeekStartMonday(d: Date = new Date()): Date {
-  const dayOfWeek = d.getDay(); // 0 = Sunday
+  const dayOfWeek = d.getDay();
   const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
   const monday = new Date(d);
   monday.setDate(d.getDate() - diffToMonday);
   return monday;
 }
 
-// ✅ same "single source of truth" pattern as getWeekStartMonday,
-// for month-to-date calculations. Local calendar month, day 1.
 export function getMonthStart(d: Date = new Date()): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
@@ -244,10 +238,6 @@ export interface ReportItem {
   service_date: string;
 }
 
-// ✅ NEW: tombstone entity types. A tombstone records "this ID was
-// deleted, at this time" so that additive-only sync merges know NOT to
-// resurrect a record another device already deleted, instead of only
-// ever being able to insert/update and never delete.
 export type TombstoneEntityType =
   | 'customer'
   | 'vehicle'
@@ -263,7 +253,6 @@ export interface Tombstone {
   deleted_at: string;
 }
 
-// ✅ NEW: Locksmith stock item — synced like other tables.
 export interface StockItem {
   id: string;
   name: string;
@@ -274,7 +263,6 @@ export interface StockItem {
 
 /////////////// BLOCK 1 - SETUP, INIT, & CORE TABLES ///////////////
 
-// Initialize database tables and seed data on first run
 export async function initDatabase() {
   const db = await getDb();
   await db.execAsync(`
@@ -388,9 +376,6 @@ export async function initDatabase() {
     `);
   } catch (e) { /* Tables already exist */ }
 
-  // ✅ NEW: tombstones table. One row per deleted entity. Never pruned —
-  // deletions are rare relative to normal records, so unbounded growth
-  // here is an acceptable tradeoff for correctness.
   try {
     await db.execAsync(`
       CREATE TABLE IF NOT EXISTS tombstones (
@@ -482,20 +467,12 @@ export async function initDatabase() {
     );
   } catch {}
 
-  // ✅ updated_at for vehicles and services. Without this, edits to an
-  // existing record (marking a service paid, changing its cost, fixing
-  // a VIN) have no timestamp to compare during sync merge — so
-  // mergeCloudIntoLocal previously could only ever INSERT brand-new
-  // records, never UPDATE an edited one already present on a device.
   try {
     await db.execAsync(`ALTER TABLE vehicles ADD COLUMN updated_at TEXT`);
   } catch {}
   try {
     await db.execAsync(`ALTER TABLE services ADD COLUMN updated_at TEXT`);
   } catch {}
-  // Backfill: existing rows created before this column existed get
-  // updated_at = created_at, so merge comparisons have a real value
-  // instead of null (which would otherwise always look "oldest").
   try {
     await db.execAsync(`UPDATE vehicles SET updated_at = created_at WHERE updated_at IS NULL`);
   } catch {}
@@ -530,9 +507,6 @@ export async function initDatabase() {
   }
 }
 
-// ✅ NEW: records a deletion so sync merges won't resurrect it. Uses
-// INSERT OR REPLACE so re-deleting (rare, but possible via import/merge
-// edge cases) always keeps the latest deleted_at.
 async function recordTombstone(
   entityType: TombstoneEntityType,
   entityId: string,
@@ -1394,7 +1368,6 @@ export async function updateStockQuantity(
     [qty, now, id]
   );
 }
-// ✅ NEW: Deduct multiple stock items at once (for Locksmith walk-in services)
 export async function deductStockItems(
   items: { id: string; quantity: number }[]
 ): Promise<void> {
@@ -1422,9 +1395,6 @@ export async function deleteStockItem(id: string): Promise<void> {
 
 /////////////// BLOCK 2 - REPORTS, SYNC, SUPPLIERS, WALK-INS, WAGES & MATH ///////////////
 
-// ============================================================
-// ✅ NEW: Income by Category report
-// ============================================================
 export interface CategoryIncomeRow {
   category: string;
   total_services: number;
@@ -1482,9 +1452,6 @@ export async function getIncomeByCategory(
   }));
 }
 
-// ============================================================
-// ✅ NEW: Unpaid services report helper.
-// ============================================================
 export interface UnpaidServiceRow {
   service_id: string;
   customer_id: string;
@@ -1575,7 +1542,6 @@ export async function getUnpaidServices(): Promise<UnpaidServicesResult> {
     total_remaining,
   };
 }
-
 
 export async function getReport(
   startDate?: string,
@@ -1671,11 +1637,17 @@ export async function getReport(
     outsource_cost: Number(r.outsource_cost) || 0,
     service_date: r.service_date,
   }));
-  const total_cost = items.reduce((sum, i) => sum + i.cost, 0);
+
+  // ✅ Only the PAID portion counts as income.
+  const paidRevenue = items.reduce((sum, i) => {
+    if (i.is_paid) return sum + i.cost;
+    return sum + (Number(i.partial_paid) || 0);
+  }, 0);
+
   const outsource_total = items.reduce((sum, i) => sum + (i.outsource_cost || 0), 0);
-  
-  let net_cash_flow = total_cost - outsource_total;
-  
+
+  let net_cash_flow = paidRevenue - outsource_total;
+
   const mondayStr = getLocalDateStr(monday);
   const todayStr = getLocalDateStr(today);
 
@@ -1693,10 +1665,14 @@ export async function getReport(
   }
 
   const unpaidItems = items.filter((i) => !i.is_paid);
-  const unpaid_total = unpaidItems.reduce((sum, i) => sum + i.cost, 0);
+  const unpaid_total = unpaidItems.reduce(
+    (sum, i) => sum + Math.max(0, i.cost - (Number(i.partial_paid) || 0)),
+    0
+  );
+
   return {
     items,
-    total_cost,
+    total_cost: paidRevenue,
     total_services: items.length,
     unpaid_count: unpaidItems.length,
     unpaid_total,
@@ -2300,9 +2276,6 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
   return result;
 }
 
-// ============================================================
-// ✅ NEW: Reorder report helper.
-// ============================================================
 export async function getLowStockBySupplier(
   threshold: number
 ): Promise<LowStockItemBySupplier[]> {
@@ -2486,7 +2459,6 @@ export async function createWalkinProductSaleMulti(
     throw new Error('No items to sell.');
   }
 
-  // Load all inventory items first (validate + compute)
   const loaded: {
     inv: InventoryItem;
     qty: number;
@@ -2524,7 +2496,6 @@ export async function createWalkinProductSaleMulti(
     throw new Error('No valid items to sell.');
   }
 
-  // Ensure walk-in customer + vehicle
   let walkinCustomer = await db.getFirstAsync<Customer>(
     `SELECT * FROM customers WHERE name = 'Walk-in' AND mobile_number = 'N/A' LIMIT 1`
   );
@@ -2556,13 +2527,11 @@ export async function createWalkinProductSaleMulti(
     );
   }
 
-  // Build summary line
   const summary = loaded
     .map((l) => `${l.inv.item_type} (x${l.qty})`)
     .join(', ');
   const totalCost = loaded.reduce((sum, l) => sum + l.lineTotal, 0);
 
-  // Create the single service
   const serviceId = generateId();
   await db.runAsync(
     `INSERT INTO services (
@@ -2585,7 +2554,6 @@ export async function createWalkinProductSaleMulti(
     ]
   );
 
-  // Deduct each inventory item + save service_items
   for (const l of loaded) {
     const newQty = Math.max(0, l.inv.item_quantity - l.qty);
     await db.runAsync(
@@ -2808,6 +2776,7 @@ export async function createWalkinProductSale(
     outsource_cost: 0,
   };
 }
+
 export async function getWeeklyCashSummary(): Promise<{
   revenue: number;
   totalOutstandingDebt: number;
@@ -2825,9 +2794,17 @@ export async function getWeeklyCashSummary(): Promise<{
   const mondayStr = getLocalDateStr(monday);
   const todayStr = getLocalDateStr(today);
 
+  // ✅ Only count the PAID portion as revenue
   const revenueResult = await db.getFirstAsync<{ total: number }>(
-    `SELECT COALESCE(SUM(cost), 0) as total FROM services 
-     WHERE DATE(service_date) >= ? AND DATE(service_date) <= ? AND (is_paid = 1 OR partial_paid > 0)`,
+    `SELECT COALESCE(SUM(
+        CASE 
+          WHEN is_paid = 1 THEN cost 
+          ELSE COALESCE(partial_paid, 0) 
+        END
+      ), 0) as total 
+     FROM services 
+     WHERE DATE(service_date) >= ? AND DATE(service_date) <= ? 
+       AND (is_paid = 1 OR partial_paid > 0)`,
     [mondayStr, todayStr]
   );
   const revenue = revenueResult?.total || 0;
@@ -2898,7 +2875,6 @@ export async function getWeeklyCashSummary(): Promise<{
   };
 }
 
-// ✅ month-to-date version of getWeeklyCashSummary above.
 export async function getMonthlyCashSummary(): Promise<{
   revenue: number;
   totalOutstandingDebt: number;
@@ -2916,9 +2892,17 @@ export async function getMonthlyCashSummary(): Promise<{
   const monthStartStr = getLocalDateStr(monthStart);
   const todayStr = getLocalDateStr(today);
 
+  // ✅ Only count the PAID portion as revenue
   const revenueResult = await db.getFirstAsync<{ total: number }>(
-    `SELECT COALESCE(SUM(cost), 0) as total FROM services 
-     WHERE DATE(service_date) >= ? AND DATE(service_date) <= ? AND (is_paid = 1 OR partial_paid > 0)`,
+    `SELECT COALESCE(SUM(
+        CASE 
+          WHEN is_paid = 1 THEN cost 
+          ELSE COALESCE(partial_paid, 0) 
+        END
+      ), 0) as total 
+     FROM services 
+     WHERE DATE(service_date) >= ? AND DATE(service_date) <= ? 
+       AND (is_paid = 1 OR partial_paid > 0)`,
     [monthStartStr, todayStr]
   );
   const revenue = revenueResult?.total || 0;
