@@ -17,6 +17,7 @@ import {
   updateSupplierBalance,
   getWeeklyCashSummary,
   getMonthlyCashSummary,
+  getAllTimeCashSummary,
   getReport,
   saveWeeklyWages,
   getLocalDateStr,
@@ -49,6 +50,11 @@ export default function SupplierDebtScreen() {
     todayCashOut: number;
     weekCashOut: number;
     monthCashOut: number;
+    // ✅ NEW: All-time (Start-to-Date)
+    allTimeRevenue: number;
+    allTimeOutsource: number;
+    allTimePaidDebts: number;
+    allTimeCashOut: number;
   }>({
     todayRevenue: 0,
     todayOutsource: 0,
@@ -64,6 +70,10 @@ export default function SupplierDebtScreen() {
     todayCashOut: 0,
     weekCashOut: 0,
     monthCashOut: 0,
+    allTimeRevenue: 0,
+    allTimeOutsource: 0,
+    allTimePaidDebts: 0,
+    allTimeCashOut: 0,
   });
   const router = useRouter();
 
@@ -91,10 +101,11 @@ export default function SupplierDebtScreen() {
         `${todayStr}T23:59:59`
       );
 
-      const [balanceList, cashSummary, monthlyCashSummary] = await Promise.all([
+      const [balanceList, cashSummary, monthlyCashSummary, allTimeSummary] = await Promise.all([
         getSupplierBalances(),
         getWeeklyCashSummary(),
         getMonthlyCashSummary(),
+        getAllTimeCashSummary(),
       ]);
 
       setSuppliers(balanceList);
@@ -113,6 +124,11 @@ export default function SupplierDebtScreen() {
         todayCashOut: cashSummary.todayWages,
         weekCashOut: cashSummary.weekWages,
         monthCashOut: monthlyCashSummary.monthWages,
+        // ✅ NEW
+        allTimeRevenue: allTimeSummary.revenue,
+        allTimeOutsource: allTimeSummary.totalOutsource,
+        allTimePaidDebts: allTimeSummary.paidDebts,
+        allTimeCashOut: allTimeSummary.wages,
       });
     } catch (error) {
       Alert.alert('Error', 'Failed to load supplier data.');
@@ -373,6 +389,62 @@ export default function SupplierDebtScreen() {
                   R(summary.mtdOutsource) -
                   R(summary.paidMonth) -
                   R(summary.monthCashOut)
+              )}
+            </Text>
+          </View>
+
+          <View style={styles.cashDivider} />
+
+          {/* ✅ NEW: Start-to-Date Section */}
+          <View style={styles.cashRow}>
+            <Text style={styles.cashLabel}>Start-to-Date Income</Text>
+            <Text style={styles.cashValue}>${R(summary.allTimeRevenue)}</Text>
+          </View>
+
+          <View style={styles.cashRow}>
+            <Text style={[styles.cashLabel, { color: '#dc2626' }]}>− Outsource (Start-to-Date)</Text>
+            <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${R(summary.allTimeOutsource)}</Text>
+          </View>
+
+          <View style={styles.cashRow}>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]}>− Paid Debts (Start-to-Date)</Text>
+            <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${R(summary.allTimePaidDebts)}</Text>
+          </View>
+
+          <View style={styles.cashRow}>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]}>− Cash Out (Start-to-Date)</Text>
+            <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${R(summary.allTimeCashOut)}</Text>
+          </View>
+
+          <View style={styles.cashDivider} />
+
+          {/* NET CASH DRAWER (START-TO-DATE) */}
+          <View style={styles.cashRow}>
+            <Text style={[styles.cashLabel, { fontWeight: '800', color: '#0f172a' }]}>
+              Net Cash Drawer (Start-to-Date)
+            </Text>
+            <Text
+              style={[
+                styles.cashValue,
+                {
+                  fontWeight: '900',
+                  color:
+                    R(summary.allTimeRevenue) -
+                      R(summary.allTimeOutsource) -
+                      R(summary.allTimePaidDebts) -
+                      R(summary.allTimeCashOut) >=
+                    0
+                      ? '#059669'
+                      : '#dc2626',
+                },
+              ]}
+            >
+              $
+              {R(
+                R(summary.allTimeRevenue) -
+                  R(summary.allTimeOutsource) -
+                  R(summary.allTimePaidDebts) -
+                  R(summary.allTimeCashOut)
               )}
             </Text>
           </View>
