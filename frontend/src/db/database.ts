@@ -2973,7 +2973,72 @@ export async function getMonthlyCashSummary(): Promise<{
     netDrawer,
   };
 }
+// ============================================================
+// ✅ NEW: All-time (Start-to-Date) cash summary
+// Same shape as getWeeklyCashSummary / getMonthlyCashSummary,
+// but with NO date filter — sums from the beginning of time
+// up to today.
+// ============================================================
+export async function getAllTimeCashSummary(): Promise<{
+  revenue: number;
+  totalOutsource: number;
+  paidDebts: number;
+  wages: number;
+  netDrawer: number;
+}> {
+  const db = await getDb();
 
+  // ✅ Income: only the PAID portion (paid = full cost, partial = partial_paid)
+  const revenueResult = await db.getFirstAsync<{ total: number }>(
+    `SELECT COALESCE(SUM(
+        CASE 
+          WHEN is_paid = 1 THEN cost 
+          ELSE COALESCE(partial_paid, 0) 
+        END
+      ), 0) as total 
+     FROM services 
+     WHERE (is_paid = 1 OR partial_paid > 0)`
+  );
+  const revenue = revenueResult?.total || 0;
+
+  // ✅ Outsource: sum of all outsource_cost
+  const outsourceResult = await db.getFirstAsync<{ total: number }>(
+    `SELECT COALESCE(SUM(COALESCE(outsource_cost, 0)), 0) as total FROM services`
+  );
+  const totalOutsource = outsourceResult?.total || 0;
+
+  // ✅ Paid debts: all supplier_payments ever recorded (always positive)
+  let paidDebts = 0;
+  try {
+    const paidResult = await db.getFirstAsync<{ total: number }>(
+      `SELECT COALESCE(SUM(ABS(amount_paid)), 0) as total FROM supplier_payments`
+    );
+    paidDebts = paidResult?.total || 0;
+  } catch (e) {
+    paidDebts = 0;
+  }
+
+  // ✅ Wages: all wages_paid ever recorded
+  let wages = 0;
+  try {
+    const wagesResult = await db.getFirstAsync<{ total: number }>(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM wages_paid`
+    );
+    wages = wagesResult?.total || 0;
+  } catch (e) {
+    wages = 0;
+  }
+
+  const netDrawer = revenue - totalOutsource - paidDebts - wages;
+
+  return {
+    revenue,
+    totalOutsource,
+    paidDebts,
+    wages,
+    netDrawer,
+  };
+}
 export async function emergencyNukeDatabase() {
   try {
     const db = await getDb();
