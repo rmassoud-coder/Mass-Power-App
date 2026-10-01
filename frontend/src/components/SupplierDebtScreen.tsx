@@ -25,7 +25,7 @@ import {
   getMonthStart,
 } from '../../src/db/database';
 
-// ✅ Round to whole number (no decimals)ok
+// ✅ Round to whole number (no decimals)
 const R = (n: number): number => Math.round(Number(n) || 0);
 
 export default function SupplierDebtScreen() {
@@ -50,7 +50,6 @@ export default function SupplierDebtScreen() {
     todayCashOut: number;
     weekCashOut: number;
     monthCashOut: number;
-    // ✅ NEW: All-time (Start-to-Date)
     allTimeRevenue: number;
     allTimeOutsource: number;
     allTimePaidDebts: number;
@@ -124,7 +123,6 @@ export default function SupplierDebtScreen() {
         todayCashOut: cashSummary.todayWages,
         weekCashOut: cashSummary.weekWages,
         monthCashOut: monthlyCashSummary.monthWages,
-        // ✅ NEW
         allTimeRevenue: allTimeSummary.revenue,
         allTimeOutsource: allTimeSummary.totalOutsource,
         allTimePaidDebts: allTimeSummary.paidDebts,
@@ -229,22 +227,22 @@ export default function SupplierDebtScreen() {
 
           {/* Today's Section */}
           <View style={styles.cashRow}>
-            <Text style={styles.cashLabel}>Today's Income</Text>
+            <Text style={styles.cashLabel} numberOfLines={1}>Today's Income</Text>
             <Text style={styles.cashValue}>${R(summary.todayRevenue)}</Text>
           </View>
 
           <View style={styles.cashRow}>
-            <Text style={[styles.cashLabel, { color: '#dc2626' }]}>− Outsource</Text>
+            <Text style={[styles.cashLabel, { color: '#dc2626' }]} numberOfLines={1}>− Outsource</Text>
             <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${R(summary.todayOutsource)}</Text>
           </View>
 
           <View style={styles.cashRow}>
-            <Text style={[styles.cashLabel, { color: '#eab308' }]}>− Paid Debts Today</Text>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]} numberOfLines={1}>− Paid Debts Today</Text>
             <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${R(summary.paidToday)}</Text>
           </View>
 
           <View style={styles.cashRow}>
-            <Text style={[styles.cashLabel, { color: '#eab308' }]}>− Cash Out Today</Text>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]} numberOfLines={1}>− Cash Out Today</Text>
             <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${R(summary.todayCashOut)}</Text>
           </View>
 
@@ -252,7 +250,10 @@ export default function SupplierDebtScreen() {
 
           {/* NET CASH DRAWER (TODAY) */}
           <View style={styles.cashRow}>
-            <Text style={[styles.cashLabel, { fontWeight: '800', color: '#0f172a' }]}>
+            <Text
+              style={[styles.cashLabel, { fontWeight: '800', color: '#0f172a' }]}
+              numberOfLines={1}
+            >
               Net Cash Drawer (Today)
             </Text>
             <Text
@@ -285,22 +286,22 @@ export default function SupplierDebtScreen() {
 
           {/* Week-to-Date Section */}
           <View style={styles.cashRow}>
-            <Text style={styles.cashLabel}>Week-to-Date Income</Text>
+            <Text style={styles.cashLabel} numberOfLines={1}>Week-to-Date Income</Text>
             <Text style={styles.cashValue}>${R(summary.wtdIncome)}</Text>
           </View>
 
           <View style={styles.cashRow}>
-            <Text style={[styles.cashLabel, { color: '#dc2626' }]}>− Outsource (WTD)</Text>
+            <Text style={[styles.cashLabel, { color: '#dc2626' }]} numberOfLines={1}>− Outsource (WTD)</Text>
             <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${R(summary.wtdOutsource)}</Text>
           </View>
 
           <View style={styles.cashRow}>
-            <Text style={[styles.cashLabel, { color: '#eab308' }]}>− Paid Debts This Week</Text>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]} numberOfLines={1}>− Paid Debts This Week</Text>
             <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${R(summary.paidWeek)}</Text>
           </View>
 
           <View style={styles.cashRow}>
-            <Text style={[styles.cashLabel, { color: '#eab308' }]}>− Cash Out (Week)</Text>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]} numberOfLines={1}>− Cash Out (Week)</Text>
             <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${R(summary.weekCashOut)}</Text>
           </View>
 
@@ -308,7 +309,10 @@ export default function SupplierDebtScreen() {
 
           {/* NET CASH DRAWER (WEEK) */}
           <View style={styles.cashRow}>
-            <Text style={[styles.cashLabel, { fontWeight: '800', color: '#0f172a' }]}>
+            <Text
+              style={[styles.cashLabel, { fontWeight: '800', color: '#0f172a' }]}
+              numberOfLines={1}
+            >
               Net Cash Drawer (Week)
             </Text>
             <Text
@@ -341,22 +345,22 @@ export default function SupplierDebtScreen() {
 
           {/* Month-to-Date Section */}
           <View style={styles.cashRow}>
-            <Text style={styles.cashLabel}>Month-to-Date Income</Text>
+            <Text style={styles.cashLabel} numberOfLines={1}>Month-to-Date Income</Text>
             <Text style={styles.cashValue}>${R(summary.mtdIncome)}</Text>
           </View>
 
           <View style={styles.cashRow}>
-            <Text style={[styles.cashLabel, { color: '#dc2626' }]}>− Outsource (MTD)</Text>
+            <Text style={[styles.cashLabel, { color: '#dc2626' }]} numberOfLines={1}>− Outsource (MTD)</Text>
             <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${R(summary.mtdOutsource)}</Text>
           </View>
 
           <View style={styles.cashRow}>
-            <Text style={[styles.cashLabel, { color: '#eab308' }]}>− Paid Debts This Month</Text>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]} numberOfLines={1}>− Paid Debts This Month</Text>
             <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${R(summary.paidMonth)}</Text>
           </View>
 
           <View style={styles.cashRow}>
-            <Text style={[styles.cashLabel, { color: '#eab308' }]}>− Cash Out (Month)</Text>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]} numberOfLines={1}>− Cash Out (Month)</Text>
             <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${R(summary.monthCashOut)}</Text>
           </View>
 
@@ -364,7 +368,10 @@ export default function SupplierDebtScreen() {
 
           {/* NET CASH DRAWER (MONTH) */}
           <View style={styles.cashRow}>
-            <Text style={[styles.cashLabel, { fontWeight: '800', color: '#0f172a' }]}>
+            <Text
+              style={[styles.cashLabel, { fontWeight: '800', color: '#0f172a' }]}
+              numberOfLines={1}
+            >
               Net Cash Drawer (Month)
             </Text>
             <Text
@@ -395,24 +402,24 @@ export default function SupplierDebtScreen() {
 
           <View style={styles.cashDivider} />
 
-          {/* ✅ NEW: Start-to-Date Section */}
+          {/* Start-to-Date Section */}
           <View style={styles.cashRow}>
-            <Text style={styles.cashLabel}>Start-to-Date Income</Text>
+            <Text style={styles.cashLabel} numberOfLines={1}>Start-to-Date Income</Text>
             <Text style={styles.cashValue}>${R(summary.allTimeRevenue)}</Text>
           </View>
 
           <View style={styles.cashRow}>
-            <Text style={[styles.cashLabel, { color: '#dc2626' }]}>− Outsource (Start-to-Date)</Text>
+            <Text style={[styles.cashLabel, { color: '#dc2626' }]} numberOfLines={1}>− Outsource</Text>
             <Text style={[styles.cashValue, { color: '#dc2626' }]}>- ${R(summary.allTimeOutsource)}</Text>
           </View>
 
           <View style={styles.cashRow}>
-            <Text style={[styles.cashLabel, { color: '#eab308' }]}>− Paid Debts (Start-to-Date)</Text>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]} numberOfLines={1}>− Paid Debts</Text>
             <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${R(summary.allTimePaidDebts)}</Text>
           </View>
 
           <View style={styles.cashRow}>
-            <Text style={[styles.cashLabel, { color: '#eab308' }]}>− Cash Out (Start-to-Date)</Text>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]} numberOfLines={1}>− Cash Out</Text>
             <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${R(summary.allTimeCashOut)}</Text>
           </View>
 
@@ -420,7 +427,10 @@ export default function SupplierDebtScreen() {
 
           {/* NET CASH DRAWER (START-TO-DATE) */}
           <View style={styles.cashRow}>
-            <Text style={[styles.cashLabel, { fontWeight: '800', color: '#0f172a' }]}>
+            <Text
+              style={[styles.cashLabel, { fontWeight: '800', color: '#0f172a' }]}
+              numberOfLines={1}
+            >
               Net Cash Drawer (Start-to-Date)
             </Text>
             <Text
@@ -565,21 +575,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+
+  // ✅ FIXED: rows now use flex + gap so long labels don't push values off-screen
   cashRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 4,
+    gap: 8,
   },
   cashLabel: {
     fontSize: 15,
     color: '#1e293b',
     fontWeight: '500',
+    flex: 1,
+    flexShrink: 1,
   },
   cashValue: {
     fontSize: 15,
     fontWeight: '700',
     color: '#1e293b',
+    flexShrink: 0,
+    textAlign: 'right',
   },
+
   cashDivider: {
     height: 1,
     backgroundColor: '#c4b5fd',
