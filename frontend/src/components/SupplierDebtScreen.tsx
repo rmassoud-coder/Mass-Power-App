@@ -25,7 +25,7 @@ import {
   getMonthStart,
 } from '../../src/db/database';
 
-// ✅ Round to whole number (no decimals)
+// ✅ Round to whole number (no decimals)ok
 const R = (n: number): number => Math.round(Number(n) || 0);
 
 export default function SupplierDebtScreen() {
