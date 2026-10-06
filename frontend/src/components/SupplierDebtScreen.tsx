@@ -14,12 +14,13 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import {
   getSupplierBalances,
-  updateSupplierBalance,
   getWeeklyCashSummary,
   getMonthlyCashSummary,
   getAllTimeCashSummary,
   getReport,
   saveWeeklyWages,
+  recordSupplierPayment,
+  getSupplierPaidMTDMap,
   getLocalDateStr,
   getWeekStartMonday,
   getMonthStart,
@@ -30,6 +31,7 @@ const R = (n: number): number => Math.round(Number(n) || 0);
 
 export default function SupplierDebtScreen() {
   const [suppliers, setSuppliers] = useState<{ id: string; name: string; balance: number }[]>([]);
+  const [paidMTDMap, setPaidMTDMap] = useState<Record<string, number>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [payTodayValue, setPayTodayValue] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -100,14 +102,18 @@ export default function SupplierDebtScreen() {
         `${todayStr}T23:59:59`
       );
 
-      const [balanceList, cashSummary, monthlyCashSummary, allTimeSummary] = await Promise.all([
-        getSupplierBalances(),
-        getWeeklyCashSummary(),
-        getMonthlyCashSummary(),
-        getAllTimeCashSummary(),
-      ]);
+      const [balanceList, cashSummary, monthlyCashSummary, allTimeSummary, mtdPaidMap] =
+        await Promise.all([
+          getSupplierBalances(),
+          getWeeklyCashSummary(),
+          getMonthlyCashSummary(),
+          getAllTimeCashSummary(),
+          getSupplierPaidMTDMap(),
+        ]);
 
       setSuppliers(balanceList);
+      setPaidMTDMap(mtdPaidMap);
+
       setSummary({
         todayRevenue: todayReport.total_cost,
         todayOutsource: todayReport.outsource_total,
@@ -164,27 +170,18 @@ export default function SupplierDebtScreen() {
     if (!editingId) return;
     const amountPaid = parseFloat(payTodayValue);
     if (isNaN(amountPaid) || amountPaid <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount paid today.');
-      return;
-    }
-
-    const supplier = suppliers.find(s => s.id === editingId);
-    if (!supplier) return;
-
-    if (amountPaid > supplier.balance) {
-      Alert.alert('Error', 'You cannot pay more than the outstanding balance.');
+      Alert.alert('Error', 'Please enter a valid amount.');
       return;
     }
 
     setSaving(true);
     try {
-      const newBalance = supplier.balance - amountPaid;
-      await updateSupplierBalance(editingId, newBalance);
+      await recordSupplierPayment(editingId, amountPaid);
       setEditingId(null);
       setPayTodayValue('');
-      loadData();
+      await loadData();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to update balance.');
+      Alert.alert('Error', error.message || 'Failed to save payment.');
     } finally {
       setSaving(false);
     }
@@ -237,7 +234,7 @@ export default function SupplierDebtScreen() {
           </View>
 
           <View style={styles.cashRow}>
-            <Text style={[styles.cashLabel, { color: '#eab308' }]} numberOfLines={1}>− Paid Debts Today</Text>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]} numberOfLines={1}>− Paid to Suppliers Today</Text>
             <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${R(summary.paidToday)}</Text>
           </View>
 
@@ -296,7 +293,7 @@ export default function SupplierDebtScreen() {
           </View>
 
           <View style={styles.cashRow}>
-            <Text style={[styles.cashLabel, { color: '#eab308' }]} numberOfLines={1}>− Paid Debts This Week</Text>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]} numberOfLines={1}>− Paid to Suppliers This Week</Text>
             <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${R(summary.paidWeek)}</Text>
           </View>
 
@@ -355,7 +352,7 @@ export default function SupplierDebtScreen() {
           </View>
 
           <View style={styles.cashRow}>
-            <Text style={[styles.cashLabel, { color: '#eab308' }]} numberOfLines={1}>− Paid Debts This Month</Text>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]} numberOfLines={1}>− Paid to Suppliers This Month</Text>
             <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${R(summary.paidMonth)}</Text>
           </View>
 
@@ -414,7 +411,7 @@ export default function SupplierDebtScreen() {
           </View>
 
           <View style={styles.cashRow}>
-            <Text style={[styles.cashLabel, { color: '#eab308' }]} numberOfLines={1}>− Paid Debts</Text>
+            <Text style={[styles.cashLabel, { color: '#eab308' }]} numberOfLines={1}>− Paid to Suppliers</Text>
             <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${R(summary.allTimePaidDebts)}</Text>
           </View>
 
@@ -479,47 +476,50 @@ export default function SupplierDebtScreen() {
         </View>
 
         {/* Supplier List */}
-        <Text style={styles.listTitle}>Manage Supplier Balances</Text>
+        <Text style={styles.listTitle}>Pay Suppliers</Text>
         {suppliers.length === 0 ? (
           <Text style={styles.emptyText}>No suppliers found. Add one in Backend Management.</Text>
         ) : (
-          suppliers.map((s) => (
-            <View key={s.id} style={styles.supplierItem}>
-              <View style={styles.supplierInfo}>
-                <Text style={styles.supplierName}>{s.name}</Text>
-                <Text style={styles.supplierBalanceLabel}>
-                  {s.balance > 0 ? `Current Debt: $${R(s.balance)}` : 'Debt Cleared'}
-                </Text>
-              </View>
+          suppliers.map((s) => {
+            const paidMTD = paidMTDMap[s.id] || 0;
+            return (
+              <View key={s.id} style={styles.supplierItem}>
+                <View style={styles.supplierInfo}>
+                  <Text style={styles.supplierName}>{s.name}</Text>
+                  <Text style={styles.supplierBalanceLabel}>
+                    Paid this month: ${R(paidMTD)}
+                  </Text>
+                </View>
 
-              {editingId === s.id ? (
-                <View style={styles.editRow}>
-                  <Text style={styles.payLabel}>Pay Today:</Text>
-                  <Text style={styles.currencySymbol}>$</Text>
-                  <TextInput
-                    style={styles.editInput}
-                    value={payTodayValue}
-                    onChangeText={setPayTodayValue}
-                    keyboardType="decimal-pad"
-                    autoFocus
-                    placeholder="0.00"
-                  />
-                  <TouchableOpacity onPress={handleSavePress} disabled={saving} style={styles.saveBtn}>
-                    <Ionicons name="checkmark" size={20} color="#fff" />
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={cancelEdit} style={styles.cancelBtn}>
-                    <Ionicons name="close" size={20} color="#64748b" />
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <View style={styles.displayRow}>
-                  <TouchableOpacity onPress={() => handleEditPress(s.id)} style={styles.payBtn}>
-                    <Text style={styles.payBtnText}>Pay Today</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          ))
+                {editingId === s.id ? (
+                  <View style={styles.editRow}>
+                    <Text style={styles.payLabel}>Amount:</Text>
+                    <Text style={styles.currencySymbol}>$</Text>
+                    <TextInput
+                      style={styles.editInput}
+                      value={payTodayValue}
+                      onChangeText={setPayTodayValue}
+                      keyboardType="decimal-pad"
+                      autoFocus
+                      placeholder="0.00"
+                    />
+                    <TouchableOpacity onPress={handleSavePress} disabled={saving} style={styles.saveBtn}>
+                      <Ionicons name="checkmark" size={20} color="#fff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={cancelEdit} style={styles.cancelBtn}>
+                      <Ionicons name="close" size={20} color="#64748b" />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.displayRow}>
+                    <TouchableOpacity onPress={() => handleEditPress(s.id)} style={styles.payBtn}>
+                      <Text style={styles.payBtnText}>Pay Supplier</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            );
+          })
         )}
 
         <TouchableOpacity style={styles.refreshBtn} onPress={loadData}>
@@ -575,8 +575,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-
-  // ✅ FIXED: rows now use flex + gap so long labels don't push values off-screen
   cashRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -598,7 +596,6 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     textAlign: 'right',
   },
-
   cashDivider: {
     height: 1,
     backgroundColor: '#c4b5fd',
@@ -656,7 +653,7 @@ const styles = StyleSheet.create({
   },
   supplierInfo: { flex: 1 },
   supplierName: { fontSize: 16, fontWeight: '600', color: '#0f172a', marginBottom: 2 },
-  supplierBalanceLabel: { fontSize: 13, color: '#64748b', fontWeight: '500' },
+  supplierBalanceLabel: { fontSize: 13, color: '#059669', fontWeight: '600' },
   displayRow: { flexDirection: 'row', alignItems: 'center' },
   payBtn: {
     backgroundColor: '#2563eb', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8,
