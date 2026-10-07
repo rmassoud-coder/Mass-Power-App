@@ -3039,6 +3039,47 @@ export async function getAllTimeCashSummary(): Promise<{
     netDrawer,
   };
 }
+// ✅ NEW: Records a payment to a supplier.
+// Only inserts into supplier_payments — does NOT touch supplier_balances
+// (debt tracking is no longer used).
+export async function recordSupplierPayment(
+  supplierId: string,
+  amount: number
+): Promise<void> {
+  const db = await getDb();
+  const clean = Math.max(0, Number(amount) || 0);
+  if (clean <= 0) throw new Error('Amount must be greater than 0');
+  const id = generateId();
+  const now = new Date().toISOString();
+  await db.runAsync(
+    `INSERT INTO supplier_payments (id, supplier_id, amount_paid, paid_at, created_at)
+     VALUES (?, ?, ?, ?, ?)`,
+    [id, supplierId, clean, now, now]
+  );
+}
+
+// ✅ NEW: Month-to-date total paid per supplier.
+// Returns a map: { [supplier_id]: totalPaidMTD }
+export async function getSupplierPaidMTDMap(): Promise<Record<string, number>> {
+  const db = await getDb();
+  const today = new Date();
+  const monthStartStr = getLocalDateStr(getMonthStart(today));
+  const todayStr = getLocalDateStr(today);
+
+  const rows = await db.getAllAsync<{ supplier_id: string; total: number }>(
+    `SELECT supplier_id, COALESCE(SUM(amount_paid), 0) as total
+     FROM supplier_payments
+     WHERE DATE(paid_at) >= ? AND DATE(paid_at) <= ?
+     GROUP BY supplier_id`,
+    [monthStartStr, todayStr]
+  );
+
+  const map: Record<string, number> = {};
+  for (const r of rows) {
+    map[r.supplier_id] = Number(r.total) || 0;
+  }
+  return map;
+}
 export async function emergencyNukeDatabase() {
   try {
     const db = await getDb();
