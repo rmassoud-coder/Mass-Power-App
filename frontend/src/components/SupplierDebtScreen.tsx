@@ -459,7 +459,7 @@ export default function SupplierDebtScreen() {
 
         {/* Cash Out Input Box */}
         <View style={styles.wagesBox}>
-          <Text style={styles.wagesTitle}>Cash Out (Wages+Goods+Exp)</Text>
+          <Text style={styles.wagesTitle}>Cash Out (Wages+Exp)</Text>
           <View style={styles.wagesInputRow}>
             <Text style={styles.currencySymbol}>$</Text>
             <TextInput
