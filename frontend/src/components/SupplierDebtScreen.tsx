@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,17 +10,14 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  getSupplierBalances,
   getWeeklyCashSummary,
   getMonthlyCashSummary,
   getAllTimeCashSummary,
   getReport,
   saveWeeklyWages,
-  recordSupplierPayment,
-  getSupplierPaidMTDMap,
   getLocalDateStr,
   getWeekStartMonday,
   getMonthStart,
@@ -30,12 +27,7 @@ import {
 const R = (n: number): number => Math.round(Number(n) || 0);
 
 export default function SupplierDebtScreen() {
-  const [suppliers, setSuppliers] = useState<{ id: string; name: string; balance: number }[]>([]);
-  const [paidMTDMap, setPaidMTDMap] = useState<Record<string, number>>({});
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [payTodayValue, setPayTodayValue] = useState<string>('');
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [wagesInput, setWagesInput] = useState('');
   const [summary, setSummary] = useState<{
     todayRevenue: number;
@@ -102,17 +94,11 @@ export default function SupplierDebtScreen() {
         `${todayStr}T23:59:59`
       );
 
-      const [balanceList, cashSummary, monthlyCashSummary, allTimeSummary, mtdPaidMap] =
-        await Promise.all([
-          getSupplierBalances(),
-          getWeeklyCashSummary(),
-          getMonthlyCashSummary(),
-          getAllTimeCashSummary(),
-          getSupplierPaidMTDMap(),
-        ]);
-
-      setSuppliers(balanceList);
-      setPaidMTDMap(mtdPaidMap);
+      const [cashSummary, monthlyCashSummary, allTimeSummary] = await Promise.all([
+        getWeeklyCashSummary(),
+        getMonthlyCashSummary(),
+        getAllTimeCashSummary(),
+      ]);
 
       setSummary({
         todayRevenue: todayReport.total_cost,
@@ -135,15 +121,19 @@ export default function SupplierDebtScreen() {
         allTimeCashOut: allTimeSummary.wages,
       });
     } catch (error) {
-      Alert.alert('Error', 'Failed to load supplier data.');
+      Alert.alert('Error', 'Failed to load cash flow data.');
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  // Reload every time this screen is opened, so supplier payments made
+  // from the new Pay Suppliers screen show up here immediately.
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const handleSaveWages = async () => {
     const amount = parseFloat(wagesInput);
@@ -159,37 +149,6 @@ export default function SupplierDebtScreen() {
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to save Cash Out.');
     }
-  };
-
-  const handleEditPress = (id: string) => {
-    setEditingId(id);
-    setPayTodayValue('');
-  };
-
-  const handleSavePress = async () => {
-    if (!editingId) return;
-    const amountPaid = parseFloat(payTodayValue);
-    if (isNaN(amountPaid) || amountPaid <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount.');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await recordSupplierPayment(editingId, amountPaid);
-      setEditingId(null);
-      setPayTodayValue('');
-      await loadData();
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to save payment.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setPayTodayValue('');
   };
 
   if (loading) {
@@ -475,53 +434,6 @@ export default function SupplierDebtScreen() {
           </View>
         </View>
 
-        {/* Supplier List */}
-        <Text style={styles.listTitle}>Pay Suppliers</Text>
-        {suppliers.length === 0 ? (
-          <Text style={styles.emptyText}>No suppliers found. Add one in Backend Management.</Text>
-        ) : (
-          suppliers.map((s) => {
-            const paidMTD = paidMTDMap[s.id] || 0;
-            return (
-              <View key={s.id} style={styles.supplierItem}>
-                <View style={styles.supplierInfo}>
-                  <Text style={styles.supplierName}>{s.name}</Text>
-                  <Text style={styles.supplierBalanceLabel}>
-                    Paid this month: ${R(paidMTD)}
-                  </Text>
-                </View>
-
-                {editingId === s.id ? (
-                  <View style={styles.editRow}>
-                    <Text style={styles.payLabel}>Amount:</Text>
-                    <Text style={styles.currencySymbol}>$</Text>
-                    <TextInput
-                      style={styles.editInput}
-                      value={payTodayValue}
-                      onChangeText={setPayTodayValue}
-                      keyboardType="decimal-pad"
-                      autoFocus
-                      placeholder="0.00"
-                    />
-                    <TouchableOpacity onPress={handleSavePress} disabled={saving} style={styles.saveBtn}>
-                      <Ionicons name="checkmark" size={20} color="#fff" />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={cancelEdit} style={styles.cancelBtn}>
-                      <Ionicons name="close" size={20} color="#64748b" />
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={styles.displayRow}>
-                    <TouchableOpacity onPress={() => handleEditPress(s.id)} style={styles.payBtn}>
-                      <Text style={styles.payBtnText}>Pay Supplier</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-            );
-          })
-        )}
-
         <TouchableOpacity style={styles.refreshBtn} onPress={loadData}>
           <Ionicons name="refresh" size={20} color="#fff" />
           <Text style={styles.refreshText}>Refresh Math</Text>
@@ -644,30 +556,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
-  listTitle: { fontSize: 16, fontWeight: '600', color: '#1e293b', marginBottom: 12 },
-  emptyText: { textAlign: 'center', color: '#94a3b8', marginTop: 20, fontStyle: 'italic' },
-  supplierItem: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 10,
-    borderWidth: 1, borderColor: '#e2e8f0',
-  },
-  supplierInfo: { flex: 1 },
-  supplierName: { fontSize: 16, fontWeight: '600', color: '#0f172a', marginBottom: 2 },
-  supplierBalanceLabel: { fontSize: 13, color: '#059669', fontWeight: '600' },
-  displayRow: { flexDirection: 'row', alignItems: 'center' },
-  payBtn: {
-    backgroundColor: '#2563eb', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8,
-  },
-  payBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  editRow: { flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-end', flexWrap: 'wrap' },
-  payLabel: { fontSize: 13, fontWeight: '600', color: '#0f172a', marginRight: 6 },
-  editInput: {
-    borderWidth: 1, borderColor: '#2563eb', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
-    fontSize: 15, minWidth: 60, marginHorizontal: 4, backgroundColor: '#eff6ff',
-  },
   currencySymbol: { fontSize: 15, fontWeight: '600', color: '#475569' },
-  saveBtn: { backgroundColor: '#059669', borderRadius: 8, padding: 8, marginRight: 4 },
-  cancelBtn: { backgroundColor: '#f1f5f9', borderRadius: 8, padding: 8 },
   refreshBtn: {
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
     backgroundColor: '#0f172a', borderRadius: 12, paddingVertical: 14, marginTop: 20,
