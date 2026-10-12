@@ -294,6 +294,16 @@ export default function HomeScreen() {
             <Text style={styles.orderButtonText}>قائمة مشتريات</Text>
           </TouchableOpacity>
 
+          {/* ✅ NEW: Pay Suppliers — open to employees (no PIN) */}
+          <TouchableOpacity
+            style={[styles.paySuppliersButton, { paddingVertical: buttonPadding }]}
+            onPress={() => router.push('/pay-suppliers')}
+            testID="pay-suppliers-button"
+          >
+            <Ionicons name="wallet-outline" size={isSmallScreen ? 14 : 18} color="#8b5cf6" />
+            <Text style={styles.paySuppliersButtonText}>دفع الموردين</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={[styles.managementButton, { paddingVertical: buttonPadding }]}
             onPress={handleBackendPress}
@@ -487,6 +497,22 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   orderButtonText: {
+    color: '#1e293b',
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 6,
+  },
+  paySuppliersButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#8b5cf6',
+    marginTop: 10,
+  },
+  paySuppliersButtonText: {
     color: '#1e293b',
     fontSize: 14,
     fontWeight: '700',
