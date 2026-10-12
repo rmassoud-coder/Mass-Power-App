@@ -251,7 +251,7 @@ export default function QuickWalkinScreen() {
           <View style={{ width: 40 }} />
         </View>
 
-        <ScrollView style={styles.content}>
+        <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.inputGroup}>
             <Text style={styles.label}>اسم العميل (اختياري)</Text>
             <View style={styles.inputContainer}>
@@ -354,25 +354,28 @@ export default function QuickWalkinScreen() {
             </View>
           ) : null}
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>السعر الإجمالي (عمل + قطع)</Text>
-            <View style={styles.inputContainer}>
-              <Text style={styles.currencySymbol}>$</Text>
+          {/* ============ 1) OUTSOURCE COST: small, amber, private ============ */}
+          <View style={styles.outsourceBox}>
+            <View style={styles.outsourceHeaderRow}>
+              <Ionicons name="lock-closed-outline" size={14} color="#92400e" />
+              <Text style={styles.outsourceLabel}>
+                تكلفة الاستعانة بمصدر خارجي (خاصة — ليست سعر العميل)
+              </Text>
+            </View>
+            <View style={styles.outsourceInputContainer}>
+              <Text style={styles.outsourceCurrency}>$</Text>
               <TextInput
-                style={styles.input}
+                style={styles.outsourceInput}
                 placeholder="0.00"
-                value={cost}
-                onChangeText={setCost}
+                placeholderTextColor="#d6a75c"
+                value={outsourceCost}
+                onChangeText={(t) => setOutsourceCost(t.replace(/[^\d.]/g, ''))}
                 keyboardType="decimal-pad"
               />
             </View>
-            {productsSubtotal > 0 && (
-              <Text style={styles.autoCalcText}>
-                + ${productsSubtotal.toFixed(2)} في القطع (محسوب تلقائياً)
-              </Text>
-            )}
           </View>
 
+          {/* ============ 2) PAYMENT STATUS ============ */}
           <View style={styles.paymentRow}>
             <TouchableOpacity
               style={[styles.payBtn, isPaid && styles.payBtnActive]}
@@ -422,18 +425,24 @@ export default function QuickWalkinScreen() {
             </View>
           )}
 
+          {/* ============ 3) TOTAL PRICE: big, final field ============ */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>تكلفة الاستعانة بمصدر خارجي (خاصة)</Text>
-            <View style={styles.inputContainer}>
-              <Text style={styles.currencySymbol}>$</Text>
+            <Text style={styles.totalLabel}>السعر الإجمالي (عمل + قطع)</Text>
+            <View style={styles.totalInputContainer}>
+              <Text style={styles.totalCurrency}>$</Text>
               <TextInput
-                style={styles.input}
+                style={styles.totalInput}
                 placeholder="0.00"
-                value={outsourceCost}
-                onChangeText={(t) => setOutsourceCost(t.replace(/[^\d.]/g, ''))}
+                value={cost}
+                onChangeText={setCost}
                 keyboardType="decimal-pad"
               />
             </View>
+            {productsSubtotal > 0 && (
+              <Text style={styles.autoCalcText}>
+                + ${productsSubtotal.toFixed(2)} في القطع (محسوب تلقائياً)
+              </Text>
+            )}
           </View>
 
           <TouchableOpacity
@@ -454,6 +463,8 @@ export default function QuickWalkinScreen() {
               </>
             )}
           </TouchableOpacity>
+
+          <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -595,6 +606,52 @@ const styles = StyleSheet.create({
   input: { flex: 1, fontSize: 16, color: '#1e293b' },
   currencySymbol: { fontSize: 16, fontWeight: '600', color: '#1e293b', marginRight: 8 },
   autoCalcText: { fontSize: 12, color: '#059669', marginTop: 6, fontStyle: 'italic' },
+
+  // ---- Outsource cost (small, amber, secondary) ----
+  outsourceBox: {
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+    borderStyle: 'dashed',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 20,
+  },
+  outsourceHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  outsourceLabel: { flex: 1, fontSize: 12, fontWeight: '600', color: '#92400e' },
+  outsourceInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    height: 40,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+  },
+  outsourceCurrency: { fontSize: 14, fontWeight: '600', color: '#92400e', marginRight: 6 },
+  outsourceInput: { flex: 1, fontSize: 14, color: '#92400e' },
+
+  // ---- Total price (big, final, primary) ----
+  totalLabel: { fontSize: 16, fontWeight: '800', color: '#0f172a', marginBottom: 8 },
+  totalInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    height: 68,
+    borderWidth: 2,
+    borderColor: '#0f172a',
+  },
+  totalCurrency: { fontSize: 22, fontWeight: '700', color: '#0f172a', marginRight: 8 },
+  totalInput: { flex: 1, fontSize: 24, fontWeight: '700', color: '#0f172a' },
+
   pickerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
