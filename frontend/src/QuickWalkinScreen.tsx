@@ -161,9 +161,7 @@ export default function QuickWalkinScreen() {
       return;
     }
 
-    // ============ NON-LOCKSMITH: sell all picked inventory items ============
     if (!isLocksmith && pickedItems.length > 0) {
-      // Validate all picked items have qty > 0
       const validItems = pickedItems.filter((it) => it.quantity > 0);
       if (validItems.length === 0) {
         Alert.alert('خطأ', 'يرجى اختيار منتج واحد على الأقل بكمية أكبر من صفر.');
@@ -189,7 +187,6 @@ export default function QuickWalkinScreen() {
       return;
     }
 
-    // ============ SERVICE-ONLY OR LOCKSMITH FLOW ============
     const totalCost = parseFloat(cost) || 0;
 
     let partialPaidNumber = 0;
@@ -220,7 +217,6 @@ export default function QuickWalkinScreen() {
         parseFloat(outsourceCost) || 0
       );
 
-      // Locksmith: deduct stock after service is created
       if (isLocksmith && pickedStock.length > 0) {
         await deductStockItems(
           pickedStock.map((p) => ({ id: p.id, quantity: p.quantity }))
@@ -354,7 +350,7 @@ export default function QuickWalkinScreen() {
             </View>
           ) : null}
 
-          {/* ============ 1) OUTSOURCE COST: small, amber, private ============ */}
+          {/* ============ OUTSOURCE + PAYMENT: same yellow box ============ */}
           <View style={styles.outsourceBox}>
             <View style={styles.outsourceHeaderRow}>
               <Ionicons name="lock-closed-outline" size={14} color="#92400e" />
@@ -373,40 +369,40 @@ export default function QuickWalkinScreen() {
                 keyboardType="decimal-pad"
               />
             </View>
-          </View>
 
-          {/* ============ 2) PAYMENT STATUS ============ */}
-          <View style={styles.paymentRow}>
-            <TouchableOpacity
-              style={[styles.payBtn, isPaid && styles.payBtnActive]}
-              onPress={() => {
-                setIsPaid(true);
-                setIsPartial(false);
-                setPartialAmount('');
-              }}
-            >
-              <Ionicons
-                name="checkmark-circle"
-                size={20}
-                color={isPaid ? '#fff' : '#64748b'}
-              />
-              <Text style={[styles.payBtnText, isPaid && styles.payBtnTextActive]}>
-                مدفوع
-              </Text>
-            </TouchableOpacity>
+            {/* ✅ Payment row now inside the same yellow box */}
+            <View style={styles.paymentRow}>
+              <TouchableOpacity
+                style={[styles.payBtn, isPaid && styles.payBtnActive]}
+                onPress={() => {
+                  setIsPaid(true);
+                  setIsPartial(false);
+                  setPartialAmount('');
+                }}
+              >
+                <Ionicons
+                  name="checkmark-circle"
+                  size={20}
+                  color={isPaid ? '#fff' : '#92400e'}
+                />
+                <Text style={[styles.payBtnText, isPaid && styles.payBtnTextActive]}>
+                  مدفوع
+                </Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.payBtn, isPartial && styles.payBtnActivePartial]}
-              onPress={() => {
-                setIsPartial(!isPartial);
-                setIsPaid(false);
-              }}
-            >
-              <Ionicons name="time" size={20} color={isPartial ? '#fff' : '#64748b'} />
-              <Text style={[styles.payBtnText, isPartial && styles.payBtnTextActive]}>
-                دفعة جزئية
-              </Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.payBtn, isPartial && styles.payBtnActivePartial]}
+                onPress={() => {
+                  setIsPartial(!isPartial);
+                  setIsPaid(false);
+                }}
+              >
+                <Ionicons name="time" size={20} color={isPartial ? '#fff' : '#92400e'} />
+                <Text style={[styles.payBtnText, isPartial && styles.payBtnTextActive]}>
+                  دفعة جزئية
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {isPartial && (
@@ -425,7 +421,7 @@ export default function QuickWalkinScreen() {
             </View>
           )}
 
-          {/* ============ 3) TOTAL PRICE: big, final field ============ */}
+          {/* ============ TOTAL PRICE ============ */}
           <View style={styles.inputGroup}>
             <Text style={styles.totalLabel}>السعر الإجمالي (عمل + قطع)</Text>
             <View style={styles.totalInputContainer}>
@@ -445,6 +441,7 @@ export default function QuickWalkinScreen() {
             )}
           </View>
 
+          {/* ✅ GRAND BUTTON: now green */}
           <TouchableOpacity
             style={[styles.submitButton, loading && styles.disabled]}
             onPress={handleSubmit}
@@ -607,7 +604,7 @@ const styles = StyleSheet.create({
   currencySymbol: { fontSize: 16, fontWeight: '600', color: '#1e293b', marginRight: 8 },
   autoCalcText: { fontSize: 12, color: '#059669', marginTop: 6, fontStyle: 'italic' },
 
-  // ---- Outsource cost (small, amber, secondary) ----
+  // ---- Outsource + Payment combined box ----
   outsourceBox: {
     backgroundColor: '#fffbeb',
     borderWidth: 1,
@@ -663,25 +660,31 @@ const styles = StyleSheet.create({
   },
   pickerIcon: { marginRight: 12 },
   picker: { flex: 1, height: 56 },
-  paymentRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+
+  // ---- Payment row (now inside yellow box) ----
+  paymentRow: { flexDirection: 'row', gap: 12, marginTop: 10 },
   payBtn: {
     flex: 1,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    height: 50,
-    borderRadius: 12,
+    height: 44,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#fde68a',
     backgroundColor: '#fff',
     gap: 8,
   },
-  payBtnActive: { backgroundColor: '#10b981', borderColor: '#10b981' },
-  payBtnActivePartial: { backgroundColor: '#eab308', borderColor: '#eab308' },
-  payBtnText: { fontSize: 16, fontWeight: '600', color: '#64748b' },
+  // ✅ Paid → amber yellow (was green)
+  payBtnActive: { backgroundColor: '#f59e0b', borderColor: '#f59e0b' },
+  // ✅ Partial → dark amber (distinct from Paid)
+  payBtnActivePartial: { backgroundColor: '#d97706', borderColor: '#d97706' },
+  payBtnText: { fontSize: 15, fontWeight: '600', color: '#92400e' },
   payBtnTextActive: { color: '#fff' },
+
+  // ✅ GRAND SUBMIT BUTTON → green (was black)
   submitButton: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#10b981',
     borderRadius: 12,
     height: 56,
     flexDirection: 'row',
@@ -691,6 +694,7 @@ const styles = StyleSheet.create({
   },
   disabled: { opacity: 0.6 },
   submitText: { color: '#fff', fontSize: 18, fontWeight: '600', marginLeft: 8 },
+
   productsCard: {
     backgroundColor: '#f8fafc',
     borderRadius: 12,
@@ -722,20 +726,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#eff6ff',
     borderRadius: 8,
   },
-  addStockBtnText: {
-    color: '#2563eb',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  emptyStockBox: {
-    alignItems: 'center',
-    paddingVertical: 24,
-    gap: 8,
-  },
-  emptyStockText: {
-    color: '#94a3b8',
-    fontSize: 13,
-  },
+  addStockBtnText: { color: '#2563eb', fontSize: 13, fontWeight: '700' },
+  emptyStockBox: { alignItems: 'center', paddingVertical: 24, gap: 8 },
+  emptyStockText: { color: '#94a3b8', fontSize: 13 },
   pickedStockRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -743,16 +736,8 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
   },
-  pickedStockName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1e293b',
-  },
-  pickedStockMeta: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: 2,
-  },
+  pickedStockName: { fontSize: 15, fontWeight: '600', color: '#1e293b' },
+  pickedStockMeta: { fontSize: 12, color: '#64748b', marginTop: 2 },
   qtyControls: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -762,12 +747,7 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     marginRight: 8,
   },
-  qtyBtn: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  qtyBtn: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
   qtyNumber: {
     fontSize: 16,
     fontWeight: '700',
@@ -794,11 +774,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 16,
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1e293b',
-  },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#1e293b' },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -811,21 +787,9 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     gap: 8,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#1e293b',
-    paddingVertical: 0,
-  },
-  emptyModal: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    gap: 12,
-  },
-  emptyModalText: {
-    color: '#94a3b8',
-    fontSize: 14,
-  },
+  searchInput: { flex: 1, fontSize: 15, color: '#1e293b', paddingVertical: 0 },
+  emptyModal: { alignItems: 'center', paddingVertical: 40, gap: 12 },
+  emptyModalText: { color: '#94a3b8', fontSize: 14 },
   stockRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -847,28 +811,10 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: '#eab308',
   },
-  stockRowName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1e293b',
-  },
-  stockRowNameOut: {
-    color: '#b91c1c',
-  },
-  stockRowNameLow: {
-    color: '#92400e',
-  },
-  stockRowMeta: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: 2,
-  },
-  stockRowMetaOut: {
-    color: '#dc2626',
-    fontWeight: '600',
-  },
-  stockRowMetaLow: {
-    color: '#d97706',
-    fontWeight: '600',
-  },
+  stockRowName: { fontSize: 15, fontWeight: '600', color: '#1e293b' },
+  stockRowNameOut: { color: '#b91c1c' },
+  stockRowNameLow: { color: '#92400e' },
+  stockRowMeta: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  stockRowMetaOut: { color: '#dc2626', fontWeight: '600' },
+  stockRowMetaLow: { color: '#d97706', fontWeight: '600' },
 });
