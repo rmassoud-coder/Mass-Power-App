@@ -381,13 +381,13 @@ export default function SupplierDebtScreen() {
 
           <View style={styles.cashDivider} />
 
-          {/* NET CASH DRAWER (START-TO-DATE) */}
+          {/* NET CASH DRAWER (START2DATE) */}
           <View style={styles.cashRow}>
             <Text
               style={[styles.cashLabel, { fontWeight: '800', color: '#0f172a' }]}
               numberOfLines={1}
             >
-              Net Cash Drawer (Start-to-Date)
+              Net Cash Drawer (Start2Date)
             </Text>
             <Text
               style={[
