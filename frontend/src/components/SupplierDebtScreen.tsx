@@ -8,10 +8,12 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+// ✅ NOTE: These imports will fail if database.ts hasn't been updated yet
 import {
   getWeeklyCashSummary,
   getMonthlyCashSummary,
@@ -21,6 +23,9 @@ import {
   getLocalDateStr,
   getWeekStartMonday,
   getMonthStart,
+  savePersonalWithdrawal,
+  getPersonalWithdrawalForMonth,
+  getAllTimePersonalWithdrawals,
 } from '../../src/db/database';
 
 // ✅ Round to whole number (no decimals)
@@ -29,6 +34,11 @@ const R = (n: number): number => Math.round(Number(n) || 0);
 export default function SupplierDebtScreen() {
   const [loading, setLoading] = useState(true);
   const [wagesInput, setWagesInput] = useState('');
+
+  // ✅ Reconcile Modal State
+  const [reconcileVisible, setReconcileVisible] = useState(false);
+  const [drawerInput, setDrawerInput] = useState('');
+  
   const [summary, setSummary] = useState<{
     todayRevenue: number;
     todayOutsource: number;
@@ -48,6 +58,9 @@ export default function SupplierDebtScreen() {
     allTimeOutsource: number;
     allTimePaidDebts: number;
     allTimeCashOut: number;
+    // ✅ NEW
+    personalMonth: number;
+    personalAllTime: number;
   }>({
     todayRevenue: 0,
     todayOutsource: 0,
@@ -67,6 +80,8 @@ export default function SupplierDebtScreen() {
     allTimeOutsource: 0,
     allTimePaidDebts: 0,
     allTimeCashOut: 0,
+    personalMonth: 0,
+    personalAllTime: 0,
   });
   const router = useRouter();
 
@@ -94,10 +109,19 @@ export default function SupplierDebtScreen() {
         `${todayStr}T23:59:59`
       );
 
-      const [cashSummary, monthlyCashSummary, allTimeSummary] = await Promise.all([
+      // ✅ Fetch personal withdrawals alongside the other summaries
+      const [
+        cashSummary,
+        monthlyCashSummary,
+        allTimeSummary,
+        personalMonthRecord,
+        personalAllTimeTotal
+      ] = await Promise.all([
         getWeeklyCashSummary(),
         getMonthlyCashSummary(),
         getAllTimeCashSummary(),
+        getPersonalWithdrawalForMonth(monthStartStr, todayStr),
+        getAllTimePersonalWithdrawals(),
       ]);
 
       setSummary({
@@ -119,6 +143,8 @@ export default function SupplierDebtScreen() {
         allTimeOutsource: allTimeSummary.totalOutsource,
         allTimePaidDebts: allTimeSummary.paidDebts,
         allTimeCashOut: allTimeSummary.wages,
+        personalMonth: personalMonthRecord ? personalMonthRecord.withdrawal_amount : 0,
+        personalAllTime: personalAllTimeTotal,
       });
     } catch (error) {
       Alert.alert('Error', 'Failed to load cash flow data.');
@@ -127,8 +153,6 @@ export default function SupplierDebtScreen() {
     }
   }, []);
 
-  // Reload every time this screen is opened, so supplier payments made
-  // from the new Pay Suppliers screen show up here immediately.
   useFocusEffect(
     useCallback(() => {
       loadData();
@@ -148,6 +172,39 @@ export default function SupplierDebtScreen() {
       loadData();
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to save Cash Out.');
+    }
+  };
+
+  // ✅ Reconcile Modal Logic
+  const currentMonthLabel = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  
+  // Expected cash this month = mtdIncome - mtdOutsource - paidMonth - monthCashOut
+  const expectedDrawer = 
+    R(summary.mtdIncome) - 
+    R(summary.mtdOutsource) - 
+    R(summary.paidMonth) - 
+    R(summary.monthCashOut);
+
+  const actualDrawerParsed = parseFloat(drawerInput);
+  const isDrawerValid = !isNaN(actualDrawerParsed) && actualDrawerParsed >= 0;
+  const diff = isDrawerValid ? expectedDrawer - R(actualDrawerParsed) : 0;
+
+  const handleReconcileSubmit = async () => {
+    if (!isDrawerValid) {
+      Alert.alert('Error', 'Please enter a valid drawer amount.');
+      return;
+    }
+    
+    const monthKey = getLocalDateStr().substring(0, 7); // "YYYY-MM"
+    
+    try {
+      await savePersonalWithdrawal(monthKey, expectedDrawer, R(actualDrawerParsed));
+      setReconcileVisible(false);
+      setDrawerInput('');
+      Alert.alert('Success', 'Drawer reconciled successfully!');
+      loadData();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to save reconciliation.');
     }
   };
 
@@ -171,7 +228,6 @@ export default function SupplierDebtScreen() {
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        {/* Summary Card */}
         <View style={styles.cashCard}>
           <View style={styles.cashHeaderRow}>
             <Ionicons name="cash-outline" size={22} color="#5b21b6" />
@@ -320,6 +376,12 @@ export default function SupplierDebtScreen() {
             <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${R(summary.monthCashOut)}</Text>
           </View>
 
+          {/* ✅ NEW: Personal Withdrawal Line (Month) */}
+          <View style={styles.cashRow}>
+            <Text style={[styles.cashLabel, { color: '#8b5cf6' }]} numberOfLines={1}>− Personal (Month)</Text>
+            <Text style={[styles.cashValue, { color: '#8b5cf6' }]}>- ${R(summary.personalMonth)}</Text>
+          </View>
+
           <View style={styles.cashDivider} />
 
           {/* NET CASH DRAWER (MONTH) */}
@@ -339,7 +401,8 @@ export default function SupplierDebtScreen() {
                     R(summary.mtdIncome) -
                       R(summary.mtdOutsource) -
                       R(summary.paidMonth) -
-                      R(summary.monthCashOut) >=
+                      R(summary.monthCashOut) -
+                      R(summary.personalMonth) >=
                     0
                       ? '#059669'
                       : '#dc2626',
@@ -351,7 +414,8 @@ export default function SupplierDebtScreen() {
                 R(summary.mtdIncome) -
                   R(summary.mtdOutsource) -
                   R(summary.paidMonth) -
-                  R(summary.monthCashOut)
+                  R(summary.monthCashOut) -
+                  R(summary.personalMonth)
               )}
             </Text>
           </View>
@@ -379,6 +443,12 @@ export default function SupplierDebtScreen() {
             <Text style={[styles.cashValue, { color: '#eab308' }]}>- ${R(summary.allTimeCashOut)}</Text>
           </View>
 
+          {/* ✅ NEW: Personal Withdrawal Line (Start-to-Date) */}
+          <View style={styles.cashRow}>
+            <Text style={[styles.cashLabel, { color: '#8b5cf6' }]} numberOfLines={1}>− Personal</Text>
+            <Text style={[styles.cashValue, { color: '#8b5cf6' }]}>- ${R(summary.personalAllTime)}</Text>
+          </View>
+
           <View style={styles.cashDivider} />
 
           {/* NET CASH DRAWER (START2DATE) */}
@@ -398,7 +468,8 @@ export default function SupplierDebtScreen() {
                     R(summary.allTimeRevenue) -
                       R(summary.allTimeOutsource) -
                       R(summary.allTimePaidDebts) -
-                      R(summary.allTimeCashOut) >=
+                      R(summary.allTimeCashOut) -
+                      R(summary.personalAllTime) >=
                     0
                       ? '#059669'
                       : '#dc2626',
@@ -410,7 +481,8 @@ export default function SupplierDebtScreen() {
                 R(summary.allTimeRevenue) -
                   R(summary.allTimeOutsource) -
                   R(summary.allTimePaidDebts) -
-                  R(summary.allTimeCashOut)
+                  R(summary.allTimeCashOut) -
+                  R(summary.personalAllTime)
               )}
             </Text>
           </View>
@@ -434,11 +506,86 @@ export default function SupplierDebtScreen() {
           </View>
         </View>
 
+        {/* ✅ Reconcile Drawer Button */}
+        <TouchableOpacity 
+          style={styles.reconcileBtn} 
+          onPress={() => setReconcileVisible(true)}
+        >
+          <Ionicons name="calculator-outline" size={20} color="#fff" />
+          <Text style={styles.reconcileBtnText}>Reconcile Drawer</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.refreshBtn} onPress={loadData}>
           <Ionicons name="refresh" size={20} color="#fff" />
           <Text style={styles.refreshText}>Refresh Math</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* ✅ Reconcile Drawer Modal */}
+      <Modal
+        visible={reconcileVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setReconcileVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Reconcile Drawer</Text>
+              <TouchableOpacity onPress={() => setReconcileVisible(false)}>
+                <Ionicons name="close" size={24} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={styles.modalPeriodLabel}>Period: {currentMonthLabel}</Text>
+              
+              <View style={styles.modalRow}>
+                <Text style={styles.modalRowLabel}>Expected Cash</Text>
+                <Text style={styles.modalRowValue}>${expectedDrawer}</Text>
+              </View>
+              
+              <View style={styles.modalDivider} />
+              
+              <Text style={styles.modalInputLabel}>Actual Drawer Count</Text>
+              <View style={styles.modalInputContainer}>
+                <Text style={styles.modalCurrency}>$</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="0.00"
+                  value={drawerInput}
+                  onChangeText={setDrawerInput}
+                  keyboardType="decimal-pad"
+                  autoFocus
+                />
+              </View>
+              
+              <View style={styles.modalDiffRow}>
+                <Text style={styles.modalDiffLabel}>Personal Withdrawal:</Text>
+                <Text style={[styles.modalDiffValue, { color: diff >= 0 ? '#059669' : '#dc2626' }]}>
+                  ${diff}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={styles.modalCancelBtn} 
+                onPress={() => setReconcileVisible(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.modalSaveBtn} 
+                onPress={handleReconcileSubmit}
+              >
+                <Text style={styles.modalSaveText}>Save Reconciliation</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -517,7 +664,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 20,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
@@ -557,9 +704,104 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   currencySymbol: { fontSize: 15, fontWeight: '600', color: '#475569' },
+  
+  // ✅ Reconcile Button
+  reconcileBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f59e0b',
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginBottom: 12,
+    gap: 8,
+  },
+  reconcileBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
   refreshBtn: {
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
-    backgroundColor: '#0f172a', borderRadius: 12, paddingVertical: 14, marginTop: 20,
+    backgroundColor: '#0f172a', borderRadius: 12, paddingVertical: 14,
   },
   refreshText: { color: '#fff', fontSize: 16, fontWeight: '600', marginLeft: 8 },
+
+  // ✅ Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1e293b' },
+  modalBody: { marginBottom: 20 },
+  modalPeriodLabel: { fontSize: 14, color: '#64748b', marginBottom: 12 },
+  modalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  modalRowLabel: { fontSize: 16, fontWeight: '600', color: '#1e293b' },
+  modalRowValue: { fontSize: 18, fontWeight: '800', color: '#2563eb' },
+  modalDivider: { height: 1, backgroundColor: '#e2e8f0', marginVertical: 12 },
+  modalInputLabel: { fontSize: 14, fontWeight: '600', color: '#1e293b', marginBottom: 8 },
+  modalInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 12,
+    height: 48,
+    marginBottom: 16,
+  },
+  modalCurrency: { fontSize: 16, fontWeight: '600', color: '#1e293b', marginRight: 8 },
+  modalInput: { flex: 1, fontSize: 18, fontWeight: '600', color: '#1e293b' },
+  modalDiffRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    padding: 12,
+    borderRadius: 10,
+  },
+  modalDiffLabel: { fontSize: 15, fontWeight: '600', color: '#1e293b' },
+  modalDiffValue: { fontSize: 18, fontWeight: '900' },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+  },
+  modalCancelText: { color: '#64748b', fontSize: 15, fontWeight: '600' },
+  modalSaveBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#8b5cf6',
+    alignItems: 'center',
+  },
+  modalSaveText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });
