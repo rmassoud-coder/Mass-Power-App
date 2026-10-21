@@ -245,7 +245,8 @@ export type TombstoneEntityType =
   | 'inventory'
   | 'supplier'
   | 'service_item'
-  | 'stock';
+  | 'stock'
+  | 'personal_withdrawal'; // ✅ NEW
 
 export interface Tombstone {
   entity_type: TombstoneEntityType;
@@ -257,6 +258,17 @@ export interface StockItem {
   id: string;
   name: string;
   quantity: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// ✅ NEW
+export interface PersonalWithdrawal {
+  id: string;
+  period_key: string;
+  expected_amount: number;
+  actual_drawer: number;
+  withdrawal_amount: number;
   created_at: string;
   updated_at: string;
 }
@@ -356,6 +368,17 @@ export async function initDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_stock_quantity ON stock(quantity);
     CREATE INDEX IF NOT EXISTS idx_stock_name ON stock(name);
+
+    CREATE TABLE IF NOT EXISTS personal_withdrawals (
+      id TEXT PRIMARY KEY,
+      period_key TEXT NOT NULL UNIQUE,
+      expected_amount REAL NOT NULL,
+      actual_drawer REAL NOT NULL,
+      withdrawal_amount REAL NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_pw_period ON personal_withdrawals(period_key);
   `);
 
   try {
@@ -1638,7 +1661,6 @@ export async function getReport(
     service_date: r.service_date,
   }));
 
-  // ✅ Only the PAID portion counts as income.
   const paidRevenue = items.reduce((sum, i) => {
     if (i.is_paid) return sum + i.cost;
     return sum + (Number(i.partial_paid) || 0);
@@ -1659,10 +1681,7 @@ export async function getReport(
     );
     const wages = wagesResult?.total || 0;
     net_cash_flow = net_cash_flow - wages;
-    console.log(`✅ Subtracted $${wages} in wages`);
-  } catch (e) {
-    console.log("ℹ️ Wages table not ready yet, skipping...");
-  }
+  } catch (e) {}
 
   const unpaidItems = items.filter((i) => !i.is_paid);
   const unpaid_total = unpaidItems.reduce(
@@ -1822,6 +1841,7 @@ export interface FullDbSnapshot {
   wagesPaid?: { id: number; date: string; amount: number; created_at: string }[];
   tombstones?: Tombstone[];
   stock?: StockItem[];
+  personalWithdrawals?: PersonalWithdrawal[]; // ✅ ADDED
 }
 
 export async function exportFullDatabase(): Promise<FullDbSnapshot> {
@@ -1857,9 +1877,10 @@ export async function exportFullDatabase(): Promise<FullDbSnapshot> {
   );
   const tombstones = await db.getAllAsync<Tombstone>(`SELECT * FROM tombstones`);
   const stock = await db.getAllAsync<StockItem>(`SELECT * FROM stock`);
+  const personalWithdrawals = await db.getAllAsync<PersonalWithdrawal>(`SELECT * FROM personal_withdrawals`); // ✅ ADDED
 
   return {
-    version: 5,
+    version: 6, // ✅ BUMPED
     exported_at: new Date().toISOString(),
     customers,
     vehicles,
@@ -1871,6 +1892,7 @@ export async function exportFullDatabase(): Promise<FullDbSnapshot> {
     wagesPaid,
     tombstones,
     stock,
+    personalWithdrawals, // ✅ ADDED
   };
 }
 
@@ -1880,7 +1902,7 @@ export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
   }
   const db = await getDb();
   await db.execAsync(
-    `DELETE FROM service_items; DELETE FROM services; DELETE FROM vehicles; DELETE FROM customers; DELETE FROM inventory; DELETE FROM suppliers; DELETE FROM tombstones; DELETE FROM stock;`
+    `DELETE FROM service_items; DELETE FROM services; DELETE FROM vehicles; DELETE FROM customers; DELETE FROM inventory; DELETE FROM suppliers; DELETE FROM tombstones; DELETE FROM stock; DELETE FROM personal_withdrawals;` // ✅ ADDED
   );
   for (const c of snap.customers) {
     await db.runAsync(
@@ -1989,6 +2011,16 @@ export async function replaceFullDatabase(snap: FullDbSnapshot): Promise<void> {
       );
     }
   }
+
+  // ✅ NEW
+  if (Array.isArray(snap.personalWithdrawals)) {
+    for (const pw of snap.personalWithdrawals) {
+      await db.runAsync(
+        `INSERT OR REPLACE INTO personal_withdrawals (id, period_key, expected_amount, actual_drawer, withdrawal_amount, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [pw.id, pw.period_key, pw.expected_amount, pw.actual_drawer, pw.withdrawal_amount, pw.created_at, pw.updated_at]
+      );
+    }
+  }
 }
 
 export interface MergeResult {
@@ -2001,6 +2033,7 @@ export interface MergeResult {
   supplierBalances: { inserted: number; updated: number };
   wagesPaid: { inserted: number; updated: number };
   stock: { inserted: number; updated: number };
+  personalWithdrawals: { inserted: number; updated: number }; // ✅ ADDED
   tombstonesApplied: number;
 }
 
@@ -2022,6 +2055,7 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
     supplierBalances: { inserted: 0, updated: 0 },
     wagesPaid: { inserted: 0, updated: 0 },
     stock: { inserted: 0, updated: 0 },
+    personalWithdrawals: { inserted: 0, updated: 0 }, // ✅ ADDED
     tombstonesApplied: 0,
   };
 
@@ -2034,6 +2068,7 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
     supplier: new Map(),
     service_item: new Map(),
     stock: new Map(),
+    personal_withdrawal: new Map(), // ✅ ADDED
   };
   for (const t of localTombstones) {
     tombstoneSet[t.entity_type].set(t.entity_id, t.deleted_at);
@@ -2057,6 +2092,7 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
           t.entity_type === 'inventory' ? 'inventory' :
           t.entity_type === 'supplier' ? 'suppliers' :
           t.entity_type === 'stock' ? 'stock' :
+          t.entity_type === 'personal_withdrawal' ? 'personal_withdrawals' : // ✅ ADDED
           'service_items';
         await db.runAsync(`DELETE FROM ${table} WHERE id = ?`, [t.entity_id]);
       }
@@ -2225,6 +2261,27 @@ export async function mergeCloudIntoLocal(snap: FullDbSnapshot): Promise<MergeRe
           [st.name, st.quantity, st.updated_at, st.id]
         );
         result.stock.updated++;
+      }
+    }
+  }
+
+  // ✅ NEW: Merge personal withdrawals
+  if (Array.isArray(snap.personalWithdrawals)) {
+    for (const pw of snap.personalWithdrawals) {
+      if (tombstoneSet.personal_withdrawal.has(pw.id)) continue;
+      const local = await db.getFirstAsync<PersonalWithdrawal>(`SELECT * FROM personal_withdrawals WHERE id = ?`, [pw.id]);
+      if (!local) {
+        await db.runAsync(
+          `INSERT INTO personal_withdrawals (id, period_key, expected_amount, actual_drawer, withdrawal_amount, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [pw.id, pw.period_key, pw.expected_amount, pw.actual_drawer, pw.withdrawal_amount, pw.created_at, pw.updated_at]
+        );
+        result.personalWithdrawals.inserted++;
+      } else if (newer(pw.updated_at, local.updated_at)) {
+        await db.runAsync(
+          `UPDATE personal_withdrawals SET expected_amount = ?, actual_drawer = ?, withdrawal_amount = ?, updated_at = ? WHERE id = ?`,
+          [pw.expected_amount, pw.actual_drawer, pw.withdrawal_amount, pw.updated_at, pw.id]
+        );
+        result.personalWithdrawals.updated++;
       }
     }
   }
@@ -2794,7 +2851,6 @@ export async function getWeeklyCashSummary(): Promise<{
   const mondayStr = getLocalDateStr(monday);
   const todayStr = getLocalDateStr(today);
 
-  // ✅ Only count the PAID portion as revenue
   const revenueResult = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(
         CASE 
@@ -2892,7 +2948,6 @@ export async function getMonthlyCashSummary(): Promise<{
   const monthStartStr = getLocalDateStr(monthStart);
   const todayStr = getLocalDateStr(today);
 
-  // ✅ Only count the PAID portion as revenue
   const revenueResult = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(
         CASE 
@@ -2973,6 +3028,7 @@ export async function getMonthlyCashSummary(): Promise<{
     netDrawer,
   };
 }
+
 // ============================================================
 // ✅ NEW: All-time (Start-to-Date) cash summary
 // Same shape as getWeeklyCashSummary / getMonthlyCashSummary,
@@ -3039,6 +3095,7 @@ export async function getAllTimeCashSummary(): Promise<{
     netDrawer,
   };
 }
+
 // ✅ NEW: Records a payment to a supplier.
 // Only inserts into supplier_payments — does NOT touch supplier_balances
 // (debt tracking is no longer used).
@@ -3080,6 +3137,64 @@ export async function getSupplierPaidMTDMap(): Promise<Record<string, number>> {
   }
   return map;
 }
+
+// ✅ NEW: Save or overwrite a month's reconciliation
+export async function savePersonalWithdrawal(
+  periodKey: string,
+  expectedAmount: number,
+  actualDrawer: number
+): Promise<void> {
+  const db = await getDb();
+  const now = new Date().toISOString();
+  const withdrawalAmount = expectedAmount - actualDrawer;
+  const id = generateId();
+
+  const existing = await db.getFirstAsync<{ id: string }>(
+    `SELECT id FROM personal_withdrawals WHERE period_key = ?`,
+    [periodKey]
+  );
+
+  if (existing) {
+    await db.runAsync(
+      `UPDATE personal_withdrawals 
+       SET expected_amount = ?, actual_drawer = ?, withdrawal_amount = ?, updated_at = ?
+       WHERE period_key = ?`,
+      [expectedAmount, actualDrawer, withdrawalAmount, now, periodKey]
+    );
+  } else {
+    await db.runAsync(
+      `INSERT INTO personal_withdrawals (id, period_key, expected_amount, actual_drawer, withdrawal_amount, created_at, updated_at) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, periodKey, expectedAmount, actualDrawer, withdrawalAmount, now, now]
+    );
+  }
+}
+
+// ✅ NEW: Get the saved reconciliation for a specific month
+export async function getPersonalWithdrawalForMonth(
+  monthStartStr: string,
+  todayStr: string
+): Promise<PersonalWithdrawal | null> {
+  const db = await getDb();
+  // period_key is "YYYY-MM"
+  const monthKey = todayStr.substring(0, 7);
+
+  const row = await db.getFirstAsync<PersonalWithdrawal>(
+    `SELECT * FROM personal_withdrawals WHERE period_key = ?`,
+    [monthKey]
+  );
+  return row || null;
+}
+
+// ✅ NEW: Sum of all personal withdrawals ever saved
+export async function getAllTimePersonalWithdrawals(): Promise<number> {
+  const db = await getDb();
+  const result = await db.getFirstAsync<{ total: number }>(
+    `SELECT COALESCE(SUM(withdrawal_amount), 0) as total FROM personal_withdrawals`
+  );
+  return result?.total || 0;
+}
+
 export async function emergencyNukeDatabase() {
   try {
     const db = await getDb();
